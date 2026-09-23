@@ -1,0 +1,37 @@
+# Build output
+build/
+dist/
+dist-debug/
+*.spec
+
+# Copies of files read out of the installed game: never commit these, they are
+# Hello Games' data and every user's machine makes its own.
+data/gamecache/
+data/gamedata/
+data/renders/
+
+# Saves and anything taken out of one
+*.hg
+*.hg.*.bak
+*.nmsdesign.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Personal and scraped data: not for a public repo
+data/reroll_log.csv
+data/generated_ships.csv
+data/previews/
+data/real_ships.csv
+ships.csv
+Sample ships.xlsx

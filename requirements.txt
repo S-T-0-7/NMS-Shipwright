@@ -1,0 +1,9 @@
+pandas
+lz4
+flask
+numpy
+Pillow
+pywebview
+unicorn
+pefile
+hgpaktool

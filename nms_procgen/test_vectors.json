@@ -1,0 +1,21 @@
+[
+ {"seed": "0x8BA812880CFAAA1C", "ship": "fighter", "source": "nms.center preview API v0.80",
+  "parts": ["_ENGINE_B","_WINGS_D","_COCKPIT_F"]},
+ {"seed": "0x7927714A9B78E44B", "ship": "fighter", "source": "nms.center preview API v0.80",
+  "parts": ["_ENGINE_C","_WINGS_F","_ACC_NONE3","_SUBWINGS_E","_LOGO_A","_COCKPIT_A","_ANOSE_C","_LOGOR_A","_LOGOL_A","_LOGO1_A2","_NUMBER4_A4","_NUMBER3_A3","_LOGO2_A3","_NUMBER2_A3","_NUMBER1_A2"]},
+ {"seed": "0x5EEDC0DECB68DBBD", "ship": "fighter", "source": "nms.center preview API v0.80",
+  "parts": ["_ENGINE_B","_WINGS_B","_ACC_A1","_SUBWINGS_A","_COCKPIT_A","_ANOSE_B","_NOSEB_BASELOD0","_LOGO1_A2","_NUMBER4_A4","_NUMBER3_A3","_LOGO2_A3","_NUMBER2_A3","_NUMBER1_A2"]},
+ {"seed": "0xF1766BCDCF6D73FE", "ship": "fighter", "source": "nms.center preview API v0.80 (_WINGSJ_MIDLOD0 there)",
+  "parts": ["_ENGINE_B","_WINGS_J","_ACC_A6","_WINGSJ_MID","_COCKPIT_A","_ANOSE_B","_NOSEB_BASELOD0","_LOGO1_A2","_NUMBER4_A4","_NUMBER3_A3","_LOGO2_A3","_NUMBER2_A3","_NUMBER1_A2"]},
+ {"seed": "0x7627472FE96555AB", "ship": "fighter", "source": "nms.center preview API v0.80 (_WINGSJ_LOWLOD0 there)",
+  "parts": ["_ENGINE_B","_WINGS_J","_ACC_A6","_WINGSJ_LOW","_COCKPIT_A","_ANOSE_C","_LOGOR_A","_LOGOL_A","_LOGO1_A2","_NUMBER4_A4","_NUMBER3_A3","_LOGO2_A3","_NUMBER2_A3","_NUMBER1_A2"]},
+ {"seed": "0x6541AB09D9EB1A25", "ship": "hauler", "source": "nms.center preview API v0.80 (older game data ids, see aliases)",
+  "aliases": {"_SUBW_NONE": "_SUBWINGS_NULL27"},
+  "parts": ["_COCKPIT_F","_NUMBER4_A2","_LETTER2_A2","_NUMBER3_A3","_NUMBER2_A2","_LETTER1_A1","_NUMBER1_A1","_LOGOR_A","_LOGOL_A","_COCKPITB_2NEW","_HULL_A","_WINGS_A","_THRUSTERS_B","_SUBWINGS_D1","_LOGO_A","_ENGINES_A","_SUBW_NONE","_SMALLSIGNL_A","_SMALLSIGNR_A","_SIDEL_A","_SIDER_A"]},
+ {"seed": "0xDDF3D6A0A9E0EB78", "ship": "sentinel", "source": "user's own ship, confirmed in-game 2026-09-13",
+  "parts": ["_PIT_C","_LIGHTS_B","_TOPFLAP_NULL","_WINGS_B","_CARRIAGE_B","_NWBOT_HALF","_EXTENSIONSBOT_NULL1","_NWTOP_FULL","_EXTENSIONSTOP_NULL","_SKIRT_B","_SKIRTWINGS_A","_ALTSKIRTING_A","_ASKIRTING_NULL3","_ENGINE_A","_BODYA_NULL"]},
+ {"seed": "0x9B328F7D50E644A3", "ship": "sentinel", "source": "user's own ship, confirmed in-game 2026-09-13",
+  "parts": ["_PIT_C","_LIGHTS_H","_TOPFLAP_A","_WINGS_V","_WINGSO_CTOP","_TOPJETS_NULL","_WINGSU_OBOT","_JETBOTS_A","_TYPE_WHITE2","_SKIRT_A","_SIDEENGINES_NULL","_UNDERWING_NULL","_ASIDES_AE","_AFRONT_SNOUT2","_GRILL_SNOUT11","_AALTSKIRT_NULL","_AENDWINGS_ANT","_ENGINEFLAME_4","_ASKIRTING_A6"]},
+ {"seed": "0x5EEDC0DE70FAE007", "ship": "fighter", "source": "nms.center page DefaultResult",
+  "parts": ["_ENGINE_B","_WINGS_A","_ACC_A","_COCKPIT_A","_ANOSE_A","_NOSEA_BASELOD0","_LOGO1_A2","_NUMBER4_A4","_NUMBER3_A3","_LOGO2_A3","_NUMBER2_A3","_NUMBER1_A2"]}
+]

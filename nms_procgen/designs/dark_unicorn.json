@@ -1,0 +1,13 @@
+{
+ "name": "Dark Unicorn",
+ "ship": "sentinel",
+ "source": "identified from user's screenshots + answers + corrections, 2026-09-13 (parts only; black paint not modelled yet)",
+ "notes": "Split Casing (V): Pincer = I-Wing Open, top (antenna, pod fin, boosters) and bottom (boosters). I-fins none or black. Underwing boosters left free. Chart names: Cylon cockpit, Stinger, Mid Wing with Turbine, Guard (Full Tip), black Flap/Elytra, Laser, Grill chin, Shard skirt, engine flames 1 (Full).",
+ "want": ["_PIT_A", "_TOPFLAP_A", "_WINGS_V", "_SKIRT_A",
+          "_WINGSO_OTOP", "_AXWINGSS_12", "_JETTOP_A", "_EXWINGS_5S436", "_TYPE_BLACK1",
+          "_WINGSU_OBOT", "_JETBOTS_A", "_TYPE_BLACK2",
+          "_SIDEENGINES_A2", "_UNDERWING_A", "_ASIDES_A4", "_AFRONT_SNOUT2", "_GRILL_SNOUT3", "_AALTSKIRT_A", "_VAR_A7",
+          "_AENDWINGS_ANT", "_ENGINEFLAME_1", "_ASKIRTING_A1S3"],
+ "avoid": [],
+ "found_seeds": ["0x7CE95BE28EFF646D", "0x0473082FC62C20A8", "0xCF2868679AC64115", "0x16E218A486AF7209"]
+}

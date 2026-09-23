@@ -1,0 +1,150 @@
+[
+{
+"id": "_ENGINE_B",
+"name": "Thruster Triple"
+},
+{
+"id": "_ENGINE_C",
+"name": "Thruster Single"
+},
+{
+"id": "_ENGINE_D",
+"name": "Thruster Box"
+},
+{
+"id": "_COCKPIT_A",
+"name": "Cockpit Multi"
+},
+{
+"id": "_COCKPIT_B",
+"name": "Cockpit Viper"
+},
+{
+"id": "_COCKPIT_D",
+"name": "Cockpit Jet"
+},
+{
+"id": "_COCKPIT_E",
+"name": "Cockpit Snowspeeder"
+},
+{
+"id": "_COCKPIT_F",
+"name": "Cockpit Barrel"
+},
+{
+"id": "_ANOSE_A",
+"name": "Cockpit Alpha"
+},
+{
+"id": "_ANOSE_B",
+"name": "Cockpit Rasa"
+},
+{
+"id": "_ANOSE_C",
+"name": "Cockpit Long"
+},
+{
+"id": "_ANOSE_D",
+"name": "Cockpit Needle"
+},
+{
+"id": "_ANOSE_E",
+"name": "Cockpit Stubby"
+},
+{
+"id": "_WINGS_A",
+"name": "Wings Vector"
+},
+{
+"id": "_WINGS_B",
+"name": "Wings Heavy"
+},
+{
+"id": "_WINGS_D",
+"name": "Wings Halo"
+},
+{
+"id": "_WINGS_E",
+"name": "Wings Serenity"
+},
+{
+"id": "_WINGS_F",
+"name": "Wings Horizon"
+},
+{
+"id": "_WINGS_G",
+"name": "Wings Starjumper"
+},
+{
+"id": "_WINGS_H",
+"name": "Wings Droid"
+},
+{
+"id": "_WINGS_I",
+"name": "Wings Quasar"
+},
+{
+"id": "_WINGS_J",
+"name": "Wings Mecha"
+},
+{
+"id": "_WINGS_K",
+"name": "Wings K"
+},
+{
+"id": "_WINGSK_A",
+"name": "Wings Starscream"
+},
+{
+"id": "_WINGSK_B",
+"name": "Wings Firefly"
+},
+{
+"id": "_SUBWINGS_A1",
+"name": "Subwings Gull"
+},
+{
+"id": "_SUBWINGS_B1",
+"name": "Subwings Aftershock"
+},
+{
+"id": "_SUBWINGS_C1",
+"name": "Subwings Bowie-H"
+},
+{
+"id": "_SUBWINGS_A",
+"name": "Subwings Shockwave"
+},
+{
+"id": "_SUBWINGS_B",
+"name": "Subwings E-Wing"
+},
+{
+"id": "_SUBWINGS_C",
+"name": "Subwings Bowie-V"
+},
+{
+"id": "_SUBWINGS_D",
+"name": "Subwings Tie"
+},
+{
+"id": "_SUBWINGS_E",
+"name": "Subwings Gull"
+},
+{
+"id": "_SUBWINGS_F",
+"name": "Subwings Vulture"
+},
+{
+"id": "_ACC_A",
+"name": "Dorsal Fin"
+},
+{
+"id": "_ACC_NONE",
+"name": "No Dorsal Fin"
+},
+{
+"id": "_SUBWINGS_NONE",
+"name": "No Subwing"
+}
+]
