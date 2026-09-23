@@ -24,7 +24,6 @@ DATA = [
     ("webapp/static", "webapp/static"),
     ("data/palettes", "data/palettes"),
     ("data/mapping.json", "data"),
-    ("data/real_ships.csv", "data"),
     ("nms_procgen/names", "nms_procgen/names"),
     ("nms_procgen/designs", "nms_procgen/designs"),
     ("nms_procgen/test_vectors.json", "nms_procgen"),
