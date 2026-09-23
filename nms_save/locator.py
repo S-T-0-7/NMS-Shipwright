@@ -11,7 +11,7 @@ DEFAULT_ROOT = os.path.expandvars(r"%APPDATA%\HelloGames\NMS")
 @dataclass
 class SaveFile:
     path: str
-    profile: str  # e.g. "st_76561199044409184"
+    profile: str  # the save folder name, e.g. "st_<steam id>" or "DefaultUser"
     slot_name: str  # "save.hg", "save2.hg", ...
     mtime: float
     size: int
