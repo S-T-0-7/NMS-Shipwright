@@ -355,9 +355,12 @@ def api_ship_refit():
     if not swaps:
         raise ValueError("this ship already has the right parts")
     names = items.catalogue()
+
+    def label(i):
+        return i if i.startswith("(") else names.get(i, {}).get("name", i)
+
     return jsonify({"ok": True, "backup": write(opened),
-                    "swaps": [{"from": names.get(a, {}).get("name", a), "to": names.get(c, {}).get("name", c)}
-                              for a, c in swaps]})
+                    "swaps": [{"from": label(a), "to": label(c)} for a, c in swaps]})
 
 
 @app.route("/api/ship/paint/clear", methods=["POST"])

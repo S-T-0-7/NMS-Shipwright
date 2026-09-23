@@ -290,34 +290,69 @@ def set_ship_name(readable_json: dict, slot: int, name: str) -> None:
     _populated_entry(readable_json, slot)["Name"] = name
 
 
-# A ship is born with one built-in part of each kind. Sentinel interceptors use their own
-# versions of all of them; every other ship type uses the ordinary ones.
+# The built-in parts a ship is born with, by kind of ship. Sentinel interceptors use their own
+# version of every part, and one part no other ship has (the Pilot Interface). Pairs line up so a
+# ship that changes type keeps the same equipment in its own flavour; None means "no counterpart".
 CORE_TECH = (("LAUNCHER", "LAUNCHER_ROBO"), ("SHIPJUMP1", "SHIPJUMP_ROBO"), ("HYPERDRIVE", "HYPERDRIVE_ROBO"),
-             ("SHIPSHIELD", "SHIPSHIELD_ROBO"), ("SHIPGUN1", "SHIPGUN_ROBO"))
+             ("SHIPSHIELD", "SHIPSHIELD_ROBO"), ("SHIPGUN1", "SHIPGUN_ROBO"), (None, "LIFESUP_ROBO"))
 SENTINEL_MODEL = "SENTINELSHIP_PROC"
+ROBOT_STAT = "ROBOT_SHIP"  # the ship stat the game puts on interceptors and on nothing else
 
 
 def is_sentinel(filename: str) -> bool:
     return SENTINEL_MODEL in (filename or "").upper()
 
 
+def core_tech_for(sentinel: bool) -> list:
+    """Ids of the parts a ship of this kind comes with."""
+    return [(b if sentinel else a) for a, b in CORE_TECH if (b if sentinel else a)]
+
+
+def _tech_ids(entry: dict) -> set:
+    return {str(s.get("Id", "")).lstrip("^") for key in ("Inventory_TechOnly", "Inventory")
+            for s in entry.get(key, {}).get("Slots", [])}
+
+
 def wrong_core_tech(entry: dict) -> list:
-    """Built-in parts in this ship entry that belong to the other kind of ship."""
+    """Parts fitted to this ship that belong to the other kind of ship.
+
+    Only those: a ship with a part missing is the player's own business (a starter ship has no
+    hyperdrive yet), while a sentinel carrying a Photon Cannon can only have come from an editor.
+    """
     sentinel = is_sentinel(entry.get("Resource", {}).get("Filename", ""))
-    wrong = {b if not sentinel else a for a, b in CORE_TECH}
-    return [str(s.get("Id", "")).lstrip("^") for key in ("Inventory_TechOnly", "Inventory")
-            for s in entry.get(key, {}).get("Slots", []) if str(s.get("Id", "")).lstrip("^") in wrong]
+    wrong = sorted(_tech_ids(entry) & set(core_tech_for(not sentinel)))
+    marked = any(str(s.get("BaseStatID", "")).lstrip("^") == ROBOT_STAT
+                 for s in (entry.get("Inventory", {}).get("BaseStatValues") or []))
+    if sentinel != marked:  # the game's own "this is an interceptor" mark
+        wrong.append("the interceptor mark is missing" if sentinel else "it is still marked as an interceptor")
+    return wrong
+
+
+def _install(inv: dict, item: str, amount: int) -> bool:
+    """Put `item` in the first free slot of `inv`. False if the grid is full."""
+    used = {(s["Index"]["X"], s["Index"]["Y"]) for s in inv.get("Slots", []) if "Index" in s}
+    free = next(((v["X"], v["Y"]) for v in inv.get("ValidSlotIndices", []) if (v["X"], v["Y"]) not in used), None)
+    if not free:
+        return False
+    inv["Slots"].append({"Type": {"InventoryType": "Technology"}, "Id": "^" + item,
+                         "Amount": amount, "MaxAmount": amount, "DamageFactor": 0.0,
+                         "FullyInstalled": True, "AddedAutomatically": False,
+                         "Index": {"X": free[0], "Y": free[1]}})
+    return True
 
 
 def set_core_tech(readable_json: dict, slot: int, sentinel: bool) -> list:
     """Give the ship in `slot` the built-in parts its type really has.
 
     A ship copied from another one carries that ship's parts, so a sentinel would fly with a
-    Photon Cannon and a Pulse Engine instead of a Sentinel Cannon and a Luminance Engine.
-    Returns the swaps made as (old id, new id).
+    Photon Cannon and a Pulse Engine instead of a Sentinel Cannon and a Luminance Engine. Parts
+    with a counterpart are swapped in place; the rest are added or taken out.
+    Returns what changed as (old id or "(none)", new id or "(removed)").
     """
     entry = _populated_entry(readable_json, slot)
-    swap = {(a if sentinel else b): (b if sentinel else a) for a, b in CORE_TECH}
+    swap = {(a if sentinel else b): (b if sentinel else a)
+            for a, b in CORE_TECH if a and b}
+    drop = {i for i in core_tech_for(not sentinel) if i not in swap}  # no counterpart on this ship
     charge = {}
     try:  # full charge for what we install, from the game's own table
         from .items import catalogue
@@ -326,7 +361,7 @@ def set_core_tech(readable_json: dict, slot: int, sentinel: bool) -> list:
         pass
     done = []
     for key in ("Inventory_TechOnly", "Inventory"):
-        for s in entry.get(key, {}).get("Slots", []):
+        for s in list(entry.get(key, {}).get("Slots", [])):
             old = str(s.get("Id", "")).lstrip("^")
             if old in swap:
                 new = swap[old]
@@ -335,26 +370,36 @@ def set_core_tech(readable_json: dict, slot: int, sentinel: bool) -> list:
                 s["DamageFactor"] = 0.0
                 s["FullyInstalled"] = True
                 done.append((old, new))
-    if sentinel:
-        for key in ("Inventory_TechOnly", "Inventory", "Inventory_Cargo"):  # every interceptor is S class
-            inv = entry.get(key)
-            if isinstance(inv, dict) and "Class" in inv:
-                inv["Class"]["InventoryClass"] = "S"
-        # An interceptor always comes with its own hyperdrive; the ship it was copied from
-        # may have had none, which would leave it unable to warp.
-        have = {str(s.get("Id", "")).lstrip("^") for key in ("Inventory_TechOnly", "Inventory")
-                for s in entry.get(key, {}).get("Slots", [])}
-        if not have & {"HYPERDRIVE", "HYPERDRIVE_ROBO"}:
-            inv = entry.get("Inventory_TechOnly") or {}
-            used = {(s["Index"]["X"], s["Index"]["Y"]) for s in inv.get("Slots", []) if "Index" in s}
-            free = next(((v["X"], v["Y"]) for v in inv.get("ValidSlotIndices", []) if (v["X"], v["Y"]) not in used), None)
-            if free:
-                amount = charge.get("HYPERDRIVE_ROBO", 0)
-                inv["Slots"].append({"Type": {"InventoryType": "Technology"}, "Id": "^HYPERDRIVE_ROBO",
-                                     "Amount": amount, "MaxAmount": amount, "DamageFactor": 0.0,
-                                     "FullyInstalled": True, "AddedAutomatically": False,
-                                     "Index": {"X": free[0], "Y": free[1]}})
-                done.append(("(none)", "HYPERDRIVE_ROBO"))
+            elif old in drop:
+                entry[key]["Slots"].remove(s)
+                done.append((old, "(removed)"))
+    # Anything this kind of ship has and this one still lacks: a copied ship may have had no
+    # hyperdrive at all, and only interceptors have a Pilot Interface.
+    have = _tech_ids(entry)
+    tech = entry.get("Inventory_TechOnly") or {}
+    for item in core_tech_for(sentinel):
+        if item not in have and _install(tech, item, charge.get(item, 0)):
+            done.append(("(none)", item))
+    for key in ("Inventory_TechOnly", "Inventory", "Inventory_Cargo"):
+        inv = entry.get(key)
+        if not isinstance(inv, dict):
+            continue
+        if sentinel and "Class" in inv:  # every interceptor is S class
+            inv["Class"]["InventoryClass"] = "S"
+        # The game marks an interceptor with a stat of its own; without it a ship with sentinel
+        # parts is still treated as an ordinary starship.
+        stats = inv.get("BaseStatValues")
+        if isinstance(stats, list):
+            robot = [s for s in stats if str(s.get("BaseStatID", "")).lstrip("^") == ROBOT_STAT]
+            if sentinel and not robot:
+                stats.append({"BaseStatID": "^" + ROBOT_STAT, "Value": 1.0})
+                if key == "Inventory":
+                    done.append(("(none)", ROBOT_STAT))
+            elif not sentinel and robot:
+                for s in robot:
+                    stats.remove(s)
+                if key == "Inventory":
+                    done.append((ROBOT_STAT, "(removed)"))
     return done
 
 

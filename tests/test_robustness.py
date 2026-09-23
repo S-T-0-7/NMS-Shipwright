@@ -230,6 +230,61 @@ class Designs(unittest.TestCase):
         self.assertIsNone(self.A._matching_seed(d["ship"], d["want"], ["0x1", "0x2"]))
 
 
+class ShipEquipment(unittest.TestCase):
+    """A ship must carry the parts, mark and class of the type it actually is."""
+
+    FIGHTER = "MODELS/COMMON/SPACECRAFT/FIGHTERS/FIGHTER_PROC.SCENE.MBIN"
+    SENTINEL = "MODELS/COMMON/SPACECRAFT/SENTINELSHIP/SENTINELSHIP_PROC.SCENE.MBIN"
+
+    def setUp(self):
+        for mod in [m for m in list(sys.modules) if m.startswith("nms_save")]:
+            del sys.modules[mod]
+        from nms_save import ships
+        self.ships = ships
+
+    def _save(self, filename, tech):
+        def inv(ids):
+            return {"Slots": [{"Type": {"InventoryType": "Technology"}, "Id": "^" + i, "Amount": 1, "MaxAmount": 1,
+                               "DamageFactor": 0.0, "FullyInstalled": True, "Index": {"X": n, "Y": 0}}
+                              for n, i in enumerate(ids)],
+                    "ValidSlotIndices": [{"X": x, "Y": y} for y in range(3) for x in range(6)],
+                    "Class": {"InventoryClass": "C"},
+                    "BaseStatValues": [{"BaseStatID": "^SHIP_DAMAGE", "Value": 1.0}]}
+        entry = {"Name": "", "Resource": {"Filename": filename, "Seed": [True, "0x1"]},
+                 "Inventory": inv([]), "Inventory_TechOnly": inv(tech), "Inventory_Cargo": inv([])}
+        return {"BaseContext": {"PlayerStateData": {"ShipOwnership": [entry]}}}, entry
+
+    def _ids(self, entry):
+        return sorted(s["Id"].lstrip("^") for s in entry["Inventory_TechOnly"]["Slots"])
+
+    def _stats(self, entry):
+        return [s["BaseStatID"].lstrip("^") for s in entry["Inventory"]["BaseStatValues"]]
+
+    def test_a_sentinel_gets_interceptor_parts_and_the_interceptor_mark(self):
+        save, entry = self._save(self.SENTINEL, ["LAUNCHER", "SHIPJUMP1", "SHIPSHIELD", "SHIPGUN1"])
+        self.assertTrue(self.ships.wrong_core_tech(entry), "fighter parts on a sentinel are a fault")
+        self.ships.set_core_tech(save, 0, True)
+        self.assertEqual(self._ids(entry), ["HYPERDRIVE_ROBO", "LAUNCHER_ROBO", "LIFESUP_ROBO",
+                                            "SHIPGUN_ROBO", "SHIPJUMP_ROBO", "SHIPSHIELD_ROBO"])
+        self.assertIn("ROBOT_SHIP", self._stats(entry), "the game's interceptor mark")
+        self.assertEqual(entry["Inventory"]["Class"]["InventoryClass"], "S")
+        self.assertEqual(self.ships.wrong_core_tech(entry), [])
+
+    def test_turning_one_back_into_a_starship_undoes_all_of_it(self):
+        save, entry = self._save(self.SENTINEL, ["LAUNCHER", "SHIPJUMP1"])
+        self.ships.set_core_tech(save, 0, True)
+        entry["Resource"]["Filename"] = self.FIGHTER
+        self.ships.set_core_tech(save, 0, False)
+        self.assertNotIn("LIFESUP_ROBO", self._ids(entry), "no Pilot Interface on an ordinary ship")
+        self.assertNotIn("ROBOT_SHIP", self._stats(entry))
+        self.assertEqual(self.ships.wrong_core_tech(entry), [])
+
+    def test_a_missing_part_is_not_called_a_fault(self):
+        """A starter ship with no hyperdrive is the player's business, not a fault to fix."""
+        save, entry = self._save(self.FIGHTER, ["LAUNCHER", "SHIPJUMP1"])
+        self.assertEqual(self.ships.wrong_core_tech(entry), [])
+
+
 class OtherPeoplesPCs(unittest.TestCase):
     """The app has to work on a PC that is not the one it was built on."""
 

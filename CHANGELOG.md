@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.1
+
+- Sentinel ships made by the tool now get the **Pilot Interface** (interceptors have one and no
+  other ship does) and the game's own **interceptor mark**, the ROBOT_SHIP ship stat. Without that
+  mark the game treats a ship with sentinel parts as an ordinary starship.
+- Turning an interceptor back into a normal ship removes both again.
+- The "wrong parts" warning on a ship page now only fires for parts belonging to the other kind of
+  ship. A ship simply missing a part (a starter ship with no hyperdrive) is not a fault.
+
 ## 1.7.0 — first public release
 
 The app now works on anyone's PC, and ships nothing that belongs to Hello Games or to anyone else.
