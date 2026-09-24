@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.3
+
+- Ship stats (damage, shield, hyperdrive, manoeuvrability) can be read and edited on the ship page,
+  along with the ship's class.
+- The ranges come from the game's own table, per ship type and class, and edits outside them are
+  refused: a class C fighter's damage bonus is 8 to 15, an S-class one's 70 to 90.
+- "Best possible" sets every stat to the highest the game would ever roll for that ship and class.
+
 ## 1.7.2
 
 - Inventories can gain and lose slots, not just "unlock everything": type a number and press Set,

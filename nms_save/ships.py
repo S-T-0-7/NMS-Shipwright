@@ -403,6 +403,68 @@ def set_core_tech(readable_json: dict, slot: int, sentinel: bool) -> list:
     return done
 
 
+SHIP_INVENTORIES = ("Inventory", "Inventory_TechOnly", "Inventory_Cargo")
+
+
+def _stat_rows(entry: dict) -> list:
+    """The stats the game rolls for this ship's type and class, with their ranges."""
+    from .items import CLASS_ORDER, _ship_row, stat_ranges
+    row = _ship_row(entry.get("Resource", {}).get("Filename", ""))
+    name = (entry.get("Inventory", {}).get("Class", {}) or {}).get("InventoryClass") or "C"
+    cls = CLASS_ORDER.index(name) if name in CLASS_ORDER else 0
+    by_class = stat_ranges()["ships"].get(row, {})
+    return by_class.get(cls) or by_class.get(max(by_class, default=0), [])
+
+
+def ship_stats(readable_json: dict, slot: int) -> dict:
+    """A ship's stat bonuses, with what the game would roll for a ship like it."""
+    entry = _populated_entry(readable_json, slot)
+    have = {str(s.get("BaseStatID", "")).lstrip("^"): s.get("Value", 0.0)
+            for s in (entry.get("Inventory", {}).get("BaseStatValues") or [])}
+    cls = (entry.get("Inventory", {}).get("Class", {}) or {}).get("InventoryClass") or "C"
+    rows = [{**r, "value": round(float(have.get(r["id"], 0.0)), 2)} for r in _stat_rows(entry)]
+    return {"slot": slot, "class": cls, "stats": rows, "sentinel": is_sentinel(entry["Resource"]["Filename"])}
+
+
+def set_ship_stats(readable_json: dict, slot: int, values: dict | None = None, ship_class: str | None = None,
+                   best: bool = False) -> dict:
+    """Set a ship's stat bonuses (and its class). Values outside what the game rolls are refused.
+
+    All three of a ship's inventories carry the same list, so all three are written.
+    """
+    from .items import CLASS_ORDER
+    entry = _populated_entry(readable_json, slot)
+    if ship_class:
+        if ship_class not in CLASS_ORDER:
+            raise ValueError(f"class must be one of {', '.join(CLASS_ORDER)}")
+        for key in SHIP_INVENTORIES:
+            inv = entry.get(key)
+            if isinstance(inv, dict) and "Class" in inv:
+                inv["Class"]["InventoryClass"] = ship_class
+    rows = {r["id"]: r for r in _stat_rows(entry)}  # ranges for the class it is now
+    wanted = {r["id"]: r["max"] for r in rows.values()} if best else {}
+    for k, v in (values or {}).items():
+        k = str(k).lstrip("^")
+        if k not in rows:
+            raise ValueError(f"{k} is not a stat this ship has")
+        v = float(v)
+        lo, hi = rows[k]["min"], rows[k]["max"]
+        if not lo <= v <= hi:
+            raise ValueError(f"the game gives a ship like this a {rows[k]['name']} bonus between {lo} and {hi}")
+        wanted[k] = v
+    for key in SHIP_INVENTORIES:
+        stats = entry.get(key, {}).get("BaseStatValues")
+        if not isinstance(stats, list):
+            continue
+        by_id = {str(s.get("BaseStatID", "")).lstrip("^"): s for s in stats}
+        for k, v in wanted.items():
+            if k in by_id:
+                by_id[k]["Value"] = float(v)
+            else:
+                stats.append({"BaseStatID": "^" + k, "Value": float(v)})
+    return ship_stats(readable_json, slot)
+
+
 def set_ship_model(readable_json: dict, slot: int, filename: str, seed: str | None = None) -> None:
     """Change a ship's model/type (Resource.Filename); optionally its seed too.
 

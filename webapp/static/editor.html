@@ -400,6 +400,8 @@ function selectShip(slot) {
     <h3>Seed</h3>
     <div class="row"><input id="sSeed" class="mono" value="${esc(s.seed)}" style="width:230px">
       <button class="btn primary" id="sApply">Apply seed</button><button class="btn" id="sReroll">Reroll</button></div>
+    <h3>Stats</h3>
+    <div class="card" style="padding:14px" id="sStats"><span class="muted">Loading...</span></div>
     <h3>Recolour</h3>
     <p class="muted" style="margin:0 0 8px">Step 1: click <b>Body</b> or <b>Trim</b>. Step 2: click a colour below. The preview above updates as you pick.
       Step 3: press Save these colours. ${s.paint ? '<b>This ship is painted by you.</b>' : 'This ship still uses its own colours.'}</p>
@@ -452,6 +454,7 @@ function selectShip(slot) {
            ${esc(t.list.toLowerCase().replace(/_/g, ' '))} ${esc(t.layer.toLowerCase())}: <b>${esc(t.option)}</b></div>`).join('')}</div>`;
   });
   setupPaint(slot);
+  guard(() => loadStats(slot));
   if (s.is_procedural) guard(async () => {
     const r = await api(`/api/parts?ship=${encodeURIComponent(s.ship || s.filename)}&seed=${encodeURIComponent(s.seed)}`);
     $('#sParts').innerHTML = r.parts.map(p => `<div>${'&nbsp;&nbsp;&nbsp;'.repeat(p.depth)}${esc(p.name || p.id)} <span>${p.name ? esc(p.id) + ' &middot; ' : ''}1 of ${p.choices}</span></div>`).join('');
@@ -544,6 +547,39 @@ function setupPaint(slot) {
   });
   $('#pClear').onclick = () => guard(async () => { await post('/api/ship/paint/clear', {path: S.path, slot}); toast('Paint removed, back to its own colours. Backup made.'); await loadShips(); });
   swatches(); chips();
+}
+
+/* Ship stats: the bonuses the game rolls when it makes a ship, kept inside the game's own ranges. */
+async function loadStats(slot) {
+  const d = await api(`/api/ship/stats?path=${encodeURIComponent(S.path)}&slot=${slot}`);
+  if (S.slot !== slot || !$('#sStats')) return;
+  if (!d.stats.length) {
+    $('#sStats').innerHTML = '<span class="muted">The game does not give this ship type tunable stats.</span>';
+    return;
+  }
+  $('#sStats').innerHTML = `<p class="muted" style="margin:0 0 10px">These are the bonuses the game rolls when it
+      makes a ship. The ranges are what a class ${esc(d.class)} ship of this type can have, straight from the game's tables.</p>
+    ${d.stats.map(s => `<div class="row" style="margin-top:6px"><label class="muted" style="min-width:150px">${esc(s.name)}</label>
+      <input type="number" step="0.1" min="${s.min}" max="${s.max}" value="${s.value}" data-stat="${esc(s.id)}" style="width:96px">
+      <span class="muted">${s.min} to ${s.max}${s.value > s.max || s.value < s.min ? ' — outside that range' : ''}</span></div>`).join('')}
+    <div class="row" style="margin-top:12px"><label class="muted" style="min-width:150px">Class</label>
+      <select id="sClass">${['C', 'B', 'A', 'S'].map(c => `<option ${c === d.class ? 'selected' : ''}>${c}</option>`).join('')}</select>
+      <button class="btn primary" id="sStatsSave">Save stats</button>
+      <button class="btn" id="sStatsBest">Best possible</button></div>`;
+  $('#sStatsSave').onclick = () => guard(async () => {
+    const values = {};
+    $$('#sStats [data-stat]').forEach(i => values[i.dataset.stat] = +i.value);
+    await post('/api/ship/stats', {path: S.path, slot, values, class: $('#sClass').value});
+    showBanner(`Stats saved for slot ${slot}. Backup made. Load this save in the game to see them.`, false);
+    await loadStats(slot); await loadShips();
+  });
+  $('#sStatsBest').onclick = () => guard(async () => {
+    const cls = $('#sClass').value;
+    if (!confirm(`Give slot ${slot} the best stats a class ${cls} ship of this type can have?`)) return;
+    await post('/api/ship/stats', {path: S.path, slot, class: cls, best: true});
+    showBanner(`Slot ${slot} now has the best stats the game allows for a class ${cls} ship of its type. Backup made.`, false);
+    await loadStats(slot); await loadShips();
+  });
 }
 
 function chooseSlot(ship) {

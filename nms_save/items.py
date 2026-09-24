@@ -196,6 +196,52 @@ def inventory_caps() -> dict:
     return {"ship": ships, "weapon": weapon}
 
 
+@functools.lru_cache(maxsize=1)
+def stat_ranges() -> dict:
+    """What the game rolls a ship's stats between, from its own table.
+
+    {"ships": {type row: {class 0-3: [{"id", "name", "min", "max"}]}}} -- a ship the game makes
+    gets a value somewhere in that range for each stat, so these are also the honest limits for
+    editing one. Stat names come from the game's own text.
+    """
+    import struct
+    folder = gamefiles.extract(os.path.join(gamefiles.CACHE, "invtable"), ["*inventorytable*"], "NMSARC.GLOBALS.pak")
+    b = read(os.path.join(folder, "inventorytable.mbin"))
+    m = gamemeta.exe_meta()
+    table = m.layout("cGcInventoryTable")
+    if not table.matches(b):
+        raise ItemError("the game's inventory table is not the layout this version expects")
+    # The game's table points agility at the hyperdrive text, so that one gets a name here.
+    names = {"SHIP_AGILE": "Manoeuvrability"}
+    stat = m.element(table, "BaseStats")
+    base, n = array(b, 0x20 + table.off("BaseStats"))
+    for k in range(n):
+        o = base + k * stat.size
+        names.setdefault(cstr(b, o, 16), _english(cstr(b, o + stat.off("LocID"), 16)))
+    per_ship = m.element(table, "ShipBaseStatsData")
+    per_class = m.element(per_ship, "BaseStatsPerClass")
+    entry = m.element(per_class, "BaseStats")
+    start = 0x20 + table.off("ShipBaseStatsData")
+    ships = {}
+    for row in range(12):
+        classes = {}
+        for cls in range(4):
+            at, count = array(b, start + row * per_ship.size + cls * per_class.size)
+            rows = []
+            for k in range(count):
+                o = at + k * entry.size
+                sid = cstr(b, o, 16)
+                mx, _mxa, mn, _mna = struct.unpack_from("<ffff", b, o + entry.off("Max"))
+                if sid and mx and sid != "ROBOT_SHIP":  # that one is a marker, not a stat
+                    rows.append({"id": sid, "name": names.get(sid) or sid.replace("_", " ").title(),
+                                 "min": round(mn, 2), "max": round(mx, 2)})
+            if rows:
+                classes[cls] = rows
+        if classes:
+            ships[row] = classes
+    return {"ships": ships}
+
+
 CLASS_ORDER = ("C", "B", "A", "S")
 SHIP_ROWS = {"INDUSTRIAL": 0, "DROPSHIPS": 1, "FIGHTERS": 2, "SCIENTIFIC": 3, "SHUTTLE": 4, "S-CLASS": 6,
              "BIOPARTS": 7, "SAILSHIP": 8, "SENTINELSHIP": 9, "CORVETTE": 10}

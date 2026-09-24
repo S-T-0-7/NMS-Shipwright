@@ -344,6 +344,18 @@ def api_ship_paint():
     return jsonify({"ok": True, "backup": write(opened)})
 
 
+@app.route("/api/ship/stats", methods=["GET", "POST"])
+def api_ship_stats():
+    """A ship's stat bonuses: what it has, what the game rolls for its type and class, and edits."""
+    if request.method == "GET":
+        a = request.args
+        return jsonify(ships.ship_stats(open_save(a.get("path")).readable, int(a["slot"])))
+    b = body()
+    opened = open_save(b.get("path"))
+    out = ships.set_ship_stats(opened.readable, int(b["slot"]), b.get("values"), b.get("class"), bool(b.get("best")))
+    return jsonify({"ok": True, **out, "backup": write(opened)})
+
+
 @app.route("/api/ship/refit", methods=["POST"])
 def api_ship_refit():
     """Swap a ship's built-in parts for the ones its own type comes with."""

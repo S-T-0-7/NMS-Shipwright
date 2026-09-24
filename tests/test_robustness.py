@@ -279,6 +279,21 @@ class ShipEquipment(unittest.TestCase):
         self.assertNotIn("ROBOT_SHIP", self._stats(entry))
         self.assertEqual(self.ships.wrong_core_tech(entry), [])
 
+    def test_stats_stay_inside_what_the_game_rolls(self):
+        save, entry = self._save(self.FIGHTER, ["LAUNCHER"])
+        try:
+            now = self.ships.ship_stats(save, 0)
+        except Exception as e:
+            self.skipTest(f"game files not available: {e}")
+        self.assertTrue(now["stats"], "a fighter has stats")
+        first = now["stats"][0]
+        with self.assertRaises(ValueError):
+            self.ships.set_ship_stats(save, 0, {first["id"]: first["max"] + 50})
+        best = self.ships.set_ship_stats(save, 0, ship_class="S", best=True)
+        self.assertEqual(best["class"], "S")
+        for st in best["stats"]:
+            self.assertEqual(st["value"], st["max"], f"{st['name']} should be at its best")
+
     def test_a_missing_part_is_not_called_a_fault(self):
         """A starter ship with no hyperdrive is the player's business, not a fault to fix."""
         save, entry = self._save(self.FIGHTER, ["LAUNCHER", "SHIPJUMP1"])
