@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.4
+
+- Paint is now stored the way the game stores it: a palette and the index of the colour inside it.
+  It used to store index -1 with a loose RGB value, which left the game to repaint the ship after
+  building it -- visible in game as a flash of the ship's own colours before the paint appears.
+
 ## 1.7.3
 
 - Ship stats (damage, shield, hyperdrive, manoeuvrability) can be read and edited on the ship page,

@@ -27,6 +27,8 @@ Two very different kinds of entries show up under the same Filename shape:
 """
 from __future__ import annotations
 
+import functools
+import os
 import re
 from dataclasses import dataclass
 
@@ -231,18 +233,57 @@ def _populated_entry(readable_json: dict, slot: int) -> dict:
     return entries[slot]
 
 
+@functools.lru_cache(maxsize=1)
+def _palettes() -> dict:
+    """{palette id: [[r, g, b], ...]} -- the game's paint sets, as 64 slots each."""
+    import json
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "data", "palettes", "customisation.json")
+    with open(path) as f:
+        return {k: v["colours"] for k, v in json.load(f)["palettes"].items()}
+
+
+def palette_index(palette_id: str, rgb) -> int:
+    """Which slot of `palette_id` this colour is (the nearest one, if it is not exact).
+
+    The game stores a paint as an index into a palette. Storing -1 with a loose RGB instead
+    leaves the ship to be repainted after it is built, which shows as a flash of its own
+    colours, and is not what other players are sent.
+    """
+    try:
+        colours = _palettes()[palette_id]
+    except (KeyError, OSError, ValueError):
+        return -1
+    rgb = [float(c) for c in rgb][:3]
+    return min(range(len(colours)), key=lambda i: sum((a - b) ** 2 for a, b in zip(colours[i], rgb)))
+
+
 def set_ship_paint(readable_json: dict, slot: int, primary=(0.0, 0.0, 0.0), accent=None,
-                   palette_id: str = "FREIGHTER") -> None:
-    """Paint a ship the way Starship Outfitting stores it -- the method the game
-    applies (confirmed on sentinels). In-game each colour snaps to the nearest
-    colour of `palette_id`; FREIGHTER contains true black, SHIP does not."""
+                   palette_id: str = "FREIGHTER", primary_index: int | None = None,
+                   accent_index: int | None = None) -> dict:
+    """Paint a ship the way Starship Outfitting stores it: a palette and an index into it.
+
+    In-game each colour snaps to the nearest colour of `palette_id`; FREIGHTER contains
+    true black, SHIP does not. Returns the indices written.
+    """
     _populated_entry(readable_json, slot)
     accent = primary if accent is None else accent
+    if primary_index is None:
+        primary_index = palette_index(palette_id, primary)
+    if accent_index is None:
+        accent_index = palette_index(palette_id, accent)
+    colours = _palettes().get(palette_id) or []
+    if 0 <= primary_index < len(colours):  # use the palette's own colour, not one a click away
+        primary = colours[primary_index]
+    if 0 <= accent_index < len(colours):
+        accent = colours[accent_index]
     data = _dig(readable_json, CUSTOMISATION_PATH)[customisation_index(slot)].setdefault("CustomData", {})
     data["PaletteID"] = "^" + palette_id
-    data["Colours"] = [{"Palette": {"Palette": "Paint", "ColourAlt": alt},
+    data["Colours"] = [{"Palette": {"Palette": "Paint", "ColourAlt": alt,
+                                    "Index": int(primary_index if alt == "Primary" else accent_index)},
                         "Colour": [float(c) for c in (primary if alt == "Primary" else accent)][:3] + [1.0]}
                        for alt in PAINT_ALTS]
+    return {"palette": palette_id, "primary_index": int(primary_index), "accent_index": int(accent_index)}
 
 
 def get_ship_paint(readable_json: dict, slot: int):
@@ -254,8 +295,11 @@ def get_ship_paint(readable_json: dict, slot: int):
             if c.get("Palette", {}).get("Palette") == "Paint"}
     if not cols:
         return None
+    idx = {c["Palette"]["ColourAlt"]: c["Palette"].get("Index", -1) for c in data.get("Colours", [])
+           if c.get("Palette", {}).get("Palette") == "Paint"}
     return {"palette": data.get("PaletteID", "^").lstrip("^"), "primary": cols.get("Primary"),
-            "accent": cols.get("Alternative1", cols.get("Primary"))}
+            "accent": cols.get("Alternative1", cols.get("Primary")),
+            "primary_index": idx.get("Primary", -1), "accent_index": idx.get("Alternative1", -1)}
 
 
 FREIGHTER_MODELS = {"freighter": "MODELS/COMMON/SPACECRAFT/INDUSTRIAL/FREIGHTER_PROC.SCENE.MBIN",

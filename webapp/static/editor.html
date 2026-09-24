@@ -387,7 +387,8 @@ function selectShip(slot) {
   $$('.ship').forEach(el => el.classList.toggle('sel', +el.dataset.slot === slot));
   const s = S.ships.find(x => x.index === slot); if (!s) return;
   const p = s.paint || {};
-  S.paint = {primary: p.primary || [0, 0, 0], accent: p.accent || p.primary || [0, 0, 0], palette: p.palette || 'FREIGHTER'};
+  S.paint = {primary: p.primary || [0, 0, 0], accent: p.accent || p.primary || [0, 0, 0], palette: p.palette || 'FREIGHTER',
+             primary_index: p.primary_index, accent_index: p.accent_index};
   $('#shipDetail').innerHTML = `
     <h2 style="margin:0">${esc(s.name || '(unnamed)')} <span class="muted" style="font-weight:400">&middot; ${esc(s.category)} &middot; slot ${s.index}</span></h2>
     <div class="hero" id="sView" style="margin-top:10px">${s.ship ? '<span class="muted">Loading 3D model...</span>'
@@ -526,20 +527,25 @@ function setupPaint(slot) {
   const swatches = () => {
     const cols = namedColours(S.palettes[pal.value] || []);
     $('#pSw').innerHTML = cols.map(c => `<i title="${esc(c.name)}" data-i="${c.i}"><b style="background:${hex(c.rgb)}"></b>${esc(c.name)}</i>`).join('');
-    $$('#pSw i').forEach(el => el.onclick = () => { S.paint[S.target] = cols[+el.dataset.i].rgb; chips(); });
+    $$('#pSw i').forEach(el => el.onclick = () => {
+      S.paint[S.target] = cols[+el.dataset.i].rgb;                  // the colour itself
+      S.paint[S.target + '_index'] = +el.dataset.i;                 // and which slot of the palette it is
+      chips();
+    });
     $('#pNote').textContent = `${cols.length} paints in this set. The game only uses these, so any other colour snaps to the closest one.`;
   };
   pal.onchange = () => { S.paint.palette = pal.value; swatches(); chips(); };
   $('#pAny').oninput = e => {
     const v = e.target.value, want = [1, 3, 5].map(i => parseInt(v.substr(i, 2), 16) / 255);
     const near = nearestColour(namedColours(S.palettes[pal.value] || []), want);  // show what the game will really use
-    S.paint[S.target] = near.rgb; chips();
+    S.paint[S.target] = near.rgb; S.paint[S.target + '_index'] = near.i; chips();
     $('#pNote').textContent = `Nearest paint in this set: ${near.name}.`;
   };
   $('#pPri').onclick = () => { S.target = 'primary'; chips(); };
   $('#pAcc').onclick = () => { S.target = 'accent'; chips(); };
   $('#pApply').onclick = () => guard(async () => {
-    await post('/api/ship/paint', {path: S.path, slot, primary: S.paint.primary, accent: S.paint.accent, palette: pal.value});
+    await post('/api/ship/paint', {path: S.path, slot, primary: S.paint.primary, accent: S.paint.accent, palette: pal.value,
+                                   primary_index: S.paint.primary_index, accent_index: S.paint.accent_index});
     const cols = namedColours(S.palettes[pal.value] || []);
     showBanner(`Painted slot ${slot}: body ${nearestColour(cols, S.paint.primary).name}, trim ${nearestColour(cols, S.paint.accent).name}`
                + ` (${PAINT_SETS[pal.value]}). Backup made. Load this save in the game to see it.`, false);

@@ -339,9 +339,9 @@ def api_ship_name():
 def api_ship_paint():
     b = body()
     opened = open_save(b.get("path"))
-    ships.set_ship_paint(opened.readable, int(b["slot"]), b.get("primary", [0, 0, 0]), b.get("accent"),
-                         b.get("palette", "FREIGHTER"))
-    return jsonify({"ok": True, "backup": write(opened)})
+    out = ships.set_ship_paint(opened.readable, int(b["slot"]), b.get("primary", [0, 0, 0]), b.get("accent"),
+                               b.get("palette", "FREIGHTER"), b.get("primary_index"), b.get("accent_index"))
+    return jsonify({"ok": True, **out, "backup": write(opened)})
 
 
 @app.route("/api/ship/stats", methods=["GET", "POST"])
