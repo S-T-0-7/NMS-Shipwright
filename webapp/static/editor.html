@@ -202,7 +202,9 @@ details.more[open]>summary,details.fold[open]>summary{color:var(--text)}
         <div class="row" style="margin-bottom:10px"><b id="iTitle"></b><span class="muted" id="iInfo"></span>
           <span style="flex:1"></span>
           <button class="btn" data-op="fill">Fill stacks</button><button class="btn" data-op="recharge">Recharge tech</button>
-          <button class="btn" data-op="repair">Repair all</button><button class="btn" data-op="expand">Unlock all slots</button></div>
+          <button class="btn" data-op="repair">Repair all</button>
+          <label class="muted">Slots</label><input id="iSlots" type="number" min="1" max="120" style="width:64px">
+          <button class="btn" id="iSetSlots">Set</button><button class="btn" data-op="expand">Max</button></div>
         <div class="invgrid" id="iGrid"></div>
         <div class="card" style="padding:12px;margin-top:12px" id="iSlot"><span class="muted">Click a slot to change it.</span></div>
       </div>
@@ -1030,7 +1032,11 @@ async function openInventory(path, data) {
   $$('#iList button').forEach(b => b.classList.toggle('sel', b.dataset.inv === path));
   const meta = INV.list.find(i => i.path === path) || {};
   $('#iTitle').textContent = meta.name || path;
-  $('#iInfo').textContent = ` · ${INV.data.valid.length} slots unlocked · class ${INV.data.class || '?'}`;
+  const cap = INV.data.max_slots;
+  $('#iInfo').textContent = ` · ${INV.data.valid.length} slots · class ${INV.data.class || '?'}`
+    + (cap ? ` · the game allows up to ${cap} here` : '');
+  $('#iSlots').value = INV.data.valid.length;
+  $('#iSlots').max = cap || 120;
   drawGrid(); $('#iSlot').innerHTML = '<span class="muted">Click a slot to change it.</span>';
 }
 function drawGrid() {
@@ -1045,7 +1051,7 @@ function drawGrid() {
       ${s ? `<b>${esc(s.name)}</b><small>${s.type === 'Technology' ? (s.max > 1 ? Math.round(100 * s.amount / s.max) + '%' : '') : s.amount + '/' + s.max}</small>` : ''}</div>`;
   }
   $('#iGrid').innerHTML = html;
-  $$('#iGrid .cell:not(.locked)').forEach(c => c.onclick = () => { INV.sel = c.dataset.k; drawGrid(); slotEditor(at[c.dataset.k]); });
+  $$('#iGrid .cell').forEach(c => c.onclick = () => { INV.sel = c.dataset.k; drawGrid(); slotEditor(at[c.dataset.k]); });
 }
 async function invEdit(op, extra = {}) {
   const r = await post('/api/inventory', {path: S.path, inv: INV.cur, op, ...extra});
@@ -1055,13 +1061,17 @@ async function invEdit(op, extra = {}) {
 }
 function slotEditor(s) {
   const [x, y] = INV.sel.split(',').map(Number);
+  const locked = !INV.data.valid.some(v => v[0] === x && v[1] === y);
   $('#iSlot').innerHTML = `
+    ${locked ? `<div class="row"><b>This slot is not part of the inventory</b>
+      <button class="btn primary" id="sUnlock">Add this slot</button></div>` : ''}
     ${s ? `<div class="row"><b>${esc(s.name)}</b><span class="muted mono">${esc(s.id)}</span><span class="badge">${esc(s.type)}</span>${s.damaged ? '<span class="badge hot">DAMAGED</span>' : ''}</div>
       <div class="row" style="margin-top:8px"><label class="muted">${s.type === 'Technology' ? 'Charge' : 'Amount'}</label>
         <input id="sAmt" type="number" min="0" value="${s.amount}" style="width:110px"><span class="muted">max ${s.max}</span>
         <button class="btn primary" id="sAmtGo">Set</button><button class="btn" id="sMax">Max</button><button class="btn" id="sDel">Empty slot</button></div>`
-      : '<p class="muted" style="margin:0">Empty slot.</p>'}
-    <div class="row" style="margin-top:12px"><label class="muted">${s ? 'Replace with' : 'Add'}</label>
+      : (locked ? '' : `<div class="row"><span class="muted">Empty slot.</span>
+        <button class="btn" id="sLock">Remove this slot</button></div>`)}
+    <div class="row" style="margin-top:12px" ${locked ? 'hidden' : ''}><label class="muted">${s ? 'Replace with' : 'Add'}</label>
       <input id="sQ" placeholder="Search items, e.g. carbon, hyperdrive..." style="min-width:280px">
       <select id="sType"><option value="">All</option><option>Substance</option><option>Product</option><option>Technology</option></select></div>
     <div class="results" id="sRes" style="margin-top:8px"></div>`;
@@ -1070,6 +1080,12 @@ function slotEditor(s) {
     $('#sMax').onclick = () => { $('#sAmt').value = s.max; $('#sAmtGo').click(); };
     $('#sDel').onclick = () => guard(async () => { await invEdit('remove', {x, y}); toast('Slot emptied. Backup made.'); slotEditor(null); });
   }
+  if ($('#sUnlock')) $('#sUnlock').onclick = () => guard(async () => {
+    await invEdit('unlock', {x, y}); toast('Slot added. Backup made.'); slotEditor(null);
+  });
+  if ($('#sLock')) $('#sLock').onclick = () => guard(async () => {
+    await invEdit('lock', {x, y}); toast('Slot removed. Backup made.'); slotEditor(null);
+  });
   let t = null;
   const find = () => { clearTimeout(t); t = setTimeout(() => guard(async () => {
     const q = $('#sQ').value.trim(); if (!q) { $('#sRes').innerHTML = ''; return; }
@@ -1082,6 +1098,14 @@ function slotEditor(s) {
   }), 200); };
   $('#sQ').oninput = find; $('#sType').onchange = find;
 }
+$('#iSetSlots').onclick = () => guard(async () => {
+  const n = +$('#iSlots').value;
+  const now = INV.data.valid.length;
+  if (n === now) return;
+  if (n < now && !confirm(`Take ${now - n} slot(s) away from this inventory? Anything in them must be moved out first.`)) return;
+  await invEdit('slots', {count: n});
+  toast(`This inventory now has ${INV.data.valid.length} slots. Backup made.`);
+});
 $$('#page-inventory [data-op]').forEach(b => b.onclick = () => guard(async () => {
   if (!INV.cur) return;
   await invEdit(b.dataset.op); toast(`${b.textContent} done. Backup made.`);

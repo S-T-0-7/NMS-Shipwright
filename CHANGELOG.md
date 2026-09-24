@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.2
+
+- Inventories can gain and lose slots, not just "unlock everything": type a number and press Set,
+  or click a cell to add or remove that one slot.
+- The limits come from the game's own inventory table, per ship type and class: a C-class fighter
+  tops out at 50 general slots, an S-class hauler at 120, multi-tools at 21 to 60, and so on.
+- "Max" now fills to the game's real maximum instead of the visible grid.
+- A slot holding something cannot be removed by accident: empty it first.
+
 ## 1.7.1
 
 - Sentinel ships made by the tool now get the **Pilot Interface** (interceptors have one and no

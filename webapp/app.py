@@ -855,7 +855,7 @@ def api_inventory():
         return jsonify(items.get_inventory(open_save(request.args.get("path")).readable, request.args["inv"]))
     b = body()
     opened = open_save(b.get("path"))
-    kw = {k: b[k] for k in ("x", "y", "id", "amount") if b.get(k) is not None}
+    kw = {k: b[k] for k in ("x", "y", "id", "amount", "count") if b.get(k) is not None}
     inv = items.edit_inventory(opened.readable, b["inv"], b["op"], **kw)
     return jsonify({**inv, "backup": write(opened)})
 

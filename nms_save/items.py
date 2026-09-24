@@ -168,6 +168,70 @@ def list_inventories(readable) -> list[dict]:
 VEHICLES = {0: "Roamer", 1: "Nomad", 2: "Colossus", 3: "Pilgrim", 4: "Nautilon", 5: "Minotaur", 6: "Nautilon (unused)"}
 
 
+@functools.lru_cache(maxsize=1)
+def inventory_caps() -> dict:
+    """The most slots the game allows, read from its own inventory table.
+
+    {"ship": {type row: {"general": (C, B, A, S), "tech": (...)}}, "weapon": (C, B, A, S)}. The ship
+    rows are indexed by the game's ship-type number, the same one the system generator uses: rows 5
+    and 11 are empty, exactly the two numbers that enum does not use.
+    """
+    import struct
+    folder = gamefiles.extract(os.path.join(gamefiles.CACHE, "invtable"), ["*inventorytable*"], "NMSARC.GLOBALS.pak")
+    b = read(os.path.join(folder, "inventorytable.mbin"))
+    m = gamemeta.exe_meta()
+    table = m.layout("cGcInventoryTable")
+    if not table.matches(b):
+        raise ItemError("the game's inventory table is not the layout this version expects")
+    row = m.element(table, "ShipInventoryMaxUpgradeSize")
+    base = 0x20 + table.off("ShipInventoryMaxUpgradeSize")
+    ships = {}
+    for i in range(12):
+        q = base + i * row.size
+        got = {name: struct.unpack_from("<4i", b, q + row.fields[field]["offset"])
+               for name, field in (("general", "MaxInventoryCapacity"), ("tech", "MaxTechInventoryCapacity"))}
+        if any(got["general"]):
+            ships[i] = got
+    weapon = struct.unpack_from("<4i", b, 0x20 + table.off("WeaponInventoryMaxUpgradeSize"))
+    return {"ship": ships, "weapon": weapon}
+
+
+CLASS_ORDER = ("C", "B", "A", "S")
+SHIP_ROWS = {"INDUSTRIAL": 0, "DROPSHIPS": 1, "FIGHTERS": 2, "SCIENTIFIC": 3, "SHUTTLE": 4, "S-CLASS": 6,
+             "BIOPARTS": 7, "SAILSHIP": 8, "SENTINELSHIP": 9, "CORVETTE": 10}
+
+
+def _ship_row(filename: str) -> int | None:
+    parts = (filename or "").upper().split("/")
+    return next((SHIP_ROWS[p] for p in parts if p in SHIP_ROWS), None)
+
+
+def max_slots(readable, path: str, inv: dict) -> int | None:
+    """Most slots the game allows in this inventory, or None when the game's tables do not say."""
+    name = (inv.get("Class", {}) or {}).get("InventoryClass") or "C"
+    cls = CLASS_ORDER.index(name) if name in CLASS_ORDER else 0
+    try:
+        caps = inventory_caps()
+    except Exception:  # without the game files, fall back to whatever the grid allows
+        return None
+    if path.startswith("Multitools"):
+        return caps["weapon"][cls]
+    row, kind = None, "tech" if path.endswith("_TechOnly") else "general"
+    if path.startswith("ShipOwnership"):
+        entry = _resolve_parent(readable, path)
+        row = _ship_row((entry.get("Resource", {}) or {}).get("Filename", ""))
+    elif path.startswith("FreighterInventory"):
+        row = 0
+    return caps["ship"].get(row, {}).get(kind, (None,) * 4)[cls] if row is not None else None
+
+
+def _resolve_parent(readable, path: str) -> dict:
+    d = _ps(readable)
+    for part in path.split(".")[:-1]:
+        d = d[int(part)] if isinstance(d, list) else d[part]
+    return d if isinstance(d, dict) else {}
+
+
 def get_inventory(readable, path: str) -> dict:
     inv = _resolve(readable, path)
     valid = {(v["X"], v["Y"]) for v in inv.get("ValidSlotIndices", [])}
@@ -178,7 +242,37 @@ def get_inventory(readable, path: str) -> dict:
                       "type": s["Type"]["InventoryType"], "amount": s["Amount"], "max": s["MaxAmount"],
                       "damaged": s.get("DamageFactor", 0) > 0 or not s.get("FullyInstalled", True)})
     return {"path": path, "width": inv["Width"], "height": inv["Height"], "valid": sorted(valid),
-            "class": inv.get("Class", {}).get("InventoryClass", ""), "slots": slots}
+            "class": inv.get("Class", {}).get("InventoryClass", ""), "slots": slots,
+            "max_slots": max_slots(readable, path, inv)}
+
+
+def _grid(inv) -> list:
+    """Every cell of the grid, row by row, growing it to the usual 10 wide if it is unset."""
+    w, h = inv.get("Width") or 10, inv.get("Height") or 1
+    return [(i, j) for j in range(h) for i in range(w)]
+
+
+def _grow_grid(inv, x, y):
+    inv["Width"] = max(inv.get("Width") or 0, x + 1)
+    inv["Height"] = max(inv.get("Height") or 0, y + 1)
+
+
+def _set_slot_count(inv, want: int, cap: int | None):
+    """Add or remove slots so the inventory has `want` of them (the game's own maximum applies)."""
+    if want < 1:
+        raise ItemError("an inventory needs at least one slot")
+    if cap and want > cap:
+        raise ItemError(f"the game allows at most {cap} slots here")
+    width = inv.get("Width") or 10
+    height = max(inv.get("Height") or 1, -(-want // width))
+    inv["Width"], inv["Height"] = width, height
+    order = [(i, j) for j in range(height) for i in range(width)]
+    keep = order[:want]
+    holding = {(s["Index"]["X"], s["Index"]["Y"]) for s in inv["Slots"]}
+    lost = holding - set(keep)
+    if lost:
+        raise ItemError(f"{len(lost)} slot(s) being removed still hold items -- empty them first")
+    inv["ValidSlotIndices"] = [{"X": i, "Y": j} for i, j in keep]
 
 
 def _slot_at(inv, x, y):
@@ -209,7 +303,10 @@ def edit_inventory(readable, path: str, op: str, **kw) -> dict:
     fill                     every stack to its maximum
     recharge                 every technology to full charge
     repair                   fix every damaged slot
-    expand                   unlock every slot of the grid
+    expand                   unlock every slot the game allows
+    slots (count)            have exactly this many slots, adding or removing them
+    unlock (x, y)            add one slot
+    lock (x, y)              remove one slot (it must be empty)
     """
     inv = _resolve(readable, path)
     slots = inv["Slots"]
@@ -244,11 +341,27 @@ def edit_inventory(readable, path: str, op: str, **kw) -> dict:
     elif op == "repair":
         for s in slots:
             s["DamageFactor"], s["FullyInstalled"] = 0.0, True
-    elif op == "expand":
-        have = {(v["X"], v["Y"]) for v in inv["ValidSlotIndices"]}
-        w, h = inv.get("Width") or 10, inv.get("Height") or 12
-        inv["Width"], inv["Height"] = w, h
-        inv["ValidSlotIndices"] += [{"X": i, "Y": j} for j in range(h) for i in range(w) if (i, j) not in have]
+    elif op in ("expand", "slots"):
+        cap = max_slots(readable, path, inv)
+        want = (cap or len(_grid(inv))) if op == "expand" else int(kw["count"])
+        _set_slot_count(inv, want, cap)
+    elif op in ("unlock", "lock"):
+        valid = inv["ValidSlotIndices"]
+        here = next((v for v in valid if (v["X"], v["Y"]) == (x, y)), None)
+        if op == "unlock":
+            cap = max_slots(readable, path, inv)
+            if here:
+                raise ItemError("that slot is already there")
+            if cap and len(valid) >= cap:
+                raise ItemError(f"the game allows at most {cap} slots here")
+            _grow_grid(inv, x, y)
+            valid.append({"X": x, "Y": y})
+        else:
+            if not here:
+                raise ItemError("that slot is not there")
+            if _slot_at(inv, x, y):
+                raise ItemError("take the item out of that slot first")
+            valid.remove(here)
     else:
         raise ItemError(f"unknown operation {op!r}")
     return get_inventory(readable, path)
