@@ -213,21 +213,21 @@ class Designs(unittest.TestCase):
         for mod in [m for m in list(sys.modules) if m.startswith(("nms_save", "nms_procgen", "webapp"))]:
             del sys.modules[mod]
         try:
-            import webapp.app as A
+            from webapp.routes import designer
         except Exception as e:
             self.skipTest(f"app not importable here: {e}")
-        self.A = A
+        self.designs = designer
 
     def test_bad_design_files_are_refused(self):
         for bad in ({"ship": "banana", "want": ["_PIT_A"]}, {"ship": "sentinel", "want": ["_NOT_A_PART"]},
                     {"ship": "sentinel", "want": []}, ["not", "a", "design"]):
             with self.assertRaises(ValueError):
-                self.A._clean_design(bad)
+                self.designs.clean_design(bad)
 
     def test_a_known_seed_is_only_used_if_it_still_builds_the_design(self):
-        d = next(x for x in self.A.read_designs() if x["id"] == "dark_unicorn")
-        self.assertEqual(self.A._matching_seed(d["ship"], d["want"], d["seeds"]), d["seeds"][0])
-        self.assertIsNone(self.A._matching_seed(d["ship"], d["want"], ["0x1", "0x2"]))
+        d = next(x for x in self.designs.read_designs() if x["id"] == "dark_unicorn")
+        self.assertEqual(self.designs.matching_seed(d["ship"], d["want"], d["seeds"]), d["seeds"][0])
+        self.assertIsNone(self.designs.matching_seed(d["ship"], d["want"], ["0x1", "0x2"]))
 
 
 class ShipEquipment(unittest.TestCase):

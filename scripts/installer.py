@@ -22,7 +22,7 @@ from pathlib import Path
 NAME = "NMS Ship Studio"
 EXE = f"{NAME}.exe"
 PUBLISHER = "NMS Ship Studio"
-VERSION = "1.7.4"
+VERSION = "1.7.5"
 UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NMSShipStudio"
 DEFAULT_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / NAME
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / NAME  # game-file cache the app builds

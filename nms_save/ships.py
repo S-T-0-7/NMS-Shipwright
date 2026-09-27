@@ -244,12 +244,7 @@ def _palettes() -> dict:
 
 
 def palette_index(palette_id: str, rgb) -> int:
-    """Which slot of `palette_id` this colour is (the nearest one, if it is not exact).
-
-    The game stores a paint as an index into a palette. Storing -1 with a loose RGB instead
-    leaves the ship to be repainted after it is built, which shows as a flash of its own
-    colours, and is not what other players are sent.
-    """
+    """Slot of `palette_id` holding this colour, or the nearest one."""
     try:
         colours = _palettes()[palette_id]
     except (KeyError, OSError, ValueError):
@@ -261,10 +256,9 @@ def palette_index(palette_id: str, rgb) -> int:
 def set_ship_paint(readable_json: dict, slot: int, primary=(0.0, 0.0, 0.0), accent=None,
                    palette_id: str = "FREIGHTER", primary_index: int | None = None,
                    accent_index: int | None = None) -> dict:
-    """Paint a ship the way Starship Outfitting stores it: a palette and an index into it.
+    """Paint a ship: a palette plus the slot in it, as Starship Outfitting stores it.
 
-    In-game each colour snaps to the nearest colour of `palette_id`; FREIGHTER contains
-    true black, SHIP does not. Returns the indices written.
+    FREIGHTER has true black, SHIP does not. Returns the slots written.
     """
     _populated_entry(readable_json, slot)
     accent = primary if accent is None else accent
@@ -360,8 +354,7 @@ def _tech_ids(entry: dict) -> set:
 def wrong_core_tech(entry: dict) -> list:
     """Parts fitted to this ship that belong to the other kind of ship.
 
-    Only those: a ship with a part missing is the player's own business (a starter ship has no
-    hyperdrive yet), while a sentinel carrying a Photon Cannon can only have come from an editor.
+    A missing part is not a fault: a starter ship has no hyperdrive yet.
     """
     sentinel = is_sentinel(entry.get("Resource", {}).get("Filename", ""))
     wrong = sorted(_tech_ids(entry) & set(core_tech_for(not sentinel)))
@@ -386,12 +379,10 @@ def _install(inv: dict, item: str, amount: int) -> bool:
 
 
 def set_core_tech(readable_json: dict, slot: int, sentinel: bool) -> list:
-    """Give the ship in `slot` the built-in parts its type really has.
+    """Give the ship in `slot` the built-in parts of its type.
 
-    A ship copied from another one carries that ship's parts, so a sentinel would fly with a
-    Photon Cannon and a Pulse Engine instead of a Sentinel Cannon and a Luminance Engine. Parts
-    with a counterpart are swapped in place; the rest are added or taken out.
-    Returns what changed as (old id or "(none)", new id or "(removed)").
+    Parts with a counterpart are swapped in place, the rest added or removed.
+    Returns [(old id or "(none)", new id or "(removed)")].
     """
     entry = _populated_entry(readable_json, slot)
     swap = {(a if sentinel else b): (b if sentinel else a)
@@ -472,10 +463,7 @@ def ship_stats(readable_json: dict, slot: int) -> dict:
 
 def set_ship_stats(readable_json: dict, slot: int, values: dict | None = None, ship_class: str | None = None,
                    best: bool = False) -> dict:
-    """Set a ship's stat bonuses (and its class). Values outside what the game rolls are refused.
-
-    All three of a ship's inventories carry the same list, so all three are written.
-    """
+    """Set a ship's stat bonuses and class; values the game would never roll are refused."""
     from .items import CLASS_ORDER
     entry = _populated_entry(readable_json, slot)
     if ship_class:
@@ -527,9 +515,8 @@ def set_ship_model(readable_json: dict, slot: int, filename: str, seed: str | No
 
 
 def create_ship(readable_json: dict, slot: int, filename: str, seed: str, name: str, clone_from: int) -> None:
-    """Fill an empty slot with a copy of ship `clone_from` (inventory, tech, layout),
-    then give it its own model, seed and name, and no paint. A blank slot has no
-    inventory slots at all, so cloning is what makes the new ship usable."""
+    """Fill an empty slot with a copy of ship `clone_from`, then give it its own model,
+    seed and name. An empty slot has no inventory grid, so the copy is what makes it usable."""
     import copy
 
     entries = _dig(readable_json, SHIP_PATH)

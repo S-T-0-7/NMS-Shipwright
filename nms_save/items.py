@@ -170,11 +170,10 @@ VEHICLES = {0: "Roamer", 1: "Nomad", 2: "Colossus", 3: "Pilgrim", 4: "Nautilon",
 
 @functools.lru_cache(maxsize=1)
 def inventory_caps() -> dict:
-    """The most slots the game allows, read from its own inventory table.
+    """Slot limits from the game's inventory table.
 
-    {"ship": {type row: {"general": (C, B, A, S), "tech": (...)}}, "weapon": (C, B, A, S)}. The ship
-    rows are indexed by the game's ship-type number, the same one the system generator uses: rows 5
-    and 11 are empty, exactly the two numbers that enum does not use.
+    {"ship": {type: {"general": (C, B, A, S), "tech": (...)}}, "weapon": (C, B, A, S)}.
+    Ship rows are the game's ship-type numbers (see systemgen.CLASS_NAMES); 5 and 11 are unused.
     """
     import struct
     folder = gamefiles.extract(os.path.join(gamefiles.CACHE, "invtable"), ["*inventorytable*"], "NMSARC.GLOBALS.pak")
@@ -198,11 +197,9 @@ def inventory_caps() -> dict:
 
 @functools.lru_cache(maxsize=1)
 def stat_ranges() -> dict:
-    """What the game rolls a ship's stats between, from its own table.
+    """Stat ranges the game rolls within, from its own table.
 
-    {"ships": {type row: {class 0-3: [{"id", "name", "min", "max"}]}}} -- a ship the game makes
-    gets a value somewhere in that range for each stat, so these are also the honest limits for
-    editing one. Stat names come from the game's own text.
+    {"ships": {type row: {class 0-3: [{"id", "name", "min", "max"}]}}}, names from the game's text.
     """
     import struct
     folder = gamefiles.extract(os.path.join(gamefiles.CACHE, "invtable"), ["*inventorytable*"], "NMSARC.GLOBALS.pak")

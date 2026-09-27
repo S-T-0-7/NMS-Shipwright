@@ -53,6 +53,21 @@ so new parts and items appear without a new version of this app.
 - It does not modify any game file, so your save is not marked as modded.
 - Your save is yours: nothing is uploaded anywhere. The app has no network access at all.
 
+## How the code is laid out
+
+```
+nms_editor.py        the desktop window (pywebview) that starts the backend
+webapp/
+  app.py             the Flask app: blueprints and the error handler
+  common.py          paths, labels, opening and writing saves, the job list
+  routes/            one module per part of the UI (ships, designer, find, ...)
+  static/            the page, its stylesheet and one script per part of the UI
+nms_save/            reading and editing a save: items, ships, unlocks, quests
+nms_procgen/         the game's own generators: parts, colours, systems, 3D models
+scripts/             build the app and its installer
+tests/               python -m unittest tests.test_robustness
+```
+
 ## Building it yourself
 
 Requires Windows, Python 3.11+ and No Man's Sky installed.

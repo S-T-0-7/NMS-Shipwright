@@ -17,9 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 NAME = "NMS Ship Studio"
 STACK = 16 * 1024 * 1024
-# (source, folder inside the app). Nothing from the game and nothing from other people's sites
-# is shipped: ship part data is copied out of the player's own install on first use, and ship
-# pictures come from the built-in 3D viewer. --with-renders re-adds a local set for testing.
+# (source, folder inside the app). Nothing from the game is shipped: the ship part data is copied
+# out of the player's own install the first time it is needed.
 DATA = [
     ("webapp/static", "webapp/static"),
     ("data/palettes", "data/palettes"),
@@ -49,6 +48,7 @@ def build(console=False):
             "--console" if console else "--windowed", "--onedir", "--icon", str(icon), "--distpath", str(ROOT / ("dist-debug" if console else "dist")),
             "--workpath", str(work), "--specpath", str(work),
             "--collect-all", "unicorn", "--collect-all", "hgpaktool", "--collect-submodules", "webview",
+            "--exclude-module", "PIL", "--exclude-module", "pandas", "--exclude-module", "tkinter",
             "--hidden-import", "webapp.app", "--paths", str(ROOT)]
     for src, dest in DATA:
         if not (ROOT / src).exists():
@@ -111,13 +111,9 @@ def shortcuts(exe):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-installer", action="store_true")
-    ap.add_argument("--with-renders", action="store_true",
-                    help="also bundle data/renders (nms.center part pictures) -- local builds only, do not share")
     ap.add_argument("--shortcuts", action="store_true", help="point Desktop / Start menu shortcuts at dist/ instead of installing")
     ap.add_argument("--console", action="store_true", help="debug build with a console window (dist-debug/)")
     a = ap.parse_args()
-    if a.with_renders:
-        DATA.append(("data/renders", "data/renders"))
     exe = build(a.console)
     print("built:", exe)
     if a.shortcuts and not a.console:
