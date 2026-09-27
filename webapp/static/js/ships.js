@@ -33,7 +33,9 @@ function selectShip(slot) {
       <button class="btn" id="sRefit">Fit its own parts</button></div>` : ''}
     <h3>Seed</h3>
     <div class="row"><input id="sSeed" class="mono" value="${esc(s.seed)}" style="width:230px">
-      <button class="btn primary" id="sApply">Apply seed</button><button class="btn" id="sReroll">Reroll</button></div>
+      <button class="btn primary" id="sApply">Apply seed</button><button class="btn" id="sReroll">Reroll</button>
+      ${s.ship ? '<button class="btn" id="sEdit">Change its parts</button>' : ''}</div>
+    ${s.ship ? '<p class="muted" style="margin:6px 0 0">"Change its parts" opens this ship in the Designer with its own parts filled in.</p>' : ''}
     <h3>Stats</h3>
     <div class="card" style="padding:14px" id="sStats"><span class="muted">Loading...</span></div>
     <h3>Recolour</h3>
@@ -52,7 +54,7 @@ function selectShip(slot) {
     <div class="row"><input id="sName" value="${esc(s.name)}" placeholder="(unnamed)" style="width:260px"><button class="btn" id="sRename">Rename</button></div>
     <h3>Ship type</h3>
     <div class="row"><select id="sModel">${S.models.map(m => `<option value="${m.ship}" ${m.ship === s.ship ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}${s.ship ? '' : `<option value="" selected>${esc(s.category)} (fixed model)</option>`}</select>
-      <button class="btn" id="sModelApply">Change type</button>${s.ship ? '<button class="btn" id="sEdit">Edit parts in Designer</button>' : ''}</div>
+      <button class="btn" id="sModelApply">Change type</button></div>
     </details>
     ${s.is_procedural && s.ship ? '<h3>Colours &amp; finish from the seed</h3><div id="sLook"><span class="muted">Working out the look...</span></div>' : ''}
     <h3>Where to find it in the game</h3><div id="sOrigin">${originHtml(s)}</div>

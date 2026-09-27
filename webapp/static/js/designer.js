@@ -4,12 +4,43 @@ async function openDesignerFor(s) {
   $('#dShip').value = s.ship; await loadTree();
   const r = await api(`/api/parts?ship=${encodeURIComponent(s.ship)}&seed=${encodeURIComponent(s.seed)}`);
   preselect(r.parts.map(p => p.id));
-  S.edit = {slot: s.index, ship: s.ship, name: s.name || '(unnamed)'}; showEdit();
+  S.edit = {slot: s.index, ship: s.ship, name: s.name || '(unnamed)'};
+  showEdit(); fillTargets();
+}
+
+/* Pinning every part of an existing ship makes the search hopeless (one ship in billions), so
+   this lets go of the pins that cost the most, cheapest first, until the wait is bearable. */
+function loosen(minutes) {
+  const rate = 5e6, budget = minutes * 60 * rate;      // seeds we can afford to test
+  const dropped = [];
+  for (let guard = 0; guard < 50 && oddsOneIn() > budget; guard++) {
+    let worst = null, worstCost = 1;
+    for (const sel of $$('#dTree select')) {
+      if (sel.value === '') continue;
+      const w = sel.dataset.weights ? JSON.parse(sel.dataset.weights) : null;
+      if (!w) continue;
+      const cost = w.reduce((a, b) => a + b, 0) / (w[+sel.value] || 1);
+      if (cost > worstCost) { worst = sel; worstCost = cost; }
+    }
+    if (!worst) break;
+    dropped.push(worst.previousElementSibling?.textContent?.trim() || 'a group');
+    worst.value = '';
+    worst.dispatchEvent(new Event('change'));
+  }
+  return dropped;
 }
 function showEdit() {
-  $('#dEdit').innerHTML = S.edit ? `<div class="card edit">Editing <b>slot ${S.edit.slot}</b> (${esc(S.edit.name)}): its current parts are filled in.
-    Change what you want and set details you don't care about back to "Any" so the search stays fast. <button class="btn" id="dEditStop">Stop editing</button></div>` : '';
-  if (S.edit) $('#dEditStop').onclick = () => { S.edit = null; showEdit(); };
+  $('#dEdit').innerHTML = S.edit ? `<div class="card edit">Editing <b>slot ${S.edit.slot}</b> (${esc(S.edit.name)}): its parts are filled in below,
+    and "Into your save" now points at that ship. Change what you like, then search for a seed.
+    <div class="row" style="margin-top:8px"><button class="btn" id="dLoosen">Make it searchable</button>
+      <span class="muted">sets the fiddliest details back to "Any" -- every part you pin makes the search slower</span>
+      <span style="flex:1"></span><button class="btn" id="dEditStop">Stop editing</button></div></div>` : '';
+  if (!S.edit) return;
+  $('#dEditStop').onclick = () => { S.edit = null; showEdit(); fillTargets(); };
+  $('#dLoosen').onclick = () => {
+    const dropped = loosen(2);
+    toast(dropped.length ? `Set back to "Any": ${dropped.join(', ')}.` : 'This design is already quick to search.');
+  };
 }
 function preselect(ids) {
   const want = new Set(ids);
@@ -68,7 +99,8 @@ function fillTargets() {
   const ship = $('#dShip').value, empty = (S.empty || []).length;
   sel.innerHTML = `<option value="new" ${empty ? '' : 'disabled'}>A new ship (first empty slot${empty ? '' : ' -- none free'})</option>`
     + (S.ships || []).map(s => `<option value="${s.index}">Replace slot ${s.index}: ${esc(s.name || '(unnamed)')} (${esc(s.category)})${s.ship && s.ship !== ship ? ' -- changes its type' : ''}</option>`).join('');
-  if (!empty && S.ships && S.ships.length) sel.value = String(S.slot ?? S.ships[0].index);
+  if (S.edit) sel.value = String(S.edit.slot);                  // editing a ship: put it back where it came from
+  else if (!empty && S.ships && S.ships.length) sel.value = String(S.slot ?? S.ships[0].index);
 }
 async function installDesign() {
   const want = wanted(); if (!want.length) throw new Error('Pick some parts or load a design first.');

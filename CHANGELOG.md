@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.6
+
+- Changing a ship you already own is no longer hidden: "Change its parts" sits next to the seed on
+  the ship's page, instead of inside the "More" section.
+- Editing a ship now points "Into your save" at that same ship, so a seed you find replaces it
+  rather than adding another one.
+- Pinning all of a ship's parts makes the search hopeless (one ship in billions), so editing offers
+  **Make it searchable**: it sets the fiddliest details back to "Any", cheapest first, until a
+  result should take about two minutes. Those parts may come out different.
+
 ## 1.7.4
 
 - Paint is now stored the way the game stores it: a palette and the index of the colour inside it.
