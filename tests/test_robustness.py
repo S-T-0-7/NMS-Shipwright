@@ -300,6 +300,27 @@ class ShipEquipment(unittest.TestCase):
         self.assertEqual(self.ships.wrong_core_tech(entry), [])
 
 
+class GeneratorVectors(unittest.TestCase):
+    """The part generator must keep reproducing known ships after a game update."""
+
+    def test_known_ships_still_come_out_the_same(self):
+        os.environ.pop("NMS_TOOL_CACHE", None)
+        for mod in [m for m in list(sys.modules) if m.startswith(("nms_save", "nms_procgen"))]:
+            del sys.modules[mod]
+        from nms_procgen.generator import part_ids, stored_id
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(here, "nms_procgen", "test_vectors.json")) as f:
+            vectors = json.load(f)
+        for t in vectors:
+            alias = t.get("aliases", {})          # ids nms.center used before the game renamed them
+            want = {stored_id(alias.get(p, p)) for p in t["parts"]}
+            try:
+                got = set(part_ids(int(str(t["seed"]), 16), t["ship"]))
+            except Exception as e:
+                self.skipTest(f"game files not available: {e}")
+            self.assertLessEqual(want, got, f"{t['seed']} ({t['ship']}) lost {sorted(want - got)}")
+
+
 class OtherPeoplesPCs(unittest.TestCase):
     """The app has to work on a PC that is not the one it was built on."""
 

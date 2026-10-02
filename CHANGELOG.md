@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.7
+
+- Works with the No Man's Sky update of 1 October 2026 (game build 88,545,352). The tool noticed
+  the new build, re-read the game's files and re-found the generator addresses by itself; nothing
+  in it needed changing for the new version.
+- Fixed the deep health check, which could not reach the system generator after the code was
+  split into modules.
+- The nine known ships the generator is checked against are now part of the test suite, so a
+  future update that changes how ships are built will be caught straight away.
+
 ## 1.7.6
 
 - Changing a ship you already own is no longer hidden: "Change its parts" sits next to the seed on

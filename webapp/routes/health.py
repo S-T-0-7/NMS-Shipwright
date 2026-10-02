@@ -55,6 +55,8 @@ def health(deep=False):
               _check("Save files", "everything", lambda: f"{len(locator.find_saves())} saves found"),
               _check("Save format", "everything", _save_format)]
     if deep:
+        from webapp.routes.find import system_gen
+
         def one_system():
             return "%d ships in one system" % len(system_gen().system(0xBE0008220992)["ships"])
 
