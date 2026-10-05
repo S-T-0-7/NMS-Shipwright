@@ -64,12 +64,9 @@ def build(console=False):
 
 
 def fix_pe(exe, size=STACK):
-    # DO NOT DELETE THIS. i know it looks like pointless header surgery on a finished exe. it is not.
-    # two separate things were killing the build and both took me an entire evening each:
-    #  1) the emulator blows straight through a 2MB thread stack, so we bump it to 16MB (same as python.exe)
-    #  2) Control Flow Guard instantly nukes the process the moment unicorn jumps into code it JIT'd
-    #     at runtime, because CFG sees it as an "illegal" indirect call. so we rip CFG out of the flags.
-    # without this the packaged app just dies with exit code 127 and no error. ask me how i found that out.
+    # Bump the thread stack to 16MB (the emulator overflows 2MB) and strip Control Flow Guard
+    # (it kills the process when unicorn jumps into its JIT'd code).
+    # WARNING: don't remove -- without this the packaged app dies with exit code 127, no error.
     import pefile
     pe = pefile.PE(str(exe))
     pe.OPTIONAL_HEADER.SizeOfStackReserve = size

@@ -1,24 +1,10 @@
-# given a ship seed, work out which star system it came from. running this backwards.
-#
-# ok so here's the trick that makes this possible at all. every ship the game spawns for
-# a system (the sentinel interceptor at a crash site, the ships that fly into the station)
-# is just a child number pulled out of ONE random generator, and that generator is seeded
-# with the system's 64-bit universe address (UA). roughly:
-#
-#     rng = MWC(UA)                      # same MWC the part generator uses
-#     ...some number of steps k...
-#     ship_seed = mix64((b << 32) | a)   # a, b = the next two rng outputs
-#
-# and the insane part: both of those steps are INVERTIBLE. so you can take a ship seed and
-# literally run the whole thing in reverse, one rng step at a time, and at each step there's
-# exactly one UA that could have produced it. if that UA looks like a real system address
-# (planet 0, top byte clear, system index < 0x300) -> found it. that's it. that's the magic.
-#
-# heads up: seeds WE invented in the design search were never produced by the game, so they
-# usually reverse into nothing. that's expected, not a bug.
-#
-# (star-system generator was at 0x141639930 when i reversed this, but see exeaddr.py, nothing
-# is actually hardcoded. the maths here is the part that doesn't move.)
+# Works out which star system a ship seed came from, by running the generator backwards.
+# a system's ships are children of one RNG seeded with its universe address (UA):
+#     rng = MWC(UA); ...k steps...; ship_seed = mix64((b<<32)|a)
+# both steps are invertible, so we reverse step-by-step and keep states that decode to a
+# real UA (planet 0, top byte clear, system index < 0x300).
+# NOTE: seeds from our own design search were never made by the game, so they usually
+# reverse into nothing -- that's expected.
 from __future__ import annotations
 
 K = 0x5A76F899
@@ -102,16 +88,14 @@ def _plausible(ua: int) -> bool:
 
 def origins(seed: int, max_steps: int = 4000) -> list[tuple[int, int]]:
     """(ua, k) pairs: `seed` is the child drawn after k steps of MWC(ua)."""
-    # undo the final mix, split back into the two 32-bit rng outputs that made this seed
+    # undo the final mix, split back into the two 32-bit rng outputs
     v = unmix64(seed & M64)
     a, b = v & M32, v >> 32
-    c = (b - a * K) & M32                # the MWC carry after the first of the two draws
+    c = (b - a * K) & M32                # MWC carry after the first draw
     if c > K:
-        return []                        # carry out of range -> this was never an MWC child. bail.
-    # now just keep stepping the generator BACKWARDS. divmod inverts one MWC step. at every
-    # step we reconstruct the UA that state implies and keep the ones that look like real
-    # systems. do not touch the j-loop, it handles a freshly-seeded state that carries >= K
-    # and i promise it is load-bearing even though it looks pointless.
+        return []                        # carry out of range -> never an MWC child
+    # step backwards; divmod inverts one MWC step, rebuild the UA each step.
+    # WARNING: the j-loop handles a fresh state carrying >= K. looks pointless, isn't. keep it.
     s0, s1, out = a, c, []
     for k in range(max_steps):
         p0, p1 = divmod((s1 << 32) | s0, K)
