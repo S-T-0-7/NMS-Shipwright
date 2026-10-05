@@ -1,12 +1,12 @@
-﻿"""NMS Ship Studio Setup -- per-user installer and uninstaller (no admin rights needed).
+﻿"""NMS Shipwright Setup -- per-user installer and uninstaller (no admin rights needed).
 
-Built into "NMS Ship Studio Setup.exe" by `python scripts/build_app.py`, with the app folder
-embedded as app.zip. Installing copies the app to %LOCALAPPDATA%\\Programs\\NMS Ship Studio (or
+Built into "NMS Shipwright Setup.exe" by `python scripts/build_app.py`, with the app folder
+embedded as app.zip. Installing copies the app to %LOCALAPPDATA%\\Programs\\NMS Shipwright (or
 a chosen folder), adds Desktop / Start menu shortcuts and an entry in Settings > Apps, and
 copies this program next to the app as Uninstall.exe.
 
-    "NMS Ship Studio Setup.exe"                 wizard
-    "NMS Ship Studio Setup.exe" /S [/D=folder]  silent install
+    "NMS Shipwright Setup.exe"                 wizard
+    "NMS Shipwright Setup.exe" /S [/D=folder]  silent install
     Uninstall.exe --uninstall                   remove (asks first; /S for silent)
 """
 import ctypes
@@ -19,11 +19,11 @@ import winreg
 import zipfile
 from pathlib import Path
 
-NAME = "NMS Ship Studio"
+NAME = "NMS Shipwright"
 EXE = f"{NAME}.exe"
-PUBLISHER = "NMS Ship Studio"
+PUBLISHER = "NMS Shipwright"
 VERSION = "1.7.7"
-UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NMSShipStudio"
+UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NMSShipwright"
 DEFAULT_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / NAME
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / NAME  # game-file cache the app builds
 DESKTOP = Path(os.environ.get("USERPROFILE", Path.home())) / "Desktop" / f"{NAME}.lnk"

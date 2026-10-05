@@ -1,12 +1,12 @@
-"""Build "NMS Ship Studio.exe" (PyInstaller, one folder) and its installer "NMS Ship Studio Setup.exe".
+"""Build "NMS Shipwright.exe" (PyInstaller, one folder) and its installer "NMS Shipwright Setup.exe".
 
-    python scripts/build_app.py                 # app + dist/NMS Ship Studio Setup.exe
+    python scripts/build_app.py                 # app + dist/NMS Shipwright Setup.exe
     python scripts/build_app.py --no-installer  # app only
     python scripts/build_app.py --shortcuts     # also point Desktop / Start menu shortcuts at dist/ (development)
 
-The app lands in dist/NMS Ship Studio/. It needs no Python, only the Edge WebView2
+The app lands in dist/NMS Shipwright/. It needs no Python, only the Edge WebView2
 runtime that Windows 10/11 already ship. Copies of game files it extracts go to
-%LOCALAPPDATA%/NMS Ship Studio/gamecache, so rebuilding keeps them.
+%LOCALAPPDATA%/NMS Shipwright/gamecache, so rebuilding keeps them.
 """
 import argparse
 import os
@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-NAME = "NMS Ship Studio"
+NAME = "NMS Shipwright"
 STACK = 16 * 1024 * 1024
 # (source, folder inside the app). Nothing from the game is shipped: the ship part data is copied
 # out of the player's own install the first time it is needed.

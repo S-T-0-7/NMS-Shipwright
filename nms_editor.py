@@ -1,6 +1,6 @@
-"""NMS Ship Studio -- desktop app.
+"""NMS Shipwright -- desktop app.
 
-    python nms_editor.py        (or the "NMS Ship Studio" shortcut / exe)
+    python nms_editor.py        (or the "NMS Shipwright" shortcut / exe)
 
 Runs the local backend on a free 127.0.0.1 port and shows it in a native
 window (pywebview / Edge WebView2). Without pywebview it opens your browser.
@@ -15,7 +15,7 @@ import time
 import webbrowser
 from pathlib import Path
 
-APP_NAME = "NMS Ship Studio"
+APP_NAME = "NMS Shipwright"
 FROZEN = getattr(sys, "frozen", False)
 if FROZEN:  # game-file copies live outside the app folder, so rebuilding the app keeps them
     os.environ.setdefault("NMS_TOOL_CACHE", os.path.join(os.environ.get("LOCALAPPDATA", str(Path.home())),

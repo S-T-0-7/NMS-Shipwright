@@ -1,6 +1,6 @@
 name: Release
 
-# Builds "NMS Ship Studio Setup.exe" on a clean Windows runner and attaches it to the GitHub
+# Builds "NMS Shipwright Setup.exe" on a clean Windows runner and attaches it to the GitHub
 # release. Nothing from No Man's Sky is needed to build: the installer only carries the app, which
 # reads the game's own files on the player's PC at runtime.
 #
@@ -59,14 +59,14 @@ jobs:
       - name: Upload the build
         uses: actions/upload-artifact@v4
         with:
-          name: NMS-Ship-Studio-Setup
-          path: dist/NMS Ship Studio Setup.exe
+          name: NMS-Shipwright-Setup
+          path: dist/NMS Shipwright Setup.exe
           if-no-files-found: error
 
       - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/NMS Ship Studio Setup.exe
+          files: dist/NMS Shipwright Setup.exe
           body_path: build/release-notes.md
           fail_on_unmatched_files: true

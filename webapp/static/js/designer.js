@@ -185,7 +185,7 @@ async function initDesigner() {
       const name = prompt('Name for this design file:', 'My design'); if (!name) return;
       const seeds = [...$$('#dResults code')].map(c => c.textContent).slice(0, 12);
       file = {filename: name.toLowerCase().replace(/[^a-z0-9]+/g, '_') + '.nmsdesign.json',
-              text: JSON.stringify({name, ship: $('#dShip').value, want, avoid: [], found_seeds: seeds, made_with: 'NMS Ship Studio'}, null, 1)};
+              text: JSON.stringify({name, ship: $('#dShip').value, want, avoid: [], found_seeds: seeds, made_with: 'NMS Shipwright'}, null, 1)};
     }
     await saveTextFile(file.filename, file.text);
   });

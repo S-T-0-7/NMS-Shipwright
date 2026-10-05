@@ -1,4 +1,4 @@
-"""NMS Ship Studio -- the local backend behind the desktop window (nms_editor.py).
+"""NMS Shipwright -- the local backend behind the desktop window (nms_editor.py).
 
 Binds to 127.0.0.1 only. Every write goes through save.OpenSave.write(), which backs the file
 up first, and is refused while No Man's Sky is running (the game would overwrite the change on

@@ -206,7 +206,7 @@ def api_design_file(key):
     """The design as a file you can keep or share."""
     d = find_design(key)
     data = {"name": d["name"], "ship": d["ship"], "notes": d["notes"], "want": d["want"], "avoid": d["avoid"],
-            "found_seeds": d["seeds"], "made_with": "NMS Ship Studio"}
+            "found_seeds": d["seeds"], "made_with": "NMS Shipwright"}
     return jsonify({"ok": True, "filename": f"{key}.nmsdesign.json", "text": json.dumps(data, indent=1)})
 
 

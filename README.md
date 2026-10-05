@@ -1,4 +1,4 @@
-# NMS Ship Studio
+# NMS Shipwright
 
 A Windows app for designing, finding and editing No Man's Sky starships, plus a general save
 editor. It reads the ship generator out of your own copy of the game, so a seed in the app builds
@@ -28,16 +28,16 @@ running, because the game would overwrite it.
 
 ## Install
 
-1. Go to the [releases page](../../releases) and download `NMS Ship Studio Setup.exe` from the
+1. Go to the [releases page](../../releases) and download `NMS Shipwright Setup.exe` from the
    latest release (under **Assets**).
 2. Run it. Windows will warn that it is from an unknown publisher (the app is not code-signed):
    choose **More info → Run anyway**.
 3. The setup window opens: press **Install**. It installs for your user only, into
-   `%LOCALAPPDATA%\Programs\NMS Ship Studio`, and adds Desktop and Start menu shortcuts. No admin
+   `%LOCALAPPDATA%\Programs\NMS Shipwright`, and adds Desktop and Start menu shortcuts. No admin
    rights, no Python, nothing else to install. Running the setup again later updates in place and
    keeps your game-file cache.
 
-To remove it: Settings → Apps → NMS Ship Studio, or run `Uninstall.exe` from the install folder.
+To remove it: Settings → Apps → NMS Shipwright, or run `Uninstall.exe` from the install folder.
 
 ## First run
 
@@ -46,7 +46,7 @@ Microsoft Store). If your copy is somewhere unusual, open **Save → Game data**
 folder that contains `Binaries\NMS.exe`.
 
 It then reads what it needs out of your game's own archives and keeps the copies in
-`%LOCALAPPDATA%\NMS Ship Studio\gamecache`. After a game update it notices and reads them again,
+`%LOCALAPPDATA%\NMS Shipwright\gamecache`. After a game update it notices and reads them again,
 so new parts and items appear without a new version of this app.
 
 ## Is this safe to use?
@@ -77,7 +77,7 @@ Requires Windows, Python 3.11+ and No Man's Sky installed.
 
 ```
 pip install -r requirements.txt
-python scripts/build_app.py          # dist/NMS Ship Studio Setup.exe
+python scripts/build_app.py          # dist/NMS Shipwright Setup.exe
 python -m unittest tests.test_robustness
 ```
 
@@ -96,7 +96,7 @@ git push origin v1.7.7
 ```
 
 The workflow checks the tag matches `VERSION`, builds the installer, and publishes the release with
-`NMS Ship Studio Setup.exe` attached and that changelog section as the notes.
+`NMS Shipwright Setup.exe` attached and that changelog section as the notes.
 
 ## What is not included
 
