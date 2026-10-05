@@ -1,11 +1,7 @@
-"""Vectorised (numpy) seed search for designs with many pinned parts.
-
-Runs generator.py's RNG for millions of seeds at once, group by group: seeds that
-fail a pinned group are dropped before their sub-parts are computed. Semantics: in
-any group where some option is wanted, the pick must be one of the wanted options
-(wanted options of one group are alternatives); avoided options must not be picked;
-wanted parts imply their parent parts. Hits are re-checked with the exact generator.
-"""
+# numpy seed search for designs w/ many pinned parts. runs generator.py's RNG for
+# millions of seeds at once, group by group, dropping fails early. hits re-checked
+# w/ the exact generator (matches()).
+# WARN: must stay in lockstep w/ generator.py. if the generator maths changes, this does too.
 import time
 
 import numpy as np

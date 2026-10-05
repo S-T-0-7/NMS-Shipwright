@@ -1,14 +1,8 @@
-"""3D models of procedural ships, straight from the game's scene and geometry files.
-
-ship_model(seed, ship) walks the ship's root scene the way the game does: descriptor
-nodes (_Name) the seed did not pick are dropped, REFERENCE nodes pull in the part's own
-scene, and every LOD0 mesh is placed with its accumulated transform. The result is one
-compact binary (see pack()) that webapp/static/viewer.js draws with WebGL.
-
-Game geometry is read on demand: the two geometry files of a part are extracted from
-NMSARC.MeshCommon.pak once and reduced to positions + indices per mesh (a few % of the
-original size) under CACHE/models/.
-"""
+# 3D models of procedural ships, from the game's scene + geometry files.
+# ship_model(seed, ship) walks the root scene like the game: drops descriptor nodes the
+# seed didnt pick, REFERENCE nodes pull in the part's scene, each LOD0 mesh placed w/ its
+# accumulated transform. output = 1 compact binary (pack()) that viewer.js draws w/ WebGL.
+# geometry read on demand from NMSARC.MeshCommon.pak, reduced to pos+indices under CACHE/models/.
 from __future__ import annotations
 
 import functools

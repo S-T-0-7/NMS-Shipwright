@@ -1,30 +1,13 @@
-"""Which ships a star system has, computed with the game's own generator code.
-
-NMS.exe's star-system generator (located per game build by exeaddr.py) is run in an emulator (see emu.py)
-for any universe address. It fills cGcSolarSystemData, from which we read:
-
-  * SentinelCrashSiteShipSeed (+0x2490) - the Sentinel interceptor found at the
-    system's crash sites. Only dissonant systems (a planet with corrupted
-    sentinels) have them.
-  * SystemShips (+0x24a0) - 50 entries of 0x40 bytes: {name[0x20], seed, valid,
-    role, subtype, class, ai-type}. The first 21 (role 1, ai-type 0) are the
-    space-station pool ("21 ships per system"); class 1 hauler, 2 fighter,
-    3 explorer, 4 shuttle, 6 exotic, 8 solar (pool ships converted by chance).
-    The rest are freighter fleets, pirates and the POLICE sentinel ship.
-  * PlanetGenerationInputs (+0x21a0, 0x58 bytes each): seed, biome (+0x10) and a
-    flag (+0x18). Feeding {planet UA, seed, biome | flag<<16} to the game's
-    planet-info function (the one that rebuilds planets from
-    discovery records) gives each planet's sentinel level for the four sentinel
-    presets (+0x34cc, 24 bytes apart); level 3 = corrupted => dissonant system.
-
-Verified against the player's save: the two crash-site interceptors (systems 139
-and 190), a station explorer (103), a station hauler (85), the planet seeds and
-biomes of all 11 discovered planets, and dissonance (139 and 190 dissonant,
-the start system not).
-
-Three generator steps that only touch live-game objects (asteroid lists,
-palettes) are skipped; none of them uses the RNG that seeds ships.
-"""
+# which ships a star system has, via the game's own generator run in the emulator (emu.py).
+# runs NMS.exe's star-system gen for a universe addr, fills cGcSolarSystemData, we read:
+#  - SentinelCrashSiteShipSeed (+0x2490): crash-site interceptor (dissonant systems only).
+#  - SystemShips (+0x24a0): 50x 0x40 bytes {name, seed, valid, role, subtype, class, ai}.
+#    first 21 (role 1, ai 0) = station pool. class 1 hauler/2 fighter/3 explorer/4 shuttle/
+#    6 exotic/8 solar. rest = freighters, pirates, police sentinel.
+#  - PlanetGenerationInputs (+0x21a0, 0x58 each): seed, biome(+0x10), flag(+0x18) -> planet-
+#    info fn -> sentinel level per preset (+0x34cc, 24 apart); level 3 = corrupted = dissonant.
+# WARN: offsets above are load-bearing. if a game update shifts the struct, these move too.
+# 3 gen steps touching live-only objects (asteroids, palettes) skipped, none seed ships.
 from __future__ import annotations
 
 import json

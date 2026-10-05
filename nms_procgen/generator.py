@@ -1,20 +1,12 @@
-"""Exact reimplementation of No Man's Sky's procedural part selection.
-
-Reverse-engineered from NMS.exe (recursive selector at 0x142D4AB20, weighted
-picker at 0x142D4F3E0 in the build installed 2026-09). Given a seed and the
-game's own *.DESCRIPTOR.MBIN tree it reproduces the parts the game builds;
-verified against nms.center previews (test_vectors.json).
-
-  * RNG: 32-bit multiply-with-carry, multiplier 0x5A76F899. A 64-bit seed
-    becomes s0 = lo32 (1 if 0), s1 = rot16(lo32) ^ hi32 ^ lo32.
-  * Per descriptor group: one step, r = (s0 * total_weight) >> 32, cumulative
-    pick. Options weigh 20; a Name containing "xRARE" weighs 1, "xNEVER" 0.
-  * Then each nested descriptor list of the chosen option, followed by each of
-    its ReferencePaths, is walked with its own seed: two steps a, b ->
-    mix64((b << 32) | a). References with no descriptor still use their steps.
-  * A group is skipped outright if any of its option ids was already chosen
-    anywhere in the model. Chosen ids are stored LOD-suffix-stripped, once.
-"""
+# exact reimpl of NMS procedural part selection. reversed from NMS.exe (selector +
+# weighted picker, 2026-09 build), verified vs nms.center previews (test_vectors.json).
+#  - RNG: 32-bit mul-with-carry, mult 0x5A76F899. 64-bit seed -> s0=lo32 (1 if 0),
+#    s1 = rot16(lo32) ^ hi32 ^ lo32.
+#  - per group: 1 step, r=(s0*total_weight)>>32, cumulative pick. opts weigh 20,
+#    "xRARE"=1, "xNEVER"=0.
+#  - each nested list + refpaths of the picked opt walked w/ own child seed (2 steps -> mix64).
+#  - group skipped if any of its opt ids already chosen anywhere in the model.
+# WARN: this must match the game bit-for-bit. dont "clean up" the maths.
 import random
 
 from .mbin import gamedata_dir, load_descriptor, ref_to_descriptor
@@ -49,7 +41,7 @@ class MWC:
 
     def __init__(self, seed):
         lo, hi = seed & M32, (seed >> 32) & M32
-        self.s0 = lo or 1
+        self.s0 = lo or 1   # WARN: lo==0 -> 1, game does this. dont drop it.
         self.s1 = (((lo << 16) | (lo >> 16)) & M32) ^ hi ^ lo
 
     def next(self):
@@ -109,8 +101,8 @@ def _select(groups, seed, out, seen, gamedata, depth=0, trace=None, pos=0):
             pos += sum(_opt_size(o, gamedata) for o in g["opts"])
         weights = [option_weight(o) for o in g["opts"]]
         total = sum(weights)
-        # The game skips (no RNG step, no recursion) a group with nothing to
-        # pick or with any option already chosen elsewhere in this model.
+        # WARN: game skips (no RNG step, no recursion) a group w/ nothing to pick OR any
+        # opt already chosen elsewhere. the "no RNG step" part is load-bearing, keep it.
         if not total or any(o["id"] in seen for o in g["opts"]):
             continue
         r = (rng.next() * total) >> 32

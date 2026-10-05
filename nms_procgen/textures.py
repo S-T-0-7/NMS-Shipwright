@@ -1,19 +1,13 @@
-"""Seed -> ship colours, texture modes and decals, following NMS.exe.
-
-Colours: the palette table generator (see exeaddr "palette_table") fills, for each of the
-66 base palettes, 5 colours and their indices from the resource seed. Verified: the Paint
-Primary index equals nms.center's "colors" value for 5 fighter seeds.
-
-Textures: every material sampler loads <map without extensions>.TEXTURE.MBIN. The layers of a
-material's lists are merged by (Name, Group), with probabilities and option weights averaged.
-Then, with MWC(seed), for each layer in order:
-  * if prob > 0: one step, x = s0 / (2^32 - 1); the layer is used if prob > x;
-  * a used layer that is not SelectToMatchBase takes one more step for a weighted pick
-    (first option whose running weight sum exceeds x * total);
-  * a SelectToMatchBase layer takes the option named like the one picked for BASE.
-The option's colour is table[palette].colours[alt] (alt > 3 uses colour 3, alt 6 an override,
-alt 7 none). All arithmetic is float32, as in the game.
-"""
+# seed -> ship colours, texture modes + decals, following NMS.exe.
+# colours: palette table gen (exeaddr "palette_table") fills 66 base palettes x 5 colours
+#   from the resource seed. verified vs nms.center "colors" for 5 fighter seeds.
+# textures: each sampler loads <map>.TEXTURE.MBIN, layers merged by (Name, Group), probs +
+#   weights averaged. then MWC(seed), per layer in order:
+#   - prob>0: 1 step, x = s0/(2^32-1), used if prob > x
+#   - used + not SelectToMatchBase: 1 more step for weighted pick
+#   - SelectToMatchBase: take the option named like the one picked for BASE
+#   colour = table[palette].colours[alt] (alt>3 -> colour 3, 6 -> override, 7 -> none).
+# WARN: all maths is float32 like the game. dont switch to float64, picks will drift.
 from __future__ import annotations
 
 import functools
