@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.0 — first public release
+
+Renamed to **NMS Shipwright**. Design, find and edit No Man's Sky ships, recolour them, and edit
+your save -- everything read from your own copy of the game, nothing bundled. Works with the game
+update of 1 October 2026.
+
 ## 1.7.7
 
 - Works with the No Man's Sky update of 1 October 2026 (game build 88,545,352). The tool noticed
