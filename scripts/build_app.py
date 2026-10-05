@@ -64,8 +64,8 @@ def build(console=False):
 
 
 def fix_pe(exe, size=STACK):
-    # stack -> 16MB (emulator overflows 2MB) + strip CFG (kills proc when unicorn hits JIT'd code).
-    # WARN: dont remove, else packaged app dies w/ exit 127, no error.
+    # stack -> 16MB (emu overflows 2MB) + strip CFG (kills proc when unicorn hits JIT'd code).
+    # WARN: dont remove, else packaged app dies w/ exit 127, no err.
     import pefile
     pe = pefile.PE(str(exe))
     pe.OPTIONAL_HEADER.SizeOfStackReserve = size

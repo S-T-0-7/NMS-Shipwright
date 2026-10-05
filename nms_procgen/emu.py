@@ -1,6 +1,6 @@
-# runs real NMS.exe code w/o the game: maps exe into unicorn emulator, fakes imports/
-# stack/heap/TEB/app obj, loads *.global.mbin, calls the generators directly.
-# reads NMS.exe + NMSARC.globals.pak off disk only, never touches running game.
+# runs real NMS.exe code w/o the game: maps exe into unicorn emu, fakes imports/stack/
+# heap/TEB/app obj, loads *.global.mbin, calls generators directly.
+# reads NMS.exe + NMSARC.globals.pak off disk only, nvr touches running game.
 from __future__ import annotations
 
 import glob
@@ -31,8 +31,8 @@ CACHE = os.environ.get("NMS_TOOL_CACHE") or os.path.join(
 BASE = 0x140000000
 STUBS, SENTINEL = 0x10000000, 0x10100000
 NATIVE = STUBS + 0x20000  # x86 versions of hot imports: no Python callback per call
-# hand-asm x86-64 (win64 abi) so hot imports run in-emulator, not via python.
-# WARN: no hand-editing hex, assemble + paste.
+# hand-asm x86-64 (win64 abi) so hot imports run in-emu, not via python.
+# WARN: no hand-edit hex, asm + paste.
 NATIVE_CODE = {
     # memmove(rcx=dst, rdx=src, r8=n) -> dst; copies backwards when dst overlaps the end of src
     # memmove(rcx=dst, rdx=src, r8=n) -> dst: 32/8/1-byte loops (unicorn runs each `rep` step as its
@@ -189,7 +189,7 @@ class Emu:
         b = open(path, "rb").read()
         h = self.alloc(len(b) + 0x100, 0x100)
         self.mu.mem_write(h, b)
-        # MBIN arrays = (rel offset, count, 0xAAAAAA01); magic marks a ptr. fix rel -> abs addr.
+        # MBIN arrays = (rel off, count, 0xAAAAAA01); magic marks a ptr. fix rel -> abs addr.
         for p in (i - 12 for i in range(12, len(b) - 3, 4)
                   if struct.unpack_from("<I", b, i)[0] == 0xAAAAAA01 and (i - 12) % 8 == 0):
             rel, cnt = struct.unpack_from("<qI", b, p)
@@ -234,8 +234,8 @@ class Emu:
         self.sizes[a] = n
         return a
 
-    # fakes return value for every import (maths, malloc, memcpy...).
-    # WARN: import problm = silent 0 = weird fault later. add missing ones here.
+    # fakes return val for evry import (maths, malloc, memcpy...).
+    # WARN: import problm = silent 0 = wierd fault later. add missing ones here.
     def _on_stub(self, mu, addr, size, _):
         fn = self.imports.get(addr)
         if fn is None:

@@ -1,6 +1,6 @@
-# finds game code in NMS.exe by byte sig (nothing hardcoded, exe moves every patch).
-# WARN: sig stops matching = game changed. re-dump bytes, dont touch logic.
-# cached in data/gamecache/exeaddr.json.
+# finds game code in NMS.exe by byte sig (nthng hardcoded, exe moves evry patch).
+# WARN: sig dont match = game changed. redump bytes, dont tuch logic.
+# cached data/gamecache/exeaddr.json.
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ from nms_save import gamepath
 
 from .emu import CACHE
 
-# opcode bytes from disasm, ?? = moves every build. WARN: no retype, re-dump.
+# opcode bytes from disasm, ??=moves evry build. WARN: no retype, redump.
 SIGS = {
     "gen": "48895c24184c894c24205556574154415541564157488dac2480d8ffffb880280000e8????????482be00f29b4247028",
     "info": "48895c2410574883ec30448bc2c6442446018bc241c1e014448bcac1e008488bda41c1f814c1f814488bf941c1f91848",
@@ -38,7 +38,7 @@ DISPS = {
 APP_PTR_LOAD = ("gen", 0x779, "488b05")  # mov rax, [rip + app_ptr]
 PLANET_FLAG_FROM_APP_PTR = 0x40
 LEA_RCX, LEA_RDX, CALL = bytes.fromhex("488d0d"), bytes.fromhex("488d15"), bytes.fromhex("e8")
-# regex over raw x86, finds gen call site + reads info/gen offsets. WARN: works, dont touch.
+# regex over raw x86, finds gen call site + reads info/gen offsets. WARN: works, dont tuch.
 GEN_CALL = re.compile(re.escape(bytes.fromhex("4c8d86")) + b"(.{4}).{0,8}?" + re.escape(bytes.fromhex("488d8e"))
                       + b"(.{4})" + re.escape(bytes.fromhex("4c8d4df0e8")), re.S)
 CACHE_FILE = os.path.join(CACHE, "exeaddr.json")
@@ -100,7 +100,7 @@ class _Image:
                             t = self.rip_target(site - 40 + k, 3, 7)
                             if lo <= t < hi:
                                 cands.setdefault(n, set()).add(t)
-        # addr next to >2 globals = shared manager, not a real global. drop it.
+        # addr next to >2 globals = shared mgr, not a real global. drop it.
         every = [t for v in cands.values() for t in v]
         shared = {t for t in every if every.count(t) > 2}
         table = {}

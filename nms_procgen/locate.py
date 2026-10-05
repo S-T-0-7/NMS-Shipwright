@@ -1,9 +1,9 @@
-# which system a ship seed came from, by running the generator backwards.
-# ships = children of one RNG seeded w/ the universe addr (UA):
+# which system a ship seed came from, by runing the generator backwards.
+# ships = children of 1 RNG seeded w/ the universe addr (UA):
 #     rng = MWC(UA); ...k steps...; ship_seed = mix64((b<<32)|a)
 # both steps invertible -> reverse step-by-step, keep states decoding to a real UA
 # (planet 0, top byte clear, sys idx < 0x300).
-# NOTE: our own design seeds werent made by the game, usually reverse to nothing. normal.
+# NOTE: our own design seeds werent made by game, usually reverse to nothing. normal.
 from __future__ import annotations
 
 K = 0x5A76F899
@@ -87,13 +87,13 @@ def _plausible(ua: int) -> bool:
 
 def origins(seed: int, max_steps: int = 4000) -> list[tuple[int, int]]:
     """(ua, k) pairs: `seed` is the child drawn after k steps of MWC(ua)."""
-    # undo final mix, split into the two 32-bit rng outputs
+    # undo final mix, split into the 2 32-bit rng outputs
     v = unmix64(seed & M64)
     a, b = v & M32, v >> 32
     c = (b - a * K) & M32                # MWC carry after 1st draw
     if c > K:
         return []                        # out of range -> not an MWC child
-    # step backwards (divmod inverts 1 MWC step), rebuild UA each step.
+    # step backwrds (divmod inverts 1 MWC step), rebuild UA each step.
     # WARN: keep j-loop, handles fresh state >= K. looks pointless, isnt.
     s0, s1, out = a, c, []
     for k in range(max_steps):
