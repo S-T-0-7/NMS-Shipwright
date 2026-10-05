@@ -64,9 +64,8 @@ def build(console=False):
 
 
 def fix_pe(exe, size=STACK):
-    # Bump the thread stack to 16MB (the emulator overflows 2MB) and strip Control Flow Guard
-    # (it kills the process when unicorn jumps into its JIT'd code).
-    # WARNING: don't remove -- without this the packaged app dies with exit code 127, no error.
+    # stack -> 16MB (emulator overflows 2MB) + strip CFG (kills proc when unicorn hits JIT'd code).
+    # WARN: dont remove, else packaged app dies w/ exit 127, no error.
     import pefile
     pe = pefile.PE(str(exe))
     pe.OPTIONAL_HEADER.SizeOfStackReserve = size
