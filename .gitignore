@@ -22,9 +22,10 @@ __pycache__/
 venv/
 .pytest_cache/
 
-# Editors
+# Editors / tooling
 .vscode/
 .idea/
+.claude/
 *.swp
 .DS_Store
 
