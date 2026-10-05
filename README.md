@@ -111,6 +111,9 @@ The app uses [hgpaktool](https://pypi.org/project/hgpaktool/) to read the game's
 Part names follow the community naming charts (Nerozii's Sentinel Interceptor chart and the
 nms.center part lists). Thanks to everyone who mapped those out.
 
+An AI assistant was used here and there while building this (mostly boilerplate and
+cleanup); the reverse-engineering, design and testing are my own.
+
 This project is not affiliated with Hello Games. No Man's Sky is their trademark.
 
 Released under the MIT Licence; see [LICENSE](LICENSE).
