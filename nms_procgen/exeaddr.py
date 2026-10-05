@@ -1,17 +1,26 @@
-"""Addresses of the game code the emulator runs, found in whatever NMS.exe is installed.
-
-Game patches move code and struct fields around, so nothing here is fixed:
-  * functions are found by masked byte signatures of their first bytes (rip-relative
-    and branch displacements are wildcards), captured on build 25343814;
-  * stop points are "function + offset", checked against the expected instruction bytes;
-  * the app pointer, the solar-system slot inside the app object and the generator /
-    planet-generator / info offsets inside the solar system are read out of the
-    instructions that use them; the planet-count flag sits 0x40 after the app pointer
-    (true for both builds checked);
-  * each global's static instance comes from the code that registers it
-    (lea rcx, instance / lea rdx, "GcXxxGlobals" / call).
-Results are cached per exe in data/gamecache/exeaddr.json.
-"""
+# finds where the game's code actually lives inside NMS.exe.
+#
+# PLEASE READ before you change anything: there are no fixed addresses in here and
+# there never can be. hello games recompiles the whole exe every single patch so
+# every function and every struct field moves. the ONLY thing that stays the same
+# is roughly what the machine code looks like, so that's what we search for (the
+# byte signatures below). if a signature stops matching after a game update it means
+# THE GAME changed, not this file -> go re-dump the bytes in ghidra. do not "fix"
+# the logic to make it pass, you will just make it lie to you.
+#
+# i swear i understood all of this for about a week when i wrote it. i don't now.
+# if it's broken and you're reading this, i'm sorry, godspeed.
+#
+# what it actually figures out:
+#   - functions: by masked byte sigs of their first bytes (the ?? are the bits that
+#     move every build), first dumped on build 25343814
+#   - stop points: "function + offset", double checked against the bytes we expect
+#   - app ptr + solar-system slot + the gen/planet-gen/info offsets: read straight
+#     out of the instructions that use them (planet-count flag is 0x40 past the app
+#     ptr, held on every build i checked, fingers crossed)
+#   - each global's static instance: from the code that registers it
+#     (lea rcx,instance / lea rdx,"GcXxxGlobals" / call)
+# cached in data/gamecache/exeaddr.json so we only live through this once per update.
 from __future__ import annotations
 
 import json
@@ -23,6 +32,9 @@ from nms_save import gamepath
 
 from .emu import CACHE
 
+# these are raw opcode bytes copied out of a disassembler. the ?? bytes are the ones
+# that move around every build. do NOT retype these by hand, you WILL get a digit wrong
+# at 2am and spend the next day wondering why nothing matches (ask me how i know).
 SIGS = {
     "gen": "48895c24184c894c24205556574154415541564157488dac2480d8ffffb880280000e8????????482be00f29b4247028",
     "info": "48895c2410574883ec30448bc2c6442446018bc241c1e014448bcac1e008488bda41c1f814c1f814488bf941c1f91848",
@@ -48,7 +60,9 @@ DISPS = {
 APP_PTR_LOAD = ("gen", 0x779, "488b05")  # mov rax, [rip + app_ptr]
 PLANET_FLAG_FROM_APP_PTR = 0x40
 LEA_RCX, LEA_RDX, CALL = bytes.fromhex("488d0d"), bytes.fromhex("488d15"), bytes.fromhex("e8")
-# the generator's caller: lea r8, [rsi + info]; ... lea rcx, [rsi + gen]; lea r9, [rbp-0x10]; call gen
+# yes this is a regex. over raw x86 machine code. i'm not proud of it but it finds the
+# one call site that sets up and calls the generator (lea r8,[rsi+info] ... lea rcx,[rsi+gen]
+# ... call gen) and from it we steal the info/gen struct offsets. it works. please leave it alone.
 GEN_CALL = re.compile(re.escape(bytes.fromhex("4c8d86")) + b"(.{4}).{0,8}?" + re.escape(bytes.fromhex("488d8e"))
                       + b"(.{4})" + re.escape(bytes.fromhex("4c8d4df0e8")), re.S)
 CACHE_FILE = os.path.join(CACHE, "exeaddr.json")
@@ -110,8 +124,11 @@ class _Image:
                             t = self.rip_target(site - 40 + k, 3, 7)
                             if lo <= t < hi:
                                 cands.setdefault(n, set()).add(t)
+        # some of these "globals" are actually the same manager object that gets passed in
+        # next to a ton of different globals. if one address shows up next to >2 different
+        # names it's one of those impostors, throw it out. took me forever to notice this.
         every = [t for v in cands.values() for t in v]
-        shared = {t for t in every if every.count(t) > 2}  # manager objects passed alongside many globals
+        shared = {t for t in every if every.count(t) > 2}
         table = {}
         for n, v in cands.items():
             v = v - shared

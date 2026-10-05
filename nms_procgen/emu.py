@@ -1,13 +1,16 @@
-"""Run functions of NMS.exe offline in the Unicorn CPU emulator.
-
-Maps the exe at its preferred base, answers every import with a Python stub
-(maths, memcpy/memset, malloc & co.), provides a TEB/TLS block and a zeroed
-stand-in for the game's app singleton, and loads the game's *.global.mbin
-settings into their static instances (MBIN header 0x20 bytes, dynamic arrays
-fixed up) - i.e. roughly the state the game is in after start-up.
-
-Nothing touches the running game; it reads NMS.exe and NMSARC.globals.pak.
-"""
+# this file runs actual No Man's Sky machine code without No Man's Sky.
+#
+# the plan (if you can call it that): map NMS.exe into a fake CPU (unicorn), then fake
+# EVERYTHING else the code expects to exist -- every windows/CRT function it imports we
+# answer with a little python stub, we hand it a fake stack, a fake TEB, a fake heap and
+# a zeroed-out stand-in for the game's giant global app object, then we pour the game's
+# own *.global.mbin settings into the right spots in memory. after all that the emulated
+# code basically thinks the game just finished booting, and we can call the ship/system
+# generator functions directly and read the result back out of memory.
+#
+# does it touch your running game? no. it just reads NMS.exe and NMSARC.globals.pak off disk.
+# is it cursed? unbelievably. but it means we never have to reimplement the generator by
+# hand, so when the game updates the maths it just... keeps working. worth it. mostly.
 from __future__ import annotations
 
 import glob
@@ -38,7 +41,11 @@ CACHE = os.environ.get("NMS_TOOL_CACHE") or os.path.join(
 BASE = 0x140000000
 STUBS, SENTINEL = 0x10000000, 0x10100000
 NATIVE = STUBS + 0x20000  # x86 versions of hot imports: no Python callback per call
-# Hand-assembled (Windows x64 ABI: rdi/rsi are callee-saved).
+# below is hand-assembled x86-64 machine code. yes, written by hand, in hex, as bytes.
+# the game calls memcpy/memset a MILLION times and bouncing out to python every time was
+# painfully slow, so these run inside the emulator instead. windows x64 abi, rdi/rsi are
+# callee-saved. if you need to change these, assemble it properly somewhere and paste the
+# bytes, do not try to edit the hex by eyeballing it. i'm begging you.
 NATIVE_CODE = {
     # memmove(rcx=dst, rdx=src, r8=n) -> dst; copies backwards when dst overlaps the end of src
     # memmove(rcx=dst, rdx=src, r8=n) -> dst: 32/8/1-byte loops (unicorn runs each `rep` step as its
@@ -195,6 +202,10 @@ class Emu:
         b = open(path, "rb").read()
         h = self.alloc(len(b) + 0x100, 0x100)
         self.mu.mem_write(h, b)
+        # MBIN files store arrays as (relative offset, count, 0xAAAAAA01). that magic number
+        # is how the game marks "this is a pointer, go fix me up". don't ask me why it's that
+        # specific value, it just is. we walk the file, find every marker, and turn the
+        # relative offset into a real absolute pointer into our emulated memory.
         for p in (i - 12 for i in range(12, len(b) - 3, 4)
                   if struct.unpack_from("<I", b, i)[0] == 0xAAAAAA01 and (i - 12) % 8 == 0):
             rel, cnt = struct.unpack_from("<qI", b, p)
@@ -239,6 +250,11 @@ class Emu:
         self.sizes[a] = n
         return a
 
+    # this is the big one. every windows/CRT function the game imports points at a stub that
+    # just does `ret`, and this hook fires right before it runs and fakes the return value in
+    # python (maths, malloc, memcpy, the works). if the generator ever calls some import that
+    # isn't handled below it silently gets 0 back and probably blows up somewhere far away and
+    # confusing. if you see weird faults, it's almost always a missing import here.
     def _on_stub(self, mu, addr, size, _):
         fn = self.imports.get(addr)
         if fn is None:
