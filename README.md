@@ -28,11 +28,14 @@ running, because the game would overwrite it.
 
 ## Install
 
-1. Download `NMS Ship Studio Setup.exe` from the [releases page](../../releases).
+1. Go to the [releases page](../../releases) and download `NMS Ship Studio Setup.exe` from the
+   latest release (under **Assets**).
 2. Run it. Windows will warn that it is from an unknown publisher (the app is not code-signed):
    choose **More info → Run anyway**.
-3. It installs for your user only, into `%LOCALAPPDATA%\Programs\NMS Ship Studio`, and adds a
-   Start menu entry. No admin rights, no Python, nothing else to install.
+3. The setup window opens: press **Install**. It installs for your user only, into
+   `%LOCALAPPDATA%\Programs\NMS Ship Studio`, and adds Desktop and Start menu shortcuts. No admin
+   rights, no Python, nothing else to install. Running the setup again later updates in place and
+   keeps your game-file cache.
 
 To remove it: Settings → Apps → NMS Ship Studio, or run `Uninstall.exe` from the install folder.
 
@@ -79,6 +82,21 @@ python -m unittest tests.test_robustness
 ```
 
 `python webapp/app.py` runs the same thing in a browser at http://localhost:5000 for development.
+
+### Cutting a release
+
+Releases are built on a clean Windows runner by GitHub Actions (`.github/workflows/release.yml`),
+so the installer attached to a release is reproducible and carries no local machine's data. To cut
+one: bump `VERSION` in [scripts/installer.py](scripts/installer.py), add a `## <version>` section at
+the top of [CHANGELOG.md](CHANGELOG.md), commit, then tag and push:
+
+```
+git tag v1.7.7
+git push origin v1.7.7
+```
+
+The workflow checks the tag matches `VERSION`, builds the installer, and publishes the release with
+`NMS Ship Studio Setup.exe` attached and that changelog section as the notes.
 
 ## What is not included
 

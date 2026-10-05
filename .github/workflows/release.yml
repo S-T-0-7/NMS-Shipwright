@@ -1,0 +1,72 @@
+name: Release
+
+# Builds "NMS Ship Studio Setup.exe" on a clean Windows runner and attaches it to the GitHub
+# release. Nothing from No Man's Sky is needed to build: the installer only carries the app, which
+# reads the game's own files on the player's PC at runtime.
+#
+# To cut a release: bump VERSION in scripts/installer.py and add a CHANGELOG entry, commit, then
+#     git tag v1.7.7 && git push origin v1.7.7
+# The workflow checks the tag matches VERSION, builds, and publishes the release with the installer
+# attached and the changelog section as the notes. "Run workflow" builds without releasing.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Check the tag matches VERSION
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $ver = (Select-String -Path scripts/installer.py -Pattern '^VERSION = "(.+)"').Matches.Groups[1].Value
+          if ($tag -ne $ver) { throw "Tag $tag does not match VERSION $ver in scripts/installer.py" }
+          "Building version $ver" | Out-Host
+
+      - name: Build the installer
+        run: python scripts/build_app.py
+
+      - name: Release notes from the changelog
+        shell: pwsh
+        run: |
+          $out = @()
+          $seen = $false
+          foreach ($line in Get-Content CHANGELOG.md) {
+            if ($line -match '^## ') { if ($seen) { break }; $seen = $true; continue }
+            if ($seen) { $out += $line }
+          }
+          ($out -join "`n").Trim() | Set-Content -Encoding utf8 build/release-notes.md
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: NMS-Ship-Studio-Setup
+          path: dist/NMS Ship Studio Setup.exe
+          if-no-files-found: error
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/NMS Ship Studio Setup.exe
+          body_path: build/release-notes.md
+          fail_on_unmatched_files: true
