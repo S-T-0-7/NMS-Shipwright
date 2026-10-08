@@ -43,6 +43,32 @@ def part_names(ship):
     return names
 
 
+def humanize(part_id):
+    """Tidy a raw descriptor id into a readable label: _SUBWINGS_A3 -> 'Subwings A3',
+    _WINGS_NONE -> 'Wings (none)'. Just formatting, not a shape description -- the curated
+    names in names/<ship>.json (sentinel, fighter) override this."""
+    tokens = part_id.strip("_").split("_")
+    if not tokens or not tokens[0]:
+        return part_id
+    group, rest = tokens[0].title(), "_".join(tokens[1:])
+    if not rest:
+        return group
+    up = rest.upper()
+    if up.startswith(("NULL", "NONE")):
+        return f"{group} (none)"
+    flag = ""
+    if up.endswith("XNEVER"):
+        rest, flag = rest[:-6], " (unused)"
+    elif up.endswith("XRARE"):
+        rest, flag = rest[:-5], " (rare)"
+    return f"{group} {rest.title()}{flag}".strip()
+
+
+def part_label(names, part_id):
+    """Curated name if we have one, otherwise a tidied version of the raw id."""
+    return names.get(part_id) or humanize(part_id)
+
+
 def ship_alias(filename):
     base = os.path.basename(filename or "").lower().replace(".scene.mbin", ".descriptor.mbin")
     return next((alias for alias, rel in ROOTS.items() if rel.split("/")[-1] == base), None)

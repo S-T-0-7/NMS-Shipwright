@@ -16,7 +16,7 @@ from nms_procgen.fastsearch import fast_search
 from nms_save import gamefiles, player, ships
 
 from webapp.common import (GameRunning, JOBS, NO_SEED_LOOK, ROOT, SHIP_LABELS, body, game_running,
-                           limit_seconds, model_filename, open_save, parse_look, part_names,
+                           limit_seconds, model_filename, open_save, parse_look, part_label, part_names,
                            ship_alias, write)
 
 bp = Blueprint("designer", __name__)
@@ -26,7 +26,7 @@ bp = Blueprint("designer", __name__)
 def api_parts():
     ship, seed = request.args.get("ship", "fighter"), request.args.get("seed", "0x0")
     names = part_names(ship if ship in ROOTS else ship_alias(ship) or "")
-    return jsonify({"parts": [{"depth": d, "group": g, "id": pid, "name": names.get(pid, ""), "label": label,
+    return jsonify({"parts": [{"depth": d, "group": g, "id": pid, "name": part_label(names, pid), "label": label,
                                "choices": len(alts) + 1} for d, g, pid, alts, label in explain(seed, ship)]})
 
 
@@ -76,7 +76,7 @@ def design_tree(ship):
                     p = ref_to_descriptor(r)
                     if p:
                         kids += groups(load_descriptor(p))
-                opts.append({"id": o["id"], "name": names.get(o["id"], ""), "children": kids,
+                opts.append({"id": o["id"], "name": part_label(names, o["id"]), "children": kids,
                              "weight": option_weight(o)})
             out.append({"type": g["type"], "options": opts})
         return out
