@@ -369,8 +369,8 @@ def _picked_meshes(ship, chosen):
 
 def ship_model(seed, ship, parts=None, fill=True) -> dict:
     """{"groups": {class: (positions float32 [n,3], indices uint32)}, "bounds": (min, max)} in the game's axes
-    (Y up, Z forward). Without `fill`, the bounds are still those of a whole ship, so the view does
-    not jump about as parts are added."""
+    (Y up, Z forward). The bounds frame exactly what is drawn, so a single picked part fills the view
+    instead of sitting tiny inside the whole ship's footprint."""
     meshes = ship_meshes(seed, ship, parts, fill)
     geos = _geometry(sorted({g for g, *_ in meshes if g}))
     acc: dict = {}
@@ -390,11 +390,6 @@ def ship_model(seed, ship, parts=None, fill=True) -> dict:
         lst[2] += len(p)
     groups = {cls: (np.concatenate(v[0]).astype(np.float32), np.concatenate(v[1]).astype(np.uint32))
               for cls, v in acc.items() if v[0]}
-    if parts is not None and not fill:  # frame the whole ship, not just what is picked so far
-        try:
-            return {"groups": groups, "bounds": ship_model(seed, ship, parts, True)["bounds"]}
-        except Exception:
-            pass
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
     return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist())}
 

@@ -1,0 +1,16 @@
+[
+{ "id": "_COCKPIT_A", "name": "Cockpit Stepped Deck" },
+{ "id": "_COCKPIT_B", "name": "Cockpit Open Flatbed" },
+{ "id": "_COCKPIT_C", "name": "Cockpit Tapered Pod" },
+{ "id": "_COCKPIT_D", "name": "Cockpit Tube" },
+{ "id": "_COCKPIT_E", "name": "Cockpit Raised Cabin" },
+{ "id": "_COCKPIT_G", "name": "Cockpit Wedge" },
+{ "id": "_COCKPIT_H", "name": "Cockpit Wide Cabin" },
+
+{ "id": "_WINGS_A", "name": "Wing Boxy Pods" },
+{ "id": "_WINGS_B", "name": "Wing Flat Fins" },
+{ "id": "_WINGS_C", "name": "Wing Single Pod" },
+{ "id": "_WINGS_D", "name": "Wing Twin-Engine Rig" },
+{ "id": "_WINGS_1", "name": "Wing Swept" },
+{ "id": "_WINGS_2", "name": "Wing Plated" }
+]
