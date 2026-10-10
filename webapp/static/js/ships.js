@@ -262,7 +262,7 @@ function newShipPanel() {
     return `<option value="${i}">${i}: ${s ? `${esc(s.category)} — ${esc(s.name || 'unnamed')}` : '(empty)'}</option>`;
   }).join('');
   const firstEmpty = S.empty.length ? S.empty[0] : 0;
-  $('#shipDetail').innerHTML = `<h2 style="margin:0 0 12px">New ship</h2>
+  $('#shipDetail').innerHTML = `<h2 style="margin:0 0 12px;display:flex;justify-content:space-between;align-items:center">New ship <button class="btn" id="nClose" title="Cancel -- make no changes" style="padding:2px 11px">✕</button></h2>
     <div class="form2">
       <label class="muted">Slot</label><select id="nSlot">${slotsHtml}</select>
       <label class="muted">Type</label><select id="nModel">${S.models.map(m => `<option value="${m.ship}" ${m.ship === 'sentinel' ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select>
@@ -272,7 +272,7 @@ function newShipPanel() {
     </div>
     <p class="muted" id="nSlotNote" style="margin:8px 0 0"></p>
     <div class="hero" id="nPrev" style="margin-top:12px"></div>
-    <div class="row" style="margin-top:12px"><button class="btn primary" id="nCreate">Create ship</button></div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="nCreate">Create ship</button><button class="btn" id="nCancel">Cancel</button></div>
     <p class="muted">Tip: design it in the Designer first and paste the seed here. Replacing a slot keeps that ship's inventory &amp; tech; filling an empty slot copies the inventory you pick, or a standard empty one. Recolour afterwards from the ship page.</p>`;
   $('#nSlot').value = String(firstEmpty);
   const prev = () => {
@@ -288,6 +288,7 @@ function newShipPanel() {
   };
   $('#nRand').onclick = () => { $('#nSeed').value = randomSeed(); prev(); };
   $('#nModel').onchange = prev; $('#nSeed').oninput = prev; $('#nSlot').onchange = syncSlot;
+  $('#nClose').onclick = $('#nCancel').onclick = closeNewShip;
   $('#nRand').click(); syncSlot();
   $('#nCreate').onclick = () => guard(async () => {
     const slot = +$('#nSlot').value, s = byIndex(slot);
@@ -297,5 +298,9 @@ function newShipPanel() {
       seed: $('#nSeed').value.trim(), name: $('#nName').value, clone_from: from === '' ? null : +from});
     toast(`${r.action === 'replaced' ? 'Replaced ship in' : 'Created ship in'} slot ${r.slot}. Backup made.`); S.slot = r.slot; await loadShips();
   });
+}
+function closeNewShip() {  // leave the New ship panel, touching nothing
+  if (S.ships.some(s => s.index === S.slot)) selectShip(S.slot);
+  else $('#shipDetail').innerHTML = '<p class="muted">Select a ship.</p>';
 }
 $('#newShip').onclick = newShipPanel;
