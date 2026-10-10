@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.2
+
+- Fixed a crash on opening some saves -- a save carrying a byte that is not valid UTF-8 would fail
+  with "'utf-8' codec can't decode byte 0x80". Such saves now load and edit normally.
+- The New ship panel has a **Cancel** button (and an ✕) to close it without making any changes.
+
 ## 1.8.1
 
 - New ship (My Ships → New ship): you can now pick **any** slot, not just empty ones -- choosing a

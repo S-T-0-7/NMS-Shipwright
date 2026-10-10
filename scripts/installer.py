@@ -22,7 +22,7 @@ from pathlib import Path
 NAME = "NMS Shipwright"
 EXE = f"{NAME}.exe"
 PUBLISHER = "NMS Shipwright"
-VERSION = "1.8.1"
+VERSION = "1.8.2"
 UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NMSShipwright"
 DEFAULT_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / NAME
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / NAME  # game-file cache the app builds
