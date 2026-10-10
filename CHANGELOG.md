@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.1
+
+- New ship (My Ships → New ship): you can now pick **any** slot, not just empty ones -- choosing a
+  slot that already holds a ship replaces it and keeps its inventory & tech. "Copy inventory & tech
+  from" is optional now: leave it on **Standard** for a fresh, empty ship instead of a copy.
+- Fixed the **Game data → Choose...** button, which did nothing when clicked. It now opens the
+  folder picker.
+- Ship parts read clearly everywhere: tidy labels for every ship type (no more raw ids), and named
+  shapes for the distinct parts (solar sails, hauler cockpits and wings, and more).
+- Picking a part in the Designer now fills the preview instead of showing it tiny inside the whole
+  ship.
+
 ## 1.8.0 — first public release
 
 Renamed to **NMS Shipwright**. Design, find and edit No Man's Sky ships, recolour them, and edit

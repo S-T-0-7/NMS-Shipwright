@@ -13,6 +13,8 @@ exactly the ship the game builds.
   second, with a live estimate of how long it will take.
 - Find that ship in a real star system near you, if you would rather fly to it than edit it in.
 - Put a design straight into your save: as a new ship, or over one you already own.
+- Build a ship in any slot from the My Ships tab -- fill an empty slot or replace one you own,
+  with a standard empty inventory or a copy of another ship's.
 - Recolour any ship, with the game's real paint sets and a live preview.
 - Save designs as files and share them.
 
