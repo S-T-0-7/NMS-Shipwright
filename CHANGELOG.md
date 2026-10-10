@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8.3
+
+- Exotic ships now build correctly: the **Royal** and **Squid** families render as separate ships
+  instead of the squid showing on top of everything, so exotics can be designed part by part like
+  any other type. (The game truncates part names, which the 3D view was not accounting for.)
+- **Remove ship**: a ship page now has a Remove button (under More) to empty its slot. A backup is
+  made first; undo it from Save > Backups.
+- Fixed an error when choosing the game-data folder (an internal name was not in scope). The folder
+  was still set, but it popped an error.
+
 ## 1.8.2
 
 - Fixed a crash on opening some saves -- a save carrying a byte that is not valid UTF-8 would fail
