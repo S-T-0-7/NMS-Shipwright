@@ -235,6 +235,22 @@ def _nodes(path):
 _parsed = functools.lru_cache(maxsize=512)(_nodes)
 
 
+_TRUNC_LEN = 15  # the game stores descriptor part names in a fixed field, truncating longer ones
+
+
+def _canon(up, options, trunc):
+    """A scene node name -> its descriptor option id. Descriptor ids are truncated to _TRUNC_LEN
+    characters, so a scene node can be longer than its id (exotic's _SClassShip_Royal is the option
+    _SCLASSSHIP_ROY, _SClassShip_SquidxRARE is _SCLASSSHIP_SQU). Without this the Royal/Squid choice
+    is never matched and both are drawn at once."""
+    if up in options:
+        return up
+    for o in trunc:  # longest first: only truncated (max-length) ids can be a prefix of a longer name
+        if up.startswith(o):
+            return o
+    return up
+
+
 def ship_meshes(seed, ship, parts=None, fill=True):
     """[(geometry path, hash, 4x4 world matrix, material class)] for the parts `seed` builds.
 
@@ -247,22 +263,23 @@ def ship_meshes(seed, ship, parts=None, fill=True):
     groups = all_parts(ship)
     options = {p for ps in groups.values() for p in ps}
     group_of = {p: g for g, ps in groups.items() for p in ps}
+    trunc = sorted((o for o in options if len(o) >= _TRUNC_LEN), key=len, reverse=True)
     designing = parts is not None
     chosen = {p.upper() for p in parts} if designing else {pid for _, pid in generate(seed, ship)}
     lod = re.compile(r"LOD\d$")
 
     def keep(name):
-        up = name.upper()
-        return up not in options or lod.sub("", up) in chosen or up in chosen
+        oid = _canon(name.upper(), options, trunc)
+        return oid not in options or lod.sub("", oid) in chosen or oid in chosen
 
     def fill_defaults(children):
         """Give every group among these siblings a part, unless the design already picks one."""
         seen: dict = {}
         for c in children:
-            up = c[1].upper()
-            g = group_of.get(up) or group_of.get(lod.sub("", up))
+            oid = _canon(c[1].upper(), options, trunc)
+            g = group_of.get(oid) or group_of.get(lod.sub("", oid))
             if g:
-                seen.setdefault(g, []).append(up)
+                seen.setdefault(g, []).append(oid)
         for g, names in seen.items():
             if any(n in chosen or lod.sub("", n) in chosen for n in names):
                 continue
@@ -317,6 +334,7 @@ def _picked_meshes(ship, chosen):
     When a part appears under several parents, the copy under picked parents wins.
     """
     options = {p for ps in all_parts(ship).values() for p in ps}
+    trunc = sorted((o for o in options if len(o) >= _TRUNC_LEN), key=len, reverse=True)
     lod = re.compile(r"LOD\d$")
     found: dict = {}  # part -> [(parents all picked, meshes)]
 
@@ -324,7 +342,7 @@ def _picked_meshes(ship, chosen):
         typ, name, t, attrs, children = n
         if depth > 12:
             return
-        up = name.upper()
+        up = _canon(name.upper(), options, trunc)
         if up in options:
             base = lod.sub("", up)
             picked = up in chosen or base in chosen
