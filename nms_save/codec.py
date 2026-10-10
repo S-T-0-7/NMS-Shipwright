@@ -56,7 +56,7 @@ def decode(raw: bytes) -> tuple[str, bool, int]:
     """
     if not is_chunked(raw):
         stripped = raw.rstrip(b"\x00")
-        return stripped.decode("utf-8"), False, len(raw) - len(stripped)
+        return stripped.decode("utf-8", "surrogateescape"), False, len(raw) - len(stripped)
 
     stream = io.BytesIO(raw)
     size = len(raw)
@@ -80,12 +80,12 @@ def decode(raw: bytes) -> tuple[str, bool, int]:
         out += lz4.block.decompress(block, uncompressed_size=uncompressed_size)
 
     stripped = bytes(out).rstrip(b"\x00")
-    return stripped.decode("utf-8"), True, len(out) - len(stripped)
+    return stripped.decode("utf-8", "surrogateescape"), True, len(out) - len(stripped)
 
 
 def encode(json_text: str, chunked: bool, trailing_nul_count: int = 1) -> bytes:
     """Encode JSON text back to raw save bytes in the requested shape."""
-    data = json_text.encode("utf-8") + b"\x00" * trailing_nul_count
+    data = json_text.encode("utf-8", "surrogateescape") + b"\x00" * trailing_nul_count
 
     if not chunked:
         return data

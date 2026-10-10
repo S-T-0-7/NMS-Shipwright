@@ -149,6 +149,17 @@ class GracefulFailure(Base):
             gamemeta.ExeMeta(path)
         self.assertIn("could not be read", str(err.exception))
 
+    def test_save_with_a_stray_non_utf8_byte_still_decodes(self):
+        # a customer's save carried a byte that is not valid UTF-8; strict decode used to crash
+        # with "'utf-8' codec can't decode byte 0x80". It must decode and round-trip instead.
+        import json
+        from nms_save import codec
+        raw = b'{"a":"name ab\x80cd","n":5}\x00'
+        text, chunked, nul = codec.decode(raw)
+        self.assertEqual(json.loads(text)["n"], 5)
+        reraw = codec.encode(json.dumps(json.loads(text), separators=(",", ":")), chunked, nul)
+        self.assertEqual(json.loads(codec.decode(reraw)[0])["n"], 5)
+
 
 class ShipModels(unittest.TestCase):
     """The viewer must never end up with an invisible ship."""
