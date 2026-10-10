@@ -73,12 +73,29 @@ def api_models():
 
 @bp.route("/api/ship/create", methods=["POST"])
 def api_ship_create():
+    """Create a ship in a slot. An empty slot is filled (cloning a chosen ship's inventory & tech,
+    or a standard empty one when none is picked); a slot that already holds a ship is replaced,
+    keeping that slot's existing inventory & tech."""
     b = body()
     opened = open_save(b.get("path"))
+    r = opened.readable
     slot = int(b["slot"])
-    ships.create_ship(opened.readable, slot, model_filename(b.get("ship")), (b.get("seed") or "").strip(),
-                      str(b.get("name", ""))[:64], int(b["clone_from"]))
-    return jsonify({"ok": True, "slot": slot, "backup": write(opened)})
+    owned = r["BaseContext"]["PlayerStateData"]["ShipOwnership"]
+    if not (0 <= slot < len(owned)):
+        raise ValueError(f"no ship slot {slot}")
+    filename = model_filename(b.get("ship"))
+    seed, name = (b.get("seed") or "").strip(), str(b.get("name", ""))[:64]
+    if owned[slot].get("Resource", {}).get("Filename"):  # replace the ship already there
+        ships.set_ship_model(r, slot, filename, seed or None)
+        ships.set_ship_name(r, slot, name)
+        action = "replaced"
+    else:  # fill the empty slot
+        clone = b.get("clone_from")
+        standard = clone in (None, "", "standard")
+        donor = player.primary_ship(r) if standard else int(clone)
+        ships.create_ship(r, slot, filename, seed, name, donor, standard=standard)
+        action = "created"
+    return jsonify({"ok": True, "slot": slot, "action": action, "backup": write(opened)})
 
 
 @bp.route("/api/ship/model", methods=["POST"])

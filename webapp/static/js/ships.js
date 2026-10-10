@@ -3,7 +3,7 @@ async function loadShips() {
   if (!S.path) { $('#shipList').innerHTML = '<p class="muted">No save files found.</p>'; return; }
   const res = await api('/api/ships?path=' + encodeURIComponent(S.path));
   S.ships = res.ships; S.empty = res.empty;
-  $('#newShip').disabled = !S.empty.length; $('#newShip').title = S.empty.length ? `Empty slots: ${S.empty.join(', ')}` : 'No empty ship slots';
+  $('#newShip').disabled = !S.ships.length; $('#newShip').title = S.empty.length ? `Empty slots: ${S.empty.join(', ')}` : 'No empty slots -- you can replace a ship instead';
   $('#shipList').innerHTML = S.ships.map(s => `
     <div class="card ship ${s.index === S.slot ? 'sel' : ''}" data-slot="${s.index}">
       <div class="thumb">${esc(s.category)}</div>
@@ -255,29 +255,47 @@ async function applySeed(seed, ship) {
 
 function newShipPanel() {
   S.slot = null; $$('.ship').forEach(el => el.classList.remove('sel'));
-  const cur = S.ships.find(s => s.primary) || S.ships.find(s => s.is_procedural) || S.ships[0];
+  const total = S.ships.length + S.empty.length;
+  const byIndex = i => S.ships.find(s => s.index === i);
+  const slotsHtml = Array.from({length: total}, (_, i) => {
+    const s = byIndex(i);
+    return `<option value="${i}">${i}: ${s ? `${esc(s.category)} — ${esc(s.name || 'unnamed')}` : '(empty)'}</option>`;
+  }).join('');
+  const firstEmpty = S.empty.length ? S.empty[0] : 0;
   $('#shipDetail').innerHTML = `<h2 style="margin:0 0 12px">New ship</h2>
     <div class="form2">
-      <label class="muted">Slot</label><select id="nSlot">${S.empty.map(i => `<option>${i}</option>`).join('')}</select>
+      <label class="muted">Slot</label><select id="nSlot">${slotsHtml}</select>
       <label class="muted">Type</label><select id="nModel">${S.models.map(m => `<option value="${m.ship}" ${m.ship === 'sentinel' ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select>
       <label class="muted">Seed</label><div class="row"><input id="nSeed" class="mono" style="width:230px"><button class="btn" id="nRand">Random</button></div>
       <label class="muted">Name</label><input id="nName" placeholder="(unnamed)">
-      <label class="muted">Copy inventory &amp; tech from</label><select id="nFrom">${S.ships.map(s => `<option value="${s.index}" ${s === cur ? 'selected' : ''}>${s.index}: ${esc(s.name || '(unnamed)')} (${esc(s.category)})</option>`).join('')}</select>
+      <label class="muted" id="nFromLabel">Copy inventory &amp; tech from</label><select id="nFrom"><option value="">Standard (fresh empty inventory)</option>${S.ships.map(s => `<option value="${s.index}">${s.index}: ${esc(s.name || '(unnamed)')} (${esc(s.category)})</option>`).join('')}</select>
     </div>
+    <p class="muted" id="nSlotNote" style="margin:8px 0 0"></p>
     <div class="hero" id="nPrev" style="margin-top:12px"></div>
     <div class="row" style="margin-top:12px"><button class="btn primary" id="nCreate">Create ship</button></div>
-    <p class="muted">Tip: design it in the Designer first and paste the seed here. The new ship copies the inventory and tech of the ship you pick, so it can fly straight away. Recolour it afterwards from its ship page.</p>`;
+    <p class="muted">Tip: design it in the Designer first and paste the seed here. Replacing a slot keeps that ship's inventory &amp; tech; filling an empty slot copies the inventory you pick, or a standard empty one. Recolour afterwards from the ship page.</p>`;
+  $('#nSlot').value = String(firstEmpty);
   const prev = () => {
     const m = $('#nModel').value, seed = $('#nSeed').value.trim();
     if (seed) show3d('nPrev', modelUrl(m, 'seed=' + encodeURIComponent(seed)), '<span class="muted">No preview for this ship type</span>');
     else $('#nPrev').innerHTML = '<span class="muted">Enter a seed to preview</span>';
   };
+  const syncSlot = () => {
+    const i = +$('#nSlot').value, s = byIndex(i);
+    for (const el of [$('#nFromLabel'), $('#nFrom')]) el.style.display = s ? 'none' : '';
+    $('#nSlotNote').textContent = s ? `Replaces the ${s.category} in slot ${i} — its inventory & tech are kept.` : '';
+    $('#nCreate').textContent = s ? 'Replace ship' : 'Create ship';
+  };
   $('#nRand').onclick = () => { $('#nSeed').value = randomSeed(); prev(); };
-  $('#nModel').onchange = prev; $('#nSeed').oninput = prev; $('#nRand').click();
+  $('#nModel').onchange = prev; $('#nSeed').oninput = prev; $('#nSlot').onchange = syncSlot;
+  $('#nRand').click(); syncSlot();
   $('#nCreate').onclick = () => guard(async () => {
-    const r = await post('/api/ship/create', {path: S.path, slot: +$('#nSlot').value, ship: $('#nModel').value,
-      seed: $('#nSeed').value.trim(), name: $('#nName').value, clone_from: +$('#nFrom').value});
-    toast(`Created a ship in slot ${r.slot}. Backup made.`); S.slot = r.slot; await loadShips();
+    const slot = +$('#nSlot').value, s = byIndex(slot);
+    if (s && !confirm(`Replace the ${s.category} in slot ${slot}?\n\nIts model, seed and colour become the new ship; its inventory & tech are kept. A backup is made first.`)) return;
+    const from = $('#nFrom').value;
+    const r = await post('/api/ship/create', {path: S.path, slot, ship: $('#nModel').value,
+      seed: $('#nSeed').value.trim(), name: $('#nName').value, clone_from: from === '' ? null : +from});
+    toast(`${r.action === 'replaced' ? 'Replaced ship in' : 'Created ship in'} slot ${r.slot}. Backup made.`); S.slot = r.slot; await loadShips();
   });
 }
 $('#newShip').onclick = newShipPanel;

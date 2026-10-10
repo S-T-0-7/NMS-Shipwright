@@ -514,9 +514,11 @@ def set_ship_model(readable_json: dict, slot: int, filename: str, seed: str | No
         set_core_tech(readable_json, slot, now)
 
 
-def create_ship(readable_json: dict, slot: int, filename: str, seed: str, name: str, clone_from: int) -> None:
-    """Fill an empty slot with a copy of ship `clone_from`, then give it its own model,
-    seed and name. An empty slot has no inventory grid, so the copy is what makes it usable."""
+def create_ship(readable_json: dict, slot: int, filename: str, seed: str, name: str, clone_from: int,
+                standard: bool = False) -> None:
+    """Fill an empty slot with a copy of ship `clone_from`, then give it its own model, seed and
+    name. An empty slot has no inventory grid, so the copy is what makes it usable. With `standard`,
+    the copied inventory is emptied afterwards, leaving a fresh ship carrying only its built-in tech."""
     import copy
 
     entries = _dig(readable_json, SHIP_PATH)
@@ -529,6 +531,10 @@ def create_ship(readable_json: dict, slot: int, filename: str, seed: str, name: 
     entry = copy.deepcopy(_populated_entry(readable_json, clone_from))
     entry["Name"] = name
     entry["Resource"].update({"Filename": filename, "Seed": [True, seed], "ProceduralTexture": {"Samplers": []}})
+    if standard:  # keep the grids' size but tip out the donor's items; core tech is re-added below
+        for grid in entry.values():
+            if isinstance(grid, dict) and isinstance(grid.get("Slots"), list):
+                grid["Slots"] = []
     entries[slot] = entry
     # The copy brought the other ship's built-in parts: give this one the ones its type has.
     set_core_tech(readable_json, slot, is_sentinel(filename))
