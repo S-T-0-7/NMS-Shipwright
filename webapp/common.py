@@ -30,6 +30,17 @@ SHIP_MODELS = {k: "MODELS/" + v[len("models/"):].upper().replace(".DESCRIPTOR.MB
                for k, v in ROOTS.items() if k not in ("freighter", "capital_freighter")}
 
 
+# Fixed one-off ships (e.g. the Starborn Phoenix): each file in data/special_ships/ is a complete
+# ship entry that gets written straight into a slot. They are not procedural -- the seed is fixed.
+SPECIAL_SHIPS = {}  # key -> {"label", "entry"}
+_special_dir = ROOT / "data" / "special_ships"
+if _special_dir.exists():
+    for _f in sorted(_special_dir.glob("*.json")):
+        with open(_f, encoding="utf-8") as _sf:
+            _entry = json.load(_sf)
+        SPECIAL_SHIPS[_f.stem] = {"label": _entry.get("Name") or _f.stem, "entry": _entry}
+
+
 with open(ROOT / "data" / "palettes" / "customisation.json") as _f:
     PALETTES = {k: v["colours"] for k, v in json.load(_f)["palettes"].items() if v["num_colours_enum"] == 5}
 
@@ -121,6 +132,8 @@ UPDATE_HINT = ("No Man's Sky looks different than expected -- it was probably up
 
 
 def model_filename(ship):
+    if ship in SPECIAL_SHIPS:
+        return SPECIAL_SHIPS[ship]["entry"]["Resource"]["Filename"]
     if ship not in SHIP_MODELS:
         raise ValueError(f"unknown ship type {ship!r}")
     return SHIP_MODELS[ship]

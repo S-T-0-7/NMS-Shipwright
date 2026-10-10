@@ -22,6 +22,7 @@ STACK = 16 * 1024 * 1024
 DATA = [
     ("webapp/static", "webapp/static"),
     ("data/palettes", "data/palettes"),
+    ("data/special_ships", "data/special_ships"),
     ("data/mapping.json", "data"),
     ("nms_procgen/names", "nms_procgen/names"),
     ("nms_procgen/designs", "nms_procgen/designs"),

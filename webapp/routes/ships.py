@@ -9,8 +9,8 @@ from flask import Blueprint, jsonify, request
 from nms_procgen import locate
 from nms_save import items, locator, player, ships
 
-from webapp.common import (PALETTES, SHIP_LABELS, SHIP_MODELS, body, game_running, model_filename, open_save,
-                           ship_alias, write)
+from webapp.common import (PALETTES, SHIP_LABELS, SHIP_MODELS, SPECIAL_SHIPS, body, game_running, model_filename,
+                           open_save, ship_alias, write)
 
 bp = Blueprint("ships", __name__)
 
@@ -68,7 +68,8 @@ def api_ships():
 
 @bp.route("/api/models")
 def api_models():
-    return jsonify([{"ship": k, "label": SHIP_LABELS.get(k, k), "filename": f} for k, f in SHIP_MODELS.items()])
+    return jsonify([{"ship": k, "label": SHIP_LABELS.get(k, k), "filename": f} for k, f in SHIP_MODELS.items()]
+                   + [{"ship": k, "label": v["label"], "special": True} for k, v in SPECIAL_SHIPS.items()])
 
 
 @bp.route("/api/ship/create", methods=["POST"])
@@ -83,17 +84,21 @@ def api_ship_create():
     owned = r["BaseContext"]["PlayerStateData"]["ShipOwnership"]
     if not (0 <= slot < len(owned)):
         raise ValueError(f"no ship slot {slot}")
-    filename = model_filename(b.get("ship"))
+    ship = b.get("ship")
     seed, name = (b.get("seed") or "").strip(), str(b.get("name", ""))[:64]
-    if owned[slot].get("Resource", {}).get("Filename"):  # replace the ship already there
-        ships.set_ship_model(r, slot, filename, seed or None)
+    filled = bool(owned[slot].get("Resource", {}).get("Filename"))
+    if ship in SPECIAL_SHIPS:  # a fixed one-off ship: write its whole entry in
+        ships.install_special_ship(r, slot, SPECIAL_SHIPS[ship]["entry"], name or None)
+        action = "replaced" if filled else "created"
+    elif filled:  # replace the ship already there
+        ships.set_ship_model(r, slot, model_filename(ship), seed or None)
         ships.set_ship_name(r, slot, name)
         action = "replaced"
     else:  # fill the empty slot
         clone = b.get("clone_from")
         standard = clone in (None, "", "standard")
         donor = player.primary_ship(r) if standard else int(clone)
-        ships.create_ship(r, slot, filename, seed, name, donor, standard=standard)
+        ships.create_ship(r, slot, model_filename(ship), seed, name, donor, standard=standard)
         action = "created"
     return jsonify({"ok": True, "slot": slot, "action": action, "backup": write(opened)})
 

@@ -35,12 +35,12 @@ def api_model():
     """3D model (model3d.pack binary) of a seed, or of ?parts=id,id,... from the Designer."""
     a = request.args
     ship = a.get("ship", "fighter")
-    if ship not in ROOTS:
+    if ship not in ROOTS and ship not in model3d.SPECIAL_SCENES:
         raise ValueError(f"unknown ship type {ship!r}")
     parts = [p for p in a.get("parts", "").split(",") if p] if "parts" in a else None
     seed = a.get("seed") or "0x0"
     colours = {}
-    if parts is None and ship not in NO_SEED_LOOK:
+    if parts is None and ship not in NO_SEED_LOOK and ship not in model3d.SPECIAL_SCENES:
         try:
             cols = textures.ship_look(seed, ship)["colours"]
             colours = {"paint": cols["primary"]["rgb"], "secondary": cols["secondary"]["rgb"],

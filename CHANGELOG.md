@@ -2,6 +2,8 @@
 
 ## 1.8.3
 
+- **Starborn Phoenix**: the special ship now appears in the New ship type list (My Ships -> New
+  ship) marked with a ★, and spawns exactly as it is -- its own model, S-class stats and tech.
 - Exotic ships now build correctly: the **Royal** and **Squid** families render as separate ships
   instead of the squid showing on top of everything, so exotics can be designed part by part like
   any other type. (The game truncates part names, which the 3D view was not accounting for.)

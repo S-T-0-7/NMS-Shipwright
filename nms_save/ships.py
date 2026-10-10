@@ -565,6 +565,21 @@ def remove_ship(readable_json: dict, slot: int) -> None:
         legacy[slot] = False
 
 
+def install_special_ship(readable_json: dict, slot: int, entry: dict, name: str | None = None) -> None:
+    """Write a fixed special ship (a complete pre-built entry, e.g. the Starborn Phoenix) straight
+    into a slot, exactly as given. Works on an empty or an occupied slot."""
+    import copy
+
+    entries = _dig(readable_json, SHIP_PATH)
+    if not (0 <= slot < len(entries)):
+        raise ShipLookupError(f"No ship slot {slot} (valid range: 0..{len(entries) - 1})")
+    e = copy.deepcopy(entry)
+    if name:
+        e["Name"] = name
+    entries[slot] = e
+    clear_ship_paint(readable_json, slot)  # the ship carries its own look; drop any stored paint
+
+
 def clear_ship_paint(readable_json: dict, slot: int, texture: bool = True, customisation: bool = True) -> None:
     """Remove stored paint from a ship slot: the texture override and/or the palette paint."""
     if texture:

@@ -251,7 +251,46 @@ def _canon(up, options, trunc):
     return up
 
 
+# Special ships are not procedural -- they are one fixed scene (seed does not change the shape).
+SPECIAL_SCENES = {"starborn_phoenix": "MODELS/COMMON/SPACECRAFT/FIGHTERS/WRACERSE.SCENE.MBIN"}
+
+
+def _scene_meshes(root):
+    """Every LOD0 mesh of a fixed (non-procedural) ship scene, for the special ships."""
+    scene = _parsed(root)
+    if not scene:
+        raise FileNotFoundError(f"scene {root} not found")
+    out = []
+
+    def walk(n, geometry, world, depth):
+        typ, name, t, attrs, children = n
+        if depth > 12:
+            return
+        world = world @ _matrix(t)
+        if typ == "MESH":
+            suffix = LOD_SUFFIX.search(name)
+            if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
+                return
+            if attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
+                out.append((geometry, int(attrs["HASH"]), world, mat_class(attrs.get("MATERIAL", ""))))
+        elif typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
+            sub = _parsed(_scene_path(attrs["SCENEGRAPH"]))
+            if sub:
+                walk(sub[1], sub[0], world, depth + 1)
+        elif typ in ("COLLISION", "LIGHT", "JOINT", "EMITTER"):
+            return
+        for c in children:
+            walk(c, geometry, world, depth)
+    walk(scene[1], scene[0], np.eye(4), 0)
+    kept = [m for m in out if m[3] != "skip"]
+    if out and not [m for m in kept if m[3] not in ("glow", "glass")]:
+        kept = [(g, h, w, name_class(c)) for g, h, w, c in out if name_class(c) != "skip"]
+    return kept
+
+
 def ship_meshes(seed, ship, parts=None, fill=True):
+    if ship in SPECIAL_SCENES:
+        return _scene_meshes(SPECIAL_SCENES[ship])
     """[(geometry path, hash, 4x4 world matrix, material class)] for the parts `seed` builds.
 
     With `parts` (the Designer's picks) and `fill`, the rest of the ship is filled in with the first

@@ -274,31 +274,36 @@ function newShipPanel() {
   $('#shipDetail').innerHTML = `<h2 style="margin:0 0 12px;display:flex;justify-content:space-between;align-items:center">New ship <button class="btn" id="nClose" title="Cancel -- make no changes" style="padding:2px 11px">✕</button></h2>
     <div class="form2">
       <label class="muted">Slot</label><select id="nSlot">${slotsHtml}</select>
-      <label class="muted">Type</label><select id="nModel">${S.models.map(m => `<option value="${m.ship}" ${m.ship === 'sentinel' ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select>
-      <label class="muted">Seed</label><div class="row"><input id="nSeed" class="mono" style="width:230px"><button class="btn" id="nRand">Random</button></div>
+      <label class="muted">Type</label><select id="nModel">${S.models.map(m => `<option value="${m.ship}" ${m.ship === 'sentinel' ? 'selected' : ''}>${esc(m.label)}${m.special ? ' ★' : ''}</option>`).join('')}</select>
+      <label class="muted" id="nSeedLabel">Seed</label><div class="row" id="nSeedRow"><input id="nSeed" class="mono" style="width:230px"><button class="btn" id="nRand">Random</button></div>
       <label class="muted">Name</label><input id="nName" placeholder="(unnamed)">
       <label class="muted" id="nFromLabel">Copy inventory &amp; tech from</label><select id="nFrom"><option value="">Standard (fresh empty inventory)</option>${S.ships.map(s => `<option value="${s.index}">${s.index}: ${esc(s.name || '(unnamed)')} (${esc(s.category)})</option>`).join('')}</select>
     </div>
+    <p class="muted" id="nSpecialNote" style="margin:8px 0 0;display:none">★ Special ship — spawns exactly as it is (its own model, stats and tech). Seed and inventory options don't apply.</p>
     <p class="muted" id="nSlotNote" style="margin:8px 0 0"></p>
     <div class="hero" id="nPrev" style="margin-top:12px"></div>
     <div class="row" style="margin-top:12px"><button class="btn primary" id="nCreate">Create ship</button><button class="btn" id="nCancel">Cancel</button></div>
     <p class="muted">Tip: design it in the Designer first and paste the seed here. Replacing a slot keeps that ship's inventory &amp; tech; filling an empty slot copies the inventory you pick, or a standard empty one. Recolour afterwards from the ship page.</p>`;
   $('#nSlot').value = String(firstEmpty);
+  const special = () => S.models.find(x => x.ship === $('#nModel').value)?.special;
   const prev = () => {
-    const m = $('#nModel').value, seed = $('#nSeed').value.trim();
+    const m = $('#nModel').value, seed = special() ? '0x6' : $('#nSeed').value.trim();
     if (seed) show3d('nPrev', modelUrl(m, 'seed=' + encodeURIComponent(seed)), '<span class="muted">No preview for this ship type</span>');
     else $('#nPrev').innerHTML = '<span class="muted">Enter a seed to preview</span>';
   };
-  const syncSlot = () => {
-    const i = +$('#nSlot').value, s = byIndex(i);
-    for (const el of [$('#nFromLabel'), $('#nFrom')]) el.style.display = s ? 'none' : '';
+  const sync = () => {
+    const i = +$('#nSlot').value, s = byIndex(i), sp = special();
+    for (const el of [$('#nSeedLabel'), $('#nSeedRow')]) el.style.display = sp ? 'none' : '';
+    for (const el of [$('#nFromLabel'), $('#nFrom')]) el.style.display = (sp || s) ? 'none' : '';
+    $('#nSpecialNote').style.display = sp ? '' : 'none';
     $('#nSlotNote').textContent = s ? `Replaces the ${s.category} in slot ${i} — its inventory & tech are kept.` : '';
     $('#nCreate').textContent = s ? 'Replace ship' : 'Create ship';
+    prev();
   };
   $('#nRand').onclick = () => { $('#nSeed').value = randomSeed(); prev(); };
-  $('#nModel').onchange = prev; $('#nSeed').oninput = prev; $('#nSlot').onchange = syncSlot;
+  $('#nModel').onchange = sync; $('#nSeed').oninput = prev; $('#nSlot').onchange = sync;
   $('#nClose').onclick = $('#nCancel').onclick = closeNewShip;
-  $('#nRand').click(); syncSlot();
+  $('#nSeed').value = randomSeed(); sync();
   $('#nCreate').onclick = () => guard(async () => {
     const slot = +$('#nSlot').value, s = byIndex(slot);
     if (s && !confirm(`Replace the ${s.category} in slot ${slot}?\n\nIts model, seed and colour become the new ship; its inventory & tech are kept. A backup is made first.`)) return;
