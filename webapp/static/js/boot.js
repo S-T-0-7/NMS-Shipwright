@@ -1,5 +1,5 @@
 /* Start-up: load the save, the ships and the designer, then keep an eye on the game. */
-(async () => {
+$('#hPick').onclick = () => guard(async () => {
   if (!(window.pywebview && pywebview.api && pywebview.api.pick_folder)) throw new Error('Type the folder into the box, then press "Use this folder".');
   const folder = await pywebview.api.pick_folder($('#hDir').value || '');
   if (folder) { $('#hDir').value = folder; await useGameFolder(folder); }
