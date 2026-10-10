@@ -30,9 +30,7 @@ SHIP_MODELS = {k: "MODELS/" + v[len("models/"):].upper().replace(".DESCRIPTOR.MB
                for k, v in ROOTS.items() if k not in ("freighter", "capital_freighter")}
 
 
-# Fixed one-off ships (e.g. the Starborn Phoenix): each file in data/special_ships/ is a complete
-# ship entry that gets written straight into a slot. They are not procedural -- the seed is fixed.
-SPECIAL_SHIPS = {}  # key -> {"label", "entry"}
+SPECIAL_SHIPS = {}
 _special_dir = ROOT / "data" / "special_ships"
 if _special_dir.exists():
     for _f in sorted(_special_dir.glob("*.json")):
@@ -56,8 +54,7 @@ def part_names(ship):
 
 def humanize(part_id):
     """Tidy a raw descriptor id into a readable label: _SUBWINGS_A3 -> 'Subwings A3',
-    _WINGS_NONE -> 'Wings (none)'. Just formatting, not a shape description -- the curated
-    names in names/<ship>.json (sentinel, fighter) override this."""
+    _WINGS_NONE -> 'Wings (none)'. The curated names in names/<ship>.json override this."""
     tokens = part_id.strip("_").split("_")
     if not tokens or not tokens[0]:
         return part_id

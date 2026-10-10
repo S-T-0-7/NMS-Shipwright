@@ -313,7 +313,7 @@ function newShipPanel() {
     toast(`${r.action === 'replaced' ? 'Replaced ship in' : 'Created ship in'} slot ${r.slot}. Backup made.`); S.slot = r.slot; await loadShips();
   });
 }
-function closeNewShip() {  // leave the New ship panel, touching nothing
+function closeNewShip() {
   if (S.ships.some(s => s.index === S.slot)) selectShip(S.slot);
   else $('#shipDetail').innerHTML = '<p class="muted">Select a ship.</p>';
 }

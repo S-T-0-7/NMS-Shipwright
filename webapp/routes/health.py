@@ -94,7 +94,7 @@ def api_gamedir():
     """Point the tool at the player's No Man's Sky folder (when it was not found on its own)."""
     folder = gamepath.save_dir(body().get("path", ""))
     gameversion.refresh(everything=True)  # anything read from the old guess is wrong
-    from webapp.routes.find import SYSGEN  # defined there; reset so the emulator reloads the new game
+    from webapp.routes.find import SYSGEN
     SYSGEN["sg"] = None
     return jsonify({"ok": True, "nms_dir": folder, "health": health(False)})
 
@@ -103,7 +103,7 @@ def api_gamedir():
 def api_health_refresh():
     """Throw away the copies of game files and read them again (after a game update)."""
     gameversion.refresh(everything=bool(body().get("everything", True)))
-    from webapp.routes.find import SYSGEN  # the emulator holds the old game code
+    from webapp.routes.find import SYSGEN
     SYSGEN["sg"] = None
     return jsonify(health(False))
 

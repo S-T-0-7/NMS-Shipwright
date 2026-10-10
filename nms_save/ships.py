@@ -517,8 +517,7 @@ def set_ship_model(readable_json: dict, slot: int, filename: str, seed: str | No
 def create_ship(readable_json: dict, slot: int, filename: str, seed: str, name: str, clone_from: int,
                 standard: bool = False) -> None:
     """Fill an empty slot with a copy of ship `clone_from`, then give it its own model, seed and
-    name. An empty slot has no inventory grid, so the copy is what makes it usable. With `standard`,
-    the copied inventory is emptied afterwards, leaving a fresh ship carrying only its built-in tech."""
+    name. An empty slot has no inventory grid, so the copy is what makes it usable."""
     import copy
 
     entries = _dig(readable_json, SHIP_PATH)
@@ -531,7 +530,7 @@ def create_ship(readable_json: dict, slot: int, filename: str, seed: str, name: 
     entry = copy.deepcopy(_populated_entry(readable_json, clone_from))
     entry["Name"] = name
     entry["Resource"].update({"Filename": filename, "Seed": [True, seed], "ProceduralTexture": {"Samplers": []}})
-    if standard:  # keep the grids' size but tip out the donor's items; core tech is re-added below
+    if standard:
         for grid in entry.values():
             if isinstance(grid, dict) and isinstance(grid.get("Slots"), list):
                 grid["Slots"] = []
@@ -545,8 +544,7 @@ def create_ship(readable_json: dict, slot: int, filename: str, seed: str, name: 
 
 
 def remove_ship(readable_json: dict, slot: int) -> None:
-    """Empty a ship slot, turning it back into a free slot. Copies the save's own empty-slot shape
-    (needs at least one empty slot to copy from), so the result is exactly what the game expects."""
+    """Empty a ship slot, turning it back into a free slot. Copies the save's own empty-slot shape."""
     import copy
 
     entries = _dig(readable_json, SHIP_PATH)
@@ -566,8 +564,7 @@ def remove_ship(readable_json: dict, slot: int) -> None:
 
 
 def install_special_ship(readable_json: dict, slot: int, entry: dict, name: str | None = None) -> None:
-    """Write a fixed special ship (a complete pre-built entry, e.g. the Starborn Phoenix) straight
-    into a slot, exactly as given. Works on an empty or an occupied slot."""
+    """Write a fixed special ship (a complete pre-built entry) into a slot, exactly as given."""
     import copy
 
     entries = _dig(readable_json, SHIP_PATH)
@@ -577,7 +574,7 @@ def install_special_ship(readable_json: dict, slot: int, entry: dict, name: str 
     if name:
         e["Name"] = name
     entries[slot] = e
-    clear_ship_paint(readable_json, slot)  # the ship carries its own look; drop any stored paint
+    clear_ship_paint(readable_json, slot)
 
 
 def clear_ship_paint(readable_json: dict, slot: int, texture: bool = True, customisation: bool = True) -> None:

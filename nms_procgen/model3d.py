@@ -235,28 +235,22 @@ def _nodes(path):
 _parsed = functools.lru_cache(maxsize=512)(_nodes)
 
 
-_TRUNC_LEN = 15  # the game stores descriptor part names in a fixed field, truncating longer ones
+_TRUNC_LEN = 15
 
 
 def _canon(up, options, trunc):
-    """A scene node name -> its descriptor option id. Descriptor ids are truncated to _TRUNC_LEN
-    characters, so a scene node can be longer than its id (exotic's _SClassShip_Royal is the option
-    _SCLASSSHIP_ROY, _SClassShip_SquidxRARE is _SCLASSSHIP_SQU). Without this the Royal/Squid choice
-    is never matched and both are drawn at once."""
     if up in options:
         return up
-    for o in trunc:  # longest first: only truncated (max-length) ids can be a prefix of a longer name
+    for o in trunc:
         if up.startswith(o):
             return o
     return up
 
 
-# Special ships are not procedural -- they are one fixed scene (seed does not change the shape).
 SPECIAL_SCENES = {"starborn_phoenix": "MODELS/COMMON/SPACECRAFT/FIGHTERS/WRACERSE.SCENE.MBIN"}
 
 
 def _scene_meshes(root):
-    """Every LOD0 mesh of a fixed (non-procedural) ship scene, for the special ships."""
     scene = _parsed(root)
     if not scene:
         raise FileNotFoundError(f"scene {root} not found")
@@ -426,8 +420,7 @@ def _picked_meshes(ship, chosen):
 
 def ship_model(seed, ship, parts=None, fill=True) -> dict:
     """{"groups": {class: (positions float32 [n,3], indices uint32)}, "bounds": (min, max)} in the game's axes
-    (Y up, Z forward). The bounds frame exactly what is drawn, so a single picked part fills the view
-    instead of sitting tiny inside the whole ship's footprint."""
+    (Y up, Z forward). The bounds frame exactly what is drawn."""
     meshes = ship_meshes(seed, ship, parts, fill)
     geos = _geometry(sorted({g for g, *_ in meshes if g}))
     acc: dict = {}

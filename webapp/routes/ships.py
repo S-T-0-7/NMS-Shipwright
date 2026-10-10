@@ -87,14 +87,14 @@ def api_ship_create():
     ship = b.get("ship")
     seed, name = (b.get("seed") or "").strip(), str(b.get("name", ""))[:64]
     filled = bool(owned[slot].get("Resource", {}).get("Filename"))
-    if ship in SPECIAL_SHIPS:  # a fixed one-off ship: write its whole entry in
+    if ship in SPECIAL_SHIPS:
         ships.install_special_ship(r, slot, SPECIAL_SHIPS[ship]["entry"], name or None)
         action = "replaced" if filled else "created"
-    elif filled:  # replace the ship already there
+    elif filled:
         ships.set_ship_model(r, slot, model_filename(ship), seed or None)
         ships.set_ship_name(r, slot, name)
         action = "replaced"
-    else:  # fill the empty slot
+    else:
         clone = b.get("clone_from")
         standard = clone in (None, "", "standard")
         donor = player.primary_ship(r) if standard else int(clone)
