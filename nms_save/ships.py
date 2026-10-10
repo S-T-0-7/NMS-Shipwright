@@ -544,6 +544,27 @@ def create_ship(readable_json: dict, slot: int, filename: str, seed: str, name: 
         legacy[slot] = legacy[clone_from]
 
 
+def remove_ship(readable_json: dict, slot: int) -> None:
+    """Empty a ship slot, turning it back into a free slot. Copies the save's own empty-slot shape
+    (needs at least one empty slot to copy from), so the result is exactly what the game expects."""
+    import copy
+
+    entries = _dig(readable_json, SHIP_PATH)
+    if not (0 <= slot < len(entries)):
+        raise ShipLookupError(f"No ship slot {slot} (valid range: 0..{len(entries) - 1})")
+    if not entries[slot].get("Resource", {}).get("Filename"):
+        raise ShipLookupError(f"Slot {slot} is already empty")
+    blank = next((e for i, e in enumerate(entries)
+                  if i != slot and not e.get("Resource", {}).get("Filename")), None)
+    if blank is None:
+        raise ShipLookupError("every ship slot is full -- keep one slot empty to use as the blank template")
+    entries[slot] = copy.deepcopy(blank)
+    clear_ship_paint(readable_json, slot)
+    legacy = _dig(readable_json, SHIP_PATH[:-1]).get("ShipUsesLegacyColours")
+    if isinstance(legacy, list) and slot < len(legacy):
+        legacy[slot] = False
+
+
 def clear_ship_paint(readable_json: dict, slot: int, texture: bool = True, customisation: bool = True) -> None:
     """Remove stored paint from a ship slot: the texture override and/or the palette paint."""
     if texture:

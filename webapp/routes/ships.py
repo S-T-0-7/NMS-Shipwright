@@ -98,6 +98,16 @@ def api_ship_create():
     return jsonify({"ok": True, "slot": slot, "action": action, "backup": write(opened)})
 
 
+@bp.route("/api/ship/remove", methods=["POST"])
+def api_ship_remove():
+    """Empty a ship slot (remove the ship in it)."""
+    b = body()
+    opened = open_save(b.get("path"))
+    slot = int(b["slot"])
+    ships.remove_ship(opened.readable, slot)
+    return jsonify({"ok": True, "slot": slot, "backup": write(opened)})
+
+
 @bp.route("/api/ship/model", methods=["POST"])
 def api_ship_model():
     b = body()

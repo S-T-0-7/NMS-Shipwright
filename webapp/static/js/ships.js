@@ -49,12 +49,15 @@ function selectShip(slot) {
       <input type="color" id="pAny" title="Any colour: it snaps to the nearest paint in this set" style="width:38px;height:30px;padding:0;border:0;background:none">
       <span class="muted" id="pNote"></span></div>
     <div class="swatches" id="pSw"></div>
-    <details class="more"><summary>More: rename, change ship type</summary>
+    <details class="more"><summary>More: rename, change ship type, remove</summary>
     <h3>Name</h3>
     <div class="row"><input id="sName" value="${esc(s.name)}" placeholder="(unnamed)" style="width:260px"><button class="btn" id="sRename">Rename</button></div>
     <h3>Ship type</h3>
     <div class="row"><select id="sModel">${S.models.map(m => `<option value="${m.ship}" ${m.ship === s.ship ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}${s.ship ? '' : `<option value="" selected>${esc(s.category)} (fixed model)</option>`}</select>
       <button class="btn" id="sModelApply">Change type</button></div>
+    <h3>Remove</h3>
+    <div class="row"><button class="btn" id="sRemove">Remove this ship</button>
+      <span class="muted">Empties the slot. A backup is made first -- undo it from Save &gt; Backups.</span></div>
     </details>
     ${s.is_procedural && s.ship ? '<h3>Colours &amp; finish from the seed</h3><div id="sLook"><span class="muted">Working out the look...</span></div>' : ''}
     <h3>Where to find it in the game</h3><div id="sOrigin">${originHtml(s)}</div>
@@ -76,6 +79,12 @@ function selectShip(slot) {
     if (!confirm(`Change slot ${slot} into a ${m.label}? Its look will be generated from its seed.`)) return;
     await post('/api/ship/model', {path: S.path, slot, ship, seed: s.is_procedural ? s.seed : randomSeed()});
     toast(`Slot ${slot} is now a ${m.label}. Backup made.`); await loadShips();
+  });
+  $('#sRemove').onclick = () => guard(async () => {
+    if (!confirm(`Remove the ${s.category} in slot ${slot}?\n\nThe slot becomes empty. A backup is made first -- undo it from Save > Backups.`)) return;
+    const r = await post('/api/ship/remove', {path: S.path, slot});
+    toast(`Removed the ship in slot ${r.slot}. Backup made.`);
+    S.slot = null; $('#shipDetail').innerHTML = '<p class="muted">Select a ship.</p>'; await loadShips();
   });
   if (s.ship) show3d('sView', modelUrl(s.ship, 'seed=' + encodeURIComponent(s.seed)));
   if ($('#sEdit')) $('#sEdit').onclick = () => guard(() => openDesignerFor(s));
