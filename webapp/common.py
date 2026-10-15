@@ -14,7 +14,7 @@ from flask import request
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from nms_procgen import ROOTS  # noqa: E402
+from nms_procgen import ROOTS, textures  # noqa: E402
 from nms_save import gamefiles, gamepath, gameversion, items, quests, save  # noqa: E402
 
 
