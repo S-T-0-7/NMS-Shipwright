@@ -351,6 +351,21 @@ def _tech_ids(entry: dict) -> set:
             for s in entry.get(key, {}).get("Slots", [])}
 
 
+def _learn_tech(readable_json: dict, ids) -> None:
+    """Add tech ids to the player's KnownTech so the game keeps mod-installed ship
+    tech instead of ejecting it on load as something the player never unlocked."""
+    ps = _dig(readable_json, SHIP_PATH[:-1])  # PlayerStateData
+    known = ps.get("KnownTech")
+    if not isinstance(known, list):
+        return
+    have = {str(k).lstrip("^") for k in known}
+    for i in ids:
+        i = str(i).lstrip("^")
+        if i and i not in have:
+            known.append("^" + i)
+            have.add(i)
+
+
 def wrong_core_tech(entry: dict) -> list:
     """Parts fitted to this ship that belong to the other kind of ship.
 
@@ -435,6 +450,7 @@ def set_core_tech(readable_json: dict, slot: int, sentinel: bool) -> list:
                     stats.remove(s)
                 if key == "Inventory":
                     done.append((ROBOT_STAT, "(removed)"))
+    _learn_tech(readable_json, core_tech_for(sentinel))  # so the game doesn't strip it on load
     return done
 
 
@@ -574,6 +590,7 @@ def install_special_ship(readable_json: dict, slot: int, entry: dict, name: str 
     if name:
         e["Name"] = name
     entries[slot] = e
+    _learn_tech(readable_json, _tech_ids(e))  # keep the special ship's built-in tech on load
     clear_ship_paint(readable_json, slot)
 
 
