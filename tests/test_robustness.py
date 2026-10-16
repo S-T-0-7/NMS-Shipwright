@@ -377,5 +377,35 @@ class OtherPeoplesPCs(unittest.TestCase):
             shutil.rmtree(cache, ignore_errors=True)
 
 
+class ShipTechIsLearned(Base):
+    """Tech the tool puts on a ship must be marked known, or the game drops it on load."""
+
+    def _save(self, filename):
+        inv = lambda: {"Slots": [], "ValidSlotIndices": [{"X": x, "Y": 0} for x in range(12)],
+                       "Class": {"InventoryClass": "C"}, "BaseStatValues": []}
+        entry = {"Resource": {"Filename": filename, "Seed": [True, "0x0"]},
+                 "Inventory": inv(), "Inventory_TechOnly": inv(), "Inventory_Cargo": inv()}
+        return {"BaseContext": {"PlayerStateData": {
+            "ShipOwnership": [entry], "KnownTech": [],
+            "CharacterCustomisationData": [{} for _ in range(26)]}}}
+
+    def test_sentinel_core_tech_is_added_to_known_tech(self):
+        from nms_save import ships
+        save = self._save("MODELS/COMMON/SPACECRAFT/SENTINELSHIP/SENTINELSHIP_PROC.SCENE.MBIN")
+        ships.set_core_tech(save, 0, True)
+        known = {k.lstrip("^") for k in save["BaseContext"]["PlayerStateData"]["KnownTech"]}
+        self.assertTrue({"HYPERDRIVE_ROBO", "SHIPSHIELD_ROBO", "LIFESUP_ROBO"} <= known)
+
+    def test_special_ship_tech_is_added_to_known_tech(self):
+        from nms_save import ships
+        save = self._save("")  # empty slot
+        special = {"Name": "X", "Resource": {"Filename": "MODELS/X.SCENE.MBIN", "Seed": [True, "0x6"]},
+                   "Inventory_TechOnly": {"Slots": [{"Id": "^SHIPLAS1"}, {"Id": "^UP_PULSE3"}]}}
+        ships.install_special_ship(save, 0, special)
+        known = {k.lstrip("^") for k in save["BaseContext"]["PlayerStateData"]["KnownTech"]}
+        self.assertIn("SHIPLAS1", known)
+        self.assertIn("UP_PULSE3", known)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

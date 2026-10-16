@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.8.4
+
+- Fixed **seed search**: it was crashing with an internal error for every ship that has a colour
+  seed (fighter, hauler, explorer, shuttle, exotic, solar), so no design search could run. It works
+  again.
+- Tech the tool fits to a ship (making or converting one -- especially to a Sentinel interceptor)
+  is now marked as known in your save, so the game keeps it instead of stripping it the next time
+  the save loads.
+- New installer: smaller download (about 25 MB instead of 60) and a standard Windows setup, with a
+  proper entry in Settings > Apps and a clean uninstaller. The app itself is unchanged.
+
 ## 1.8.3
 
 - **Starborn Phoenix**: the special ship now appears in the New ship type list (My Ships -> New

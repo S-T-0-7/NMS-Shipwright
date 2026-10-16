@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 NAME = "NMS Shipwright"
+VERSION = "1.8.4"
 STACK = 16 * 1024 * 1024
 # (source, folder inside the app). Nothing from the game is shipped: the ship part data is copied
 # out of the player's own install the first time it is needed.
@@ -40,6 +41,30 @@ def make_icon(path):
     img.save(path, sizes=[(16, 16), (32, 32), (48, 48), (256, 256)])
 
 
+def version_file(orig_filename, description):
+    """A version/company resource for the exe, so scanners stop treating an unsigned exe as nameless."""
+    v = tuple(int(x) for x in (VERSION.split(".") + ["0", "0", "0"])[:4])
+    txt = f"""VSVersionInfo(
+  ffi=FixedFileInfo(filevers={v}, prodvers={v}, mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+  kids=[
+    StringFileInfo([StringTable('040904B0', [
+      StringStruct('CompanyName', 'Shikhar Tiwari'),
+      StringStruct('FileDescription', '{description}'),
+      StringStruct('FileVersion', '{VERSION}.0'),
+      StringStruct('InternalName', '{NAME}'),
+      StringStruct('LegalCopyright', 'Shikhar Tiwari. Open-source; bundles GPL-licensed components.'),
+      StringStruct('OriginalFilename', '{orig_filename}'),
+      StringStruct('ProductName', '{NAME}'),
+      StringStruct('ProductVersion', '{VERSION}.0')])]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)"""
+    p = ROOT / "build" / (orig_filename + ".version.txt")
+    p.parent.mkdir(exist_ok=True)
+    p.write_text(txt, encoding="utf-8")
+    return str(p)
+
+
 def build(console=False):
     work = ROOT / "build"
     work.mkdir(exist_ok=True)
@@ -48,6 +73,7 @@ def build(console=False):
     args = [sys.executable, "-m", "PyInstaller", str(ROOT / "nms_editor.py"), "--name", NAME, "--noconfirm", "--clean",
             "--console" if console else "--windowed", "--onedir", "--icon", str(icon), "--distpath", str(ROOT / ("dist-debug" if console else "dist")),
             "--workpath", str(work), "--specpath", str(work),
+            "--version-file", version_file(f"{NAME}.exe", "NMS Shipwright - No Mans Sky ship designer and save editor"),
             "--collect-all", "unicorn", "--collect-all", "hgpaktool", "--collect-submodules", "webview",
             "--exclude-module", "PIL", "--exclude-module", "pandas", "--exclude-module", "tkinter",
             "--hidden-import", "webapp.app", "--paths", str(ROOT)]
@@ -77,24 +103,33 @@ def fix_pe(exe, size=STACK):
     exe.write_bytes(data)
 
 
+def find_iscc():
+    """Locate the Inno Setup command-line compiler (ISCC.exe)."""
+    import shutil
+    found = shutil.which("ISCC") or shutil.which("iscc")
+    if found:
+        return found
+    for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles"),
+                 os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs")):
+        if base:
+            cand = Path(base) / "Inno Setup 6" / "ISCC.exe"
+            if cand.exists():
+                return str(cand)
+    return None
+
+
 def build_installer(app_exe):
-    """Zip the app folder into a one-file Setup.exe (see scripts/installer.py) plus a small Uninstall.exe."""
-    import zipfile
-    work, app_dir = ROOT / "build", app_exe.parent
-    bundle = work / "app.zip"
-    with zipfile.ZipFile(bundle, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-        for f in app_dir.rglob("*"):
-            if f.is_file():
-                z.write(f, f.relative_to(app_dir))
-    common = [sys.executable, "-m", "PyInstaller", str(ROOT / "scripts" / "installer.py"), "--noconfirm", "--onefile",
-              "--windowed", "--icon", str(work / "app.ico"), "--workpath", str(work / "installer"),
-              "--specpath", str(work / "installer"), "--add-data", f"{work / 'app.ico'}{os.pathsep}."]
-    subprocess.run(common + ["--name", "Uninstall", "--distpath", str(work / "installer")], check=True, cwd=ROOT)
-    subprocess.run(common + ["--name", f"{NAME} Setup", "--distpath", str(ROOT / "dist"),
-                             "--add-data", f"{bundle}{os.pathsep}.",
-                             "--add-data", f"{work / 'installer' / 'Uninstall.exe'}{os.pathsep}."], check=True, cwd=ROOT)
+    """Compile the Inno Setup installer around the built app folder (installer/nms_shipwright.iss)."""
+    iscc = find_iscc()
+    if not iscc:
+        sys.exit("Inno Setup not found. Install it (choco install innosetup, or jrsoftware.org/isdl.php).")
+    app_dir = app_exe.parent  # dist/NMS Shipwright
+    subprocess.run([iscc, f"/DAppSrc={app_dir}", f"/DOutDir={ROOT / 'dist'}",
+                    f"/DIcon={ROOT / 'build' / 'app.ico'}", f"/DAppVer={VERSION}",
+                    str(ROOT / "installer" / "nms_shipwright.iss")], check=True, cwd=ROOT)
     setup = ROOT / "dist" / f"{NAME} Setup.exe"
-    bundle.unlink()
+    if not setup.exists():
+        sys.exit("installer build failed: Setup.exe not found")
     return setup
 
 
