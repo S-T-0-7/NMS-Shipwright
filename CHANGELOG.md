@@ -5,6 +5,8 @@
 - **Linux support**: there is now a Linux build (an AppImage) alongside the Windows installer, both
   attached to each release. It finds No Man's Sky through Steam/Proton -- including the save inside
   the game's Proton prefix -- and opens in your browser instead of a native window.
+- Notifications float on their own layer now, so a pop-up no longer pushes the page around, and the
+  app has had a visual tidy-up (cleaner cards, buttons and spacing).
 
 ## 1.8.4
 

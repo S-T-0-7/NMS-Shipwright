@@ -68,3 +68,25 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;
 details.more,details.fold{margin-top:14px}details.more>summary,details.fold>summary{cursor:pointer;font-weight:600;color:var(--muted);padding:6px 0}
 details.more[open]>summary,details.fold[open]>summary{color:var(--text)}
 #toast{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9}#toast div{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--ok);padding:10px 14px;border-radius:8px;max-width:460px;word-break:break-word}#toast div.err{border-left-color:var(--err)}
+
+/* ---- visual refresh ---- */
+:root{--panel:#14171e;--panel2:#1b1f29;--line:#272c38;--line2:#343b49;--r:11px;--shadow:0 14px 38px rgba(0,0,0,.52);--shadow-sm:0 2px 10px rgba(0,0,0,.30)}
+html,body{background:radial-gradient(1100px 560px at 82% -14%,#1a2130 0%,#0c0e13 58%) fixed;-webkit-font-smoothing:antialiased}
+header{box-shadow:0 1px 0 #ffffff08}
+.brand i{box-shadow:0 0 14px var(--accent),0 0 3px var(--accent)}
+.btn,nav button,input,select,.card,.ship,.cell,.swatches i,.pill,.res{transition:background .15s,border-color .15s,box-shadow .15s,transform .12s,color .15s}
+.btn{border-radius:9px;padding:7px 13px}
+.btn:hover{border-color:var(--line2);background:#20252f}
+.btn.primary,.btn.primary:hover{background:linear-gradient(180deg,var(--accent2),var(--accent));border-color:transparent;color:#fff;font-weight:600;box-shadow:0 2px 12px rgba(232,84,62,.35)}
+.btn.primary:hover{filter:brightness(1.08)}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,84,62,.16)}
+.card{box-shadow:var(--shadow-sm)}
+.ship:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+.res:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+nav button.active{background:linear-gradient(90deg,#ffffff0d,transparent)}
+.banner{position:fixed;top:70px;left:calc(50% + 100px);transform:translateX(-50%);z-index:60;margin:0;max-width:min(720px,70vw);padding:12px 16px;border-radius:12px;box-shadow:var(--shadow);background:#251511;animation:bannerpop .22s ease}
+.banner.info{background:#171c26;border-color:#33415e}
+#toast div{box-shadow:var(--shadow);animation:pop .2s ease}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes bannerpop{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+::-webkit-scrollbar{width:11px;height:11px}::-webkit-scrollbar-thumb{background:#2a303c;border-radius:9px;border:2px solid transparent;background-clip:padding-box}::-webkit-scrollbar-thumb:hover{background:#3a4150;background-clip:padding-box}
