@@ -17,6 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 NAME = "NMS Shipwright"
 VERSION = "1.8.4"
+WINDOWS = os.name == "nt"
+EXE = f"{NAME}.exe" if WINDOWS else NAME  # PyInstaller drops the .exe on Linux
 STACK = 16 * 1024 * 1024
 # (source, folder inside the app). Nothing from the game is shipped: the ship part data is copied
 # out of the player's own install the first time it is needed.
@@ -39,6 +41,7 @@ def make_icon(path):
     d.ellipse((58, 58, 198, 198), fill=(232, 84, 62, 255))
     d.polygon([(128, 70), (176, 170), (128, 148), (80, 170)], fill=(255, 255, 255, 255))
     img.save(path, sizes=[(16, 16), (32, 32), (48, 48), (256, 256)])
+    img.save(Path(path).with_suffix(".png"))  # Linux / AppImage wants a PNG
 
 
 def version_file(orig_filename, description):
@@ -71,22 +74,27 @@ def build(console=False):
     icon = work / "app.ico"
     make_icon(icon)
     args = [sys.executable, "-m", "PyInstaller", str(ROOT / "nms_editor.py"), "--name", NAME, "--noconfirm", "--clean",
-            "--console" if console else "--windowed", "--onedir", "--icon", str(icon), "--distpath", str(ROOT / ("dist-debug" if console else "dist")),
+            "--console" if console else "--windowed", "--onedir", "--distpath", str(ROOT / ("dist-debug" if console else "dist")),
             "--workpath", str(work), "--specpath", str(work),
-            "--version-file", version_file(f"{NAME}.exe", "NMS Shipwright - No Mans Sky ship designer and save editor"),
-            "--collect-all", "unicorn", "--collect-all", "hgpaktool", "--collect-submodules", "webview",
+            "--collect-all", "unicorn", "--collect-all", "hgpaktool",
             "--exclude-module", "PIL", "--exclude-module", "pandas", "--exclude-module", "tkinter",
             "--hidden-import", "webapp.app", "--paths", str(ROOT)]
+    if WINDOWS:  # the native window (WebView2) and exe metadata are Windows-only; Linux uses the browser
+        args += ["--icon", str(icon), "--collect-submodules", "webview",
+                 "--version-file", version_file(EXE, "NMS Shipwright - No Mans Sky ship designer and save editor")]
+    else:
+        args += ["--exclude-module", "webview"]
     for src, dest in DATA:
         if not (ROOT / src).exists():
             print(f"skipping {src} (not in this checkout)")  # e.g. the scraped ship catalogue
             continue
         args += ["--add-data", f"{ROOT / src}{os.pathsep}{dest}"]
     subprocess.run(args, check=True, cwd=ROOT)
-    exe = ROOT / ("dist-debug" if console else "dist") / NAME / f"{NAME}.exe"
+    exe = ROOT / ("dist-debug" if console else "dist") / NAME / EXE
     if not exe.exists():
         sys.exit("build failed: exe not found")
-    fix_pe(exe)
+    if WINDOWS:  # Linux uses the thread stack set in nms_editor.main(); PE/CFG don't apply
+        fix_pe(exe)
     return exe
 
 
@@ -155,4 +163,7 @@ if __name__ == "__main__":
     if a.shortcuts and not a.console:
         shortcuts(exe)
     if not (a.no_installer or a.console):
-        print("installer:", build_installer(exe))
+        if WINDOWS:
+            print("installer:", build_installer(exe))
+        else:
+            print("app folder:", exe.parent, "-- run scripts/build_appimage.sh to package it")
