@@ -16,10 +16,23 @@ import webbrowser
 from pathlib import Path
 
 APP_NAME = "NMS Shipwright"
-FROZEN = getattr(sys, "frozen", False)
-if FROZEN:  # game-file copies live outside the app folder, so rebuilding the app keeps them
-    os.environ.setdefault("NMS_TOOL_CACHE", os.path.join(os.environ.get("LOCALAPPDATA", str(Path.home())),
-                                                         APP_NAME, "gamecache"))
+FROZEN = getattr(sys, "frozen", False) or "__compiled__" in globals()
+
+
+def _data_dir():
+    """Per-user folder for the game-file cache, outside the app so rebuilds keep it."""
+    home = str(Path.home())
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or home
+    elif sys.platform == "darwin":
+        base = os.path.join(home, "Library", "Application Support")
+    else:  # Linux and the rest: XDG
+        base = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    return os.path.join(base, APP_NAME, "gamecache")
+
+
+if FROZEN:
+    os.environ.setdefault("NMS_TOOL_CACHE", _data_dir())
 else:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -81,17 +94,27 @@ def main():
             break
         except OSError:
             time.sleep(0.05)
+    def in_browser(reason=""):
+        if reason:
+            print(reason)
+        print(f"Opening NMS Shipwright in your browser: {url}")
+        webbrowser.open(url)
+        try:
+            input("Press Enter here to quit...")
+        except (EOFError, OSError):
+            threading.Event().wait()  # no console (GUI launch): just keep the server alive
+
     try:
         import webview
     except ImportError:
-        print(f"pywebview is not installed -- opening in your browser instead: {url}")
-        webbrowser.open(url)
-        input("Press Enter here to quit...")
-        return
-    webview.settings["ALLOW_DOWNLOADS"] = True  # fallback for plain links
-    webview.create_window(APP_NAME, url, width=1440, height=920, min_size=(1100, 680), background_color="#0E1014",
-                          js_api=FileBridge())
-    webview.start()
+        return in_browser("pywebview is not installed.")
+    try:
+        webview.settings["ALLOW_DOWNLOADS"] = True  # fallback for plain links
+        webview.create_window(APP_NAME, url, width=1440, height=920, min_size=(1100, 680),
+                              background_color="#0E1014", js_api=FileBridge())
+        webview.start()
+    except Exception as e:  # no native GUI backend (e.g. WebKitGTK missing on Linux)
+        return in_browser(f"Native window unavailable ({e}).")
 
 
 if __name__ == "__main__":

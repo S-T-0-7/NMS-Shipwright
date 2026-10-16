@@ -407,5 +407,62 @@ class ShipTechIsLearned(Base):
         self.assertIn("UP_PULSE3", known)
 
 
+class CrossPlatformPaths(unittest.TestCase):
+    """Game/save discovery must work on Linux (Steam/Proton), not just Windows."""
+
+    def test_looks_like_game_matches_folder_case_insensitively(self):
+        from nms_save import gamepath
+        d = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(d, "binaries"))            # lower-case, as a Linux install may be
+            open(os.path.join(d, "binaries", "nms.exe"), "w").close()
+            os.makedirs(os.path.join(d, "gamedata", "pcbanks"))
+            self.assertTrue(gamepath.looks_like_game(d))
+            self.assertFalse(gamepath.looks_like_game(os.path.join(d, "nope")))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_steam_libraries_includes_extra_drives_from_the_vdf(self):
+        from nms_save import gamepath
+        steam, extra = tempfile.mkdtemp(), tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(steam, "steamapps"))
+            with open(os.path.join(steam, "steamapps", "libraryfolders.vdf"), "w") as f:
+                f.write('"libraryfolders"{"0"{"path" "%s"}}' % extra.replace("\\", "\\\\"))
+            orig = gamepath._steam_roots
+            gamepath._steam_roots = lambda: [steam]
+            try:
+                libs = gamepath.steam_libraries()
+            finally:
+                gamepath._steam_roots = orig
+            self.assertIn(steam, libs)
+            self.assertIn(extra, libs)
+        finally:
+            shutil.rmtree(steam, ignore_errors=True)
+            shutil.rmtree(extra, ignore_errors=True)
+
+    def test_linux_save_roots_point_at_the_proton_prefix(self):
+        from nms_save import gamepath, locator
+        lib = tempfile.mkdtemp()
+        try:
+            pfx = os.path.join(lib, "steamapps", "compatdata", "275850", "pfx", "drive_c", "users",
+                               "steamuser", "AppData", "Roaming", "HelloGames", "NMS", "st_1")
+            os.makedirs(pfx)
+            with open(os.path.join(pfx, "save.hg"), "wb") as f:
+                f.write(b"x")
+            keep_w, keep_libs = locator.WINDOWS, gamepath.steam_libraries
+            locator.WINDOWS = False
+            gamepath.steam_libraries = lambda: [lib]
+            try:
+                roots = locator.save_roots()
+                saves = locator.find_saves()
+            finally:
+                locator.WINDOWS, gamepath.steam_libraries = keep_w, keep_libs
+            self.assertTrue(any("compatdata" in r for r in roots), roots)
+            self.assertEqual([s.slot_name for s in saves], ["save.hg"])
+        finally:
+            shutil.rmtree(lib, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

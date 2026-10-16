@@ -1,11 +1,36 @@
-"""Find No Man's Sky save files on this machine (Windows)."""
+"""Find No Man's Sky save files on this machine (Windows, or Linux via Steam Play / Proton)."""
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
 from glob import glob
 
-DEFAULT_ROOT = os.path.expandvars(r"%APPDATA%\HelloGames\NMS")
+WINDOWS = os.name == "nt"
+APP_ID = "275850"
+# Under Proton the save lives inside the game's compatibility prefix.
+_PROTON_SUFFIX = os.path.join("steamapps", "compatdata", APP_ID, "pfx", "drive_c", "users",
+                              "steamuser", "AppData", "Roaming", "HelloGames", "NMS")
+DEFAULT_ROOT = os.path.expandvars(r"%APPDATA%\HelloGames\NMS") if WINDOWS \
+    else os.path.expanduser("~/.local/share/HelloGames/NMS")
+
+
+def save_roots() -> list[str]:
+    """Every folder that might hold save*.hg files, newest-install-first."""
+    env = os.environ.get("NMS_SAVE_DIR")
+    roots = [env] if env else []
+    if WINDOWS:
+        roots.append(os.path.expandvars(r"%APPDATA%\HelloGames\NMS"))
+    else:
+        from nms_save import gamepath
+        for lib in gamepath.steam_libraries():
+            roots.append(os.path.join(lib, _PROTON_SUFFIX))
+        roots.append(os.path.expanduser("~/.local/share/HelloGames/NMS"))  # just in case
+    seen, out = set(), []
+    for r in roots:
+        if r and r not in seen and os.path.isdir(r):
+            seen.add(r)
+            out.append(r)
+    return out
 
 
 @dataclass
@@ -33,24 +58,26 @@ class SaveFile:
         return "Autosave" if self.index % 2 == 0 else "Manual save"
 
 
-def find_saves(root: str = DEFAULT_ROOT) -> list[SaveFile]:
-    """List every save*.hg (not accountdata/manifest) file, newest first."""
+def find_saves(root: str | None = None) -> list[SaveFile]:
+    """List every save*.hg (not accountdata/manifest) file, newest first.
+
+    With no `root`, scans every likely location for this OS (Proton prefixes on Linux).
+    """
+    roots = [root] if root else save_roots()
     results = []
-    for path in glob(os.path.join(root, "*", "save*.hg")):
-        slot_name = os.path.basename(path)
-        if slot_name.startswith("mf_"):
-            continue  # manifest sidecar, not a save
-        profile = os.path.basename(os.path.dirname(path))
-        stat = os.stat(path)
-        results.append(
-            SaveFile(
-                path=path,
-                profile=profile,
-                slot_name=slot_name,
-                mtime=stat.st_mtime,
-                size=stat.st_size,
-            )
-        )
+    seen = set()
+    for base in roots:
+        for path in glob(os.path.join(base, "*", "save*.hg")):
+            if path in seen:
+                continue
+            seen.add(path)
+            slot_name = os.path.basename(path)
+            if slot_name.startswith("mf_"):
+                continue  # manifest sidecar, not a save
+            profile = os.path.basename(os.path.dirname(path))
+            stat = os.stat(path)
+            results.append(SaveFile(path=path, profile=profile, slot_name=slot_name,
+                                    mtime=stat.st_mtime, size=stat.st_size))
 
     results.sort(key=lambda s: s.mtime, reverse=True)
     return results
