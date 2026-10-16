@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.5
+
+- **Linux support**: there is now a Linux build (an AppImage) alongside the Windows installer, both
+  attached to each release. It finds No Man's Sky through Steam/Proton -- including the save inside
+  the game's Proton prefix -- and opens in your browser instead of a native window.
+
 ## 1.8.4
 
 - Fixed **seed search**: it was crashing with an internal error for every ship that has a colour

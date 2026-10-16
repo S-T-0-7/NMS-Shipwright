@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 NAME = "NMS Shipwright"
-VERSION = "1.8.4"
+VERSION = "1.8.5"
 WINDOWS = os.name == "nt"
 EXE = f"{NAME}.exe" if WINDOWS else NAME  # PyInstaller drops the .exe on Linux
 STACK = 16 * 1024 * 1024
