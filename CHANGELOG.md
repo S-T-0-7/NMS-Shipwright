@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.6
+
+- **Sentinel recolour** actually shows up now. The game only draws the metallic palette on an
+  interceptor -- colours from any other paint set are saved but never rendered, so the ship kept
+  its default red/orange. Recolour now uses metallic paints for Sentinels, and says so.
+
 ## 1.8.5
 
 - **Linux support**: there is now a Linux build (an AppImage) alongside the Windows installer, both

@@ -260,8 +260,12 @@ def set_ship_paint(readable_json: dict, slot: int, primary=(0.0, 0.0, 0.0), acce
 
     FREIGHTER has true black, SHIP does not. Returns the slots written.
     """
-    _populated_entry(readable_json, slot)
+    entry = _populated_entry(readable_json, slot)
     accent = primary if accent is None else accent
+    if is_sentinel(entry.get("Resource", {}).get("Filename", "")) and palette_id != "SHIP_METALLIC":
+        # Sentinels only take metallic paint in game; any other palette is ignored and the ship
+        # stays its default red. Snap the chosen colours to the metallic set instead.
+        palette_id, primary_index, accent_index = "SHIP_METALLIC", None, None
     if primary_index is None:
         primary_index = palette_index(palette_id, primary)
     if accent_index is None:
