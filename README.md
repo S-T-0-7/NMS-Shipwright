@@ -89,7 +89,7 @@ python -m unittest tests.test_robustness
 
 Releases are built on a clean Windows runner by GitHub Actions (`.github/workflows/release.yml`),
 so the installer attached to a release is reproducible and carries no local machine's data. To cut
-one: bump `VERSION` in [scripts/installer.py](scripts/installer.py), add a `## <version>` section at
+one: bump `VERSION` in [webapp/version.py](webapp/version.py), add a `## <version>` section at
 the top of [CHANGELOG.md](CHANGELOG.md), commit, then tag and push:
 
 ```

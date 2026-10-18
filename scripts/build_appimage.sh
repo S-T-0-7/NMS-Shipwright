@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 NAME="NMS Shipwright"
 APPDIR="dist/${NAME}.AppDir"
 OUT="dist/NMS_Shipwright-x86_64.AppImage"
-VERSION="$(grep -oP '^VERSION = "\K[^"]+' scripts/build_app.py)"
+VERSION="$(grep -oP '^VERSION = "\K[^"]+' webapp/version.py)"
 
 echo ">> building the app folder"
 python scripts/build_app.py --no-installer
