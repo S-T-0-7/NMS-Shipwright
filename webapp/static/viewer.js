@@ -128,10 +128,13 @@
         return {cls: g.class, vao, bufs, count: g.indices, col: head.colours[g.class] || c.col || [.75, .75, .78],
                 emit: c.emit || 0, spec: c.spec ?? .4, alpha: c.alpha ?? 1, blend: c.blend || null};
       });
-      const [lo, hi] = head.bounds;
+      const [lo, hi] = head.bounds, zoom = v.dist / v.radius;
       v.center = [-(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
       v.radius = Math.max(.5, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2);
-      reset();
+      // Only the first model gets the default view. Reloads (the Designer adding a part) keep the
+      // angle, spin and zoom the user chose; double-click still resets.
+      if (v.loaded) v.dist = v.radius * zoom; else reset();
+      v.loaded = true;
       return head;
     };
     requestAnimationFrame(draw);

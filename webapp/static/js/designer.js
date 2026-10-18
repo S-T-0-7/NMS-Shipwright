@@ -164,6 +164,7 @@ function wireApply(box, ship) {
 }
 
 async function initDesigner() {
+  if (!$('#dPreview + .viewbar')) $('#dPreview').insertAdjacentHTML('afterend', viewBar('dPreview'));
   S.models = await api('/api/models');
   const types = await api('/api/design/types');
   $('#dShip').innerHTML = types.map(t => `<option value="${t.ship}">${esc(t.label)}</option>`).join('');
