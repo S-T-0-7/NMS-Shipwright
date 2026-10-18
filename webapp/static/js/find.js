@@ -66,11 +66,12 @@ $('#fHere').onclick = () => guard(async () => {
   await loadFind(); $('#fAddr').value = S.loc.current.glyphs; $('#fGal').value = S.loc.current.galaxy; await showSystem();
 });
 $('#dFind').onclick = () => guard(async () => {
-  const want = wanted(); if (!want.length) throw new Error('Pick at least one part first.');
+  const want = wanted();
+  if (!want.length && !lookSet()) throw new Error('Pick at least one part or colour first.');
   if (!S.loc) await loadFind();
   const ship = $('#dShip').value;
   const r = await post('/api/find/scan', {ship, want, addr: S.loc.current.ua, radius: +$('#dRad').value, n: +$('#dN').value,
-    closest: $('#dClose').checked});
+    closest: $('#dClose').checked, look: S.look});
   S.job = {id: r.job, ship, shown: ''}; $('#dResults').innerHTML = '';
   $('#dGo').disabled = $('#dFind').disabled = true; $('#dStop').disabled = false; pollFind();
 });
@@ -84,7 +85,7 @@ async function pollFind() {
       const d = document.createElement('div'); d.className = 'card res';
       const miss = res.missing.map(id => S.optLabel[id] || id);
       d.innerHTML = `
-        <div style="margin-top:6px"><span class="badge ${res.score === res.total ? 'hot' : ''}">${res.score}/${res.total} parts</span>
+        <div style="margin-top:6px"><span class="badge ${res.score === res.total ? 'hot' : ''}">${res.total ? `${res.score}/${res.total} parts` : 'colour match'}</span>
           ${miss.length ? `<small class="muted" title="${esc(miss.join(', '))}">missing ${esc(miss.slice(0, 3).join(', '))}${miss.length > 3 ? '...' : ''}</small>` : ''}</div>
         <div style="margin-top:6px">${placeHtml(res)}</div>
         <div style="margin-top:4px">${res.where === 'crash site' ? 'Crash-site interceptor &middot; <span class="badge hot">DISSONANT</span>'

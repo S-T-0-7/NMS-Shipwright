@@ -9,7 +9,7 @@ from flask import Blueprint, jsonify, request
 from nms_procgen import locate, systemgen
 from nms_save import ships
 
-from webapp.common import JOBS, SHIP_LABELS, body, open_save, write
+from webapp.common import JOBS, NO_SEED_LOOK, SHIP_LABELS, body, open_save, parse_look, write
 
 bp = Blueprint("find", __name__)
 
@@ -58,10 +58,10 @@ def api_freighter():
     return jsonify({"ok": True, "backup": backup, **ships.get_freighter(opened.readable)})
 
 
-def run_find(job, center, radius, ship, want, limit, closest):
+def run_find(job, center, radius, ship, want, limit, closest, look):
     try:
         for best in systemgen.scan(center, radius, ship, want, (), limit=limit, closest=closest, stats=job["stats"],
-                                   should_stop=lambda: job["cancel"]):
+                                   should_stop=lambda: job["cancel"], look=look):
             job["results"] = best
         job["status"] = "cancelled" if job["cancel"] else "done"
     except Exception as e:  # reported to the UI
@@ -84,10 +84,16 @@ def api_find_scan():
     if any(j["status"] == "running" and j.get("kind") == "find" for j in JOBS.values()):
         raise ValueError("a scan is already running")
     center = locate.parse_address(b.get("addr", ""), int(b.get("galaxy", 0)))
+    look = parse_look(b.get("look")) if ship not in NO_SEED_LOOK else {}
+    want = list(b.get("want", []))
+    if not want and not look:
+        raise ValueError("Pick at least one part or colour to search for.")
+    # a pure-colour search has no part score to rank by, so stop as soon as `n` are found
+    closest = bool(b.get("closest", True)) and bool(want)
     job_id = uuid.uuid4().hex[:10]
     JOBS[job_id] = job = {"status": "running", "results": [], "stats": {}, "cancel": False, "error": None,
                           "ship": ship, "kind": "find"}
-    threading.Thread(target=run_find, args=(job, center, max(0, min(int(b.get("radius", 0)), 6)), ship,
-                                            list(b.get("want", [])), max(1, min(int(b.get("n", 10)), 50)),
-                                            bool(b.get("closest", True))), daemon=True).start()
+    threading.Thread(target=run_find, args=(job, center, max(0, min(int(b.get("radius", 0)), 12)), ship,
+                                            want, max(1, min(int(b.get("n", 10)), 50)),
+                                            closest, look), daemon=True).start()
     return jsonify({"ok": True, "job": job_id})

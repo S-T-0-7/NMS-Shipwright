@@ -2,6 +2,11 @@
 
 ## 1.8.6
 
+- **Find a ship by colour**: Design & Find now takes a colour as well as parts, for Sentinel
+  interceptors too, and "Find in game" returns the real systems whose ship is that colour, with the
+  portal glyphs to fly there and claim it. A Sentinel's colour comes from its seed, so this is how
+  you get, say, a white interceptor -- search for one and go find it. The system scan also reaches a
+  bit further out.
 - **Sentinel recolour** actually shows up now. The game only draws the metallic palette on an
   interceptor -- colours from any other paint set are saved but never rendered, so the ship kept
   its default red/orange. Recolour now uses metallic paints for Sentinels, and says so.

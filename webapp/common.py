@@ -136,7 +136,7 @@ def model_filename(ship):
     return SHIP_MODELS[ship]
 
 
-NO_SEED_LOOK = {"sentinel"}  # sentinel colour comes from its parts and the player's paint, not the seed
+NO_SEED_LOOK = set()  # every scannable type's colour comes from its seed (sentinels included)
 
 
 def parse_look(raw):

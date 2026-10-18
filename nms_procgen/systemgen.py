@@ -235,7 +235,7 @@ def _save_chunk(path, data):
 def _region_task(task, floor=None):
     """Scan one chunk of a region; returns (systems scanned, best results of this chunk).
     floor: the score the scan's current results already beat (nothing at or below it is kept)."""
-    x, y, z, start, galaxy, ship, want, avoid, closest, keep, away = task
+    x, y, z, start, galaxy, ship, want, avoid, closest, keep, away, look = task
     if "sg" not in _W:
         _warm()
     sg = _W["sg"]
@@ -245,6 +245,9 @@ def _region_task(task, floor=None):
     else:
         where_ok = "freighter fleet" if ship in FLEET_TYPES else "space station"
         cands = [(seed, ua, where) for seed, ua, where, alias in data["c"] if where == where_ok and alias == ship]
+    if look:  # keep only ships whose seed generates the wanted colours
+        from . import textures
+        cands = [(seed, ua, where) for seed, ua, where in cands if textures.look_matches(seed, look)]
     total = len(want)
     if closest:
         from .generator import part_ids, stored_id
@@ -314,11 +317,13 @@ def warm_up(workers: int | None = None):
 
 
 def scan(center_ua: int, radius: int, ship: str, want=(), avoid=(), limit: int = 20, closest: bool = False,
-         workers: int | None = None, stats: dict | None = None, should_stop=None):
+         workers: int | None = None, stats: dict | None = None, should_stop=None, look=None):
     """Scan the regions around a system for a design; yields the best results so far as chunks finish.
 
     closest=False: only systems whose ship has every wanted part (stops once `limit` are found).
     closest=True:  the `limit` ships sharing the most wanted parts, exact matches first.
+    look: optional colour filter {primary/secondary/undercoat: set of palette indices} -- only
+    systems whose ship generates those colours are kept (e.g. a white or black interceptor).
     Station ships are scanned for fighter/hauler/explorer/shuttle/exotic/solar, the crash-site
     interceptor (dissonant systems only) for sentinel. Every region's ships are cached on disk,
     so scanning the same area again is almost instant. stats gets tested, regions,
@@ -328,11 +333,13 @@ def scan(center_ua: int, radius: int, ship: str, want=(), avoid=(), limit: int =
         raise ValueError(f"{ship!r} ships are not sold at space stations or found at crash sites")
     from .fastsearch import make_filter
     make_filter(ship, want, avoid)  # rejects part ids that do not belong to this ship type
+    if not want and not look:
+        raise ValueError("pick at least one part or colour to scan for")
     galaxy, c = center_ua >> 32 & 0xFF, unpack_ua(center_ua)
     regions = list(regions_around(center_ua, radius))
     starts = range(SYSTEM_INDICES.start, SYSTEM_INDICES.stop, CHUNK)
     tasks = [(x, y, z, st, galaxy, ship, tuple(want), tuple(avoid), closest, limit,
-              max(abs(x - c["x"]), abs(y - c["y"]), abs(z - c["z"]))) for x, y, z in regions for st in starts]
+              max(abs(x - c["x"]), abs(y - c["y"]), abs(z - c["z"])), look) for x, y, z in regions for st in starts]
     workers = min(default_workers() if workers is None else max(1, workers), len(tasks))
     stats = {} if stats is None else stats
     stats.update(tested=0, regions=0, total_regions=len(regions), seconds=0.0, workers=workers)
