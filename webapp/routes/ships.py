@@ -11,13 +11,13 @@ from nms_save import items, locator, player, ships
 
 from webapp.common import (PALETTES, SHIP_LABELS, SHIP_MODELS, SPECIAL_SHIPS, body, game_running, model_filename,
                            open_save, ship_alias, write)
+from webapp.version import VERSION
 
 bp = Blueprint("ships", __name__)
 
 
 @bp.route("/api/status")
 def api_status():
-    from webapp.version import VERSION
     return jsonify({"game_running": game_running(), "version": VERSION})
 
 
