@@ -8,6 +8,7 @@ header select{flex:0 1 560px;min-width:0}
 .pill{margin-left:auto;padding:3px 10px;border-radius:99px;font-size:12px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}.pill.on{color:#fff;background:var(--err);border-color:var(--err)}.pill.off{color:var(--ok);border-color:#2b5c43}
 nav{background:var(--panel);border-right:1px solid var(--line);padding:12px 8px;display:flex;flex-direction:column;gap:4px}
 nav button{all:unset;cursor:pointer;padding:10px 12px;border-radius:8px;color:var(--muted);font-weight:600}nav button:hover{background:var(--panel2);color:var(--text)}nav button.active{background:var(--panel2);color:#fff;box-shadow:inset 3px 0 0 var(--accent)}
+.navver{margin-top:auto;padding:10px 12px;color:var(--muted);font-size:12px}
 main{overflow:auto;padding:18px}.page{display:none}.page.active{display:block}
 h2{margin:0 0 12px;font-size:18px}h3{margin:18px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}
 .btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}.btn:hover{border-color:#3d4453}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn:disabled{opacity:.5;cursor:default}

@@ -17,7 +17,8 @@ bp = Blueprint("ships", __name__)
 
 @bp.route("/api/status")
 def api_status():
-    return jsonify({"game_running": game_running()})
+    from webapp.version import VERSION
+    return jsonify({"game_running": game_running(), "version": VERSION})
 
 
 SAVE_INFO = {}  # (path, mtime) -> summary shown in the save picker

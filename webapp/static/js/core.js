@@ -92,6 +92,7 @@ async function loadStatus() {
   const st = await api('/api/status'), pill = $('#gamePill');
   pill.className = 'pill ' + (st.game_running ? 'on' : 'off');
   pill.textContent = st.game_running ? 'Game running: edits blocked' : 'Game closed: safe to edit';
+  if (st.version && $('#navVer')) $('#navVer').textContent = 'v' + st.version;
 }
 async function loadSaves() {
   const saves = await api('/api/saves');

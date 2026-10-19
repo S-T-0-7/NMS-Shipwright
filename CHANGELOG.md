@@ -2,6 +2,8 @@
 
 ## 1.8.6
 
+- The **version number** now shows at the bottom of the left-hand menu, so after an update you can
+  tell at a glance which build you have installed.
 - **Find a ship by colour**: Design & Find now takes a colour as well as parts, for Sentinel
   interceptors too, and "Find in game" returns the real systems whose ship is that colour, with the
   portal glyphs to fly there and claim it. A Sentinel's colour comes from its seed, so this is how
