@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.8.6
+## 1.8.5
 
 - The Designer preview no longer **jumps back to the default angle** every time you pick a part --
   it keeps the angle and zoom you set, so you can line up a front-only part and add pieces without
@@ -16,9 +16,6 @@
 - **Sentinel recolour** actually shows up now. The game only draws the metallic palette on an
   interceptor -- colours from any other paint set are saved but never rendered, so the ship kept
   its default red/orange. Recolour now uses metallic paints for Sentinels, and says so.
-
-## 1.8.5
-
 - **Linux support**: there is now a Linux build (an AppImage) alongside the Windows installer, both
   attached to each release. It finds No Man's Sky through Steam/Proton -- including the save inside
   the game's Proton prefix -- and opens in your browser instead of a native window.
