@@ -2,6 +2,10 @@
 
 ## 1.8.6
 
+- The Designer preview no longer **jumps back to the default angle** every time you pick a part --
+  it keeps the angle and zoom you set, so you can line up a front-only part and add pieces without
+  the view snapping around. Double-click resets it, and there are now **angle buttons** (Front,
+  Side, Top, Back, 3/4, Spin) under the preview, the same as the My Ships viewer.
 - The **version number** now shows at the bottom of the left-hand menu, so after an update you can
   tell at a glance which build you have installed.
 - **Find a ship by colour**: Design & Find now takes a colour as well as parts, for Sentinel

@@ -275,11 +275,12 @@ let previewTimer;
 function preview() {
   clearTimeout(previewTimer);
   previewTimer = setTimeout(async () => {
-    const parts = wanted(), box = $('#dPreview');
-    if (!parts.length) { VIEWERS.dPreview?.destroy(); delete VIEWERS.dPreview; box.classList.remove('v3d'); box.innerHTML = '<span class="muted">Clean slate. Pick a part and it appears here, piece by piece.</span>'; return; }
+    const parts = wanted(), box = $('#dPreview'), bar = $('#dViewBar');
+    if (!parts.length) { VIEWERS.dPreview?.destroy(); delete VIEWERS.dPreview; box.classList.remove('v3d'); box.innerHTML = '<span class="muted">Clean slate. Pick a part and it appears here, piece by piece.</span>'; if (bar) bar.innerHTML = ''; return; }
     const url = modelUrl($('#dShip').value, 'parts=' + encodeURIComponent(parts.join(',')));
     if (VIEWERS.dPreview) VIEWERS.dPreview.load(url).catch(e => toast(e.message, true));
     else show3d('dPreview', url);
+    if (bar && !bar.innerHTML) bar.innerHTML = viewBar('dPreview');
   }, 150);
 }
 $('#dGo').onclick = () => guard(async () => {

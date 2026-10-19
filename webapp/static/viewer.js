@@ -131,8 +131,8 @@
       const [lo, hi] = head.bounds;
       v.center = [-(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
       v.radius = Math.max(.5, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2);
-      reset();
-      return head;
+      if (!v.loaded) { reset(); v.loaded = true; }  // fit on the first model only; later loads keep
+      return head;                                   // the user's angle/zoom (double-click resets)
     };
     requestAnimationFrame(draw);
     return v;
