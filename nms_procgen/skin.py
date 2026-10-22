@@ -1,7 +1,7 @@
 # Posed ship geometry: CPU skinning so a ship can be drawn flying as well as landed.
 #
-# A skinned part stores every vertex in the scene's bind pose -- the landed ship. anim.flight_delta
-# says how the deploy moves each joint; walking the part's own scene (its .SCENE.MBIN, where the
+# A skinned part stores every vertex in the scene's bind pose -- the landed ship. anim.ship_pose
+# says where the deploy puts each joint; walking the part's own scene (its .SCENE.MBIN, where the
 # JOINT nodes live) with that movement applied gives every joint a bind and a posed world matrix in
 # the part's model space. Skinning a vertex by sum_i weight_i * (posed_i @ inverse(bind_i)) bends
 # the landed mesh into the flying one.

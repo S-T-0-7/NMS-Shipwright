@@ -213,10 +213,12 @@ def _matrix(t) -> np.ndarray:
 
 
 def _local(name, t, pose):
-    """A node's local transform, moved by the flying pose when that node is one the deploy moves."""
+    """A node's local transform under a pose from anim.ship_pose (see it for "set" vs "mul")."""
     m = _matrix(t)
-    d = pose.get(name.upper()) if pose else None
-    return d @ m if d is not None else m
+    e = pose.get(name.upper()) if pose else None
+    if e is None:
+        return m
+    return e[1] if e[0] == "set" else e[1] @ m
 
 
 def _nodes(path):
@@ -437,9 +439,8 @@ def ship_model(seed, ship, parts=None, fill=True, pose=None) -> dict:
     """{"groups": {class: (positions float32 [n,3], indices uint32)}, "bounds": (min, max)} in the game's axes
     (Y up, Z forward). The bounds frame exactly what is drawn.
 
-    `pose` (anim.flight_delta) flies the ship: parts hung off the skeleton are carried by their
-    joint, and skinned parts are bent by it. Without it the ship is drawn landed, exactly as its
-    scene stores it."""
+    `pose` (anim.ship_pose) parks or flies the ship: parts hung off the skeleton are carried by
+    their joint, and skinned parts are bent by it."""
     meshes = ship_meshes(seed, ship, parts, fill, pose)
     geos = _geometry(sorted({g for g, *_ in meshes if g}))
     bend: dict = {}
@@ -473,7 +474,7 @@ def ship_model(seed, ship, parts=None, fill=True, pose=None) -> dict:
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
     from . import anim
     return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()),
-            "posable": bool(anim.flight_delta(ship))}  # offers a landed/flying toggle
+            "posable": anim.posable(ship)}  # offers a landed/flying toggle
 
 
 def pack(model: dict, colours: dict | None = None) -> bytes:

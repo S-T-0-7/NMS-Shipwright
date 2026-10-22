@@ -221,17 +221,17 @@ class ShipModels(unittest.TestCase):
         """Not just the Sentinel: each type with a gear or wing anim must offer a flying pose."""
         from nms_procgen import anim
         for ship in ("sentinel", "solar", "fighter", "explorer", "shuttle", "exotic"):
-            self.assertTrue(anim.flight_delta(ship), f"{ship} should have a flying pose")
-        self.assertFalse(anim.flight_delta("freighter"), "a freighter never takes off")
+            self.assertTrue(anim.posable(ship), f"{ship} should have a flying pose")
+        self.assertFalse(anim.posable("freighter"), "a freighter never takes off")
 
     def test_the_flying_pose_bends_a_ship_without_breaking_it(self):
         """Flying moves the gear and wings only -- it must not tip, grow or tear the ship."""
         from nms_procgen import anim
         span = lambda p: float(numpy.linalg.norm(p.max(0) - p.min(0)))
         for ship in ("sentinel", "fighter", "explorer", "exotic"):
-            landed = self.m.ship_model("0x1", ship)
+            landed = self.m.ship_model("0x1", ship, pose=anim.ship_pose(ship, False))
             self.assertTrue(landed["posable"], f"{ship} should offer a flying pose")
-            flight = self.m.ship_model("0x1", ship, pose=anim.flight_delta(ship))
+            flight = self.m.ship_model("0x1", ship, pose=anim.ship_pose(ship, True))
             lp = numpy.concatenate([p for p, _ in landed["groups"].values()])
             fp = numpy.concatenate([p for p, _ in flight["groups"].values()])
             self.assertEqual(lp.shape, fp.shape, f"{ship}: the pose changed the mesh itself")
