@@ -51,7 +51,11 @@ def api_model():
         if a.get(k):
             h = a[k].lstrip("#")
             colours[k] = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
-    data = model3d.pack(model3d.ship_model(seed, ship, parts, a.get("fill") == "1"), colours)
+    pose = None
+    if a.get("pose") == "flight":
+        from nms_procgen import anim
+        pose = anim.flight_delta(ship) or None
+    data = model3d.pack(model3d.ship_model(seed, ship, parts, a.get("fill") == "1", pose), colours)
     return Response(data, mimetype="application/octet-stream", headers={"Cache-Control": "no-store"})
 
 

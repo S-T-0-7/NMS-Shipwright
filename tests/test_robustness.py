@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 
+import numpy
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -180,7 +182,7 @@ class ShipModels(unittest.TestCase):
         self.m._material_class = self.real
 
     def _classes(self):
-        return {c for _, _, _, c in self.m.ship_meshes(0xA547AB958C97E439, "fighter")}
+        return {m[3] for m in self.m.ship_meshes(0xA547AB958C97E439, "fighter")}
 
     def test_unreadable_materials_still_draw_the_hull(self):
         self.m._material_class = lambda material: (None, "")
@@ -214,6 +216,32 @@ class ShipModels(unittest.TestCase):
             self.assertNotEqual(self.m.LOD_SUFFIX.search(name).group(1), "0")
         self.assertIsNone(self.m.LOD_SUFFIX.search("Body"))
         self.assertEqual(self.m.LOD_SUFFIX.search("WingsALOD0").group(1), "0")
+
+    def test_every_ship_that_deploys_can_be_flown(self):
+        """Not just the Sentinel: each type with a gear or wing anim must offer a flying pose."""
+        from nms_procgen import anim
+        for ship in ("sentinel", "solar", "fighter", "explorer", "shuttle", "exotic"):
+            self.assertTrue(anim.flight_delta(ship), f"{ship} should have a flying pose")
+        self.assertFalse(anim.flight_delta("freighter"), "a freighter never takes off")
+
+    def test_the_flying_pose_bends_a_ship_without_breaking_it(self):
+        """Flying moves the gear and wings only -- it must not tip, grow or tear the ship."""
+        from nms_procgen import anim
+        span = lambda p: float(numpy.linalg.norm(p.max(0) - p.min(0)))
+        for ship in ("sentinel", "fighter", "explorer", "exotic"):
+            landed = self.m.ship_model("0x1", ship)
+            self.assertTrue(landed["posable"], f"{ship} should offer a flying pose")
+            flight = self.m.ship_model("0x1", ship, pose=anim.flight_delta(ship))
+            lp = numpy.concatenate([p for p, _ in landed["groups"].values()])
+            fp = numpy.concatenate([p for p, _ in flight["groups"].values()])
+            self.assertEqual(lp.shape, fp.shape, f"{ship}: the pose changed the mesh itself")
+            self.assertTrue(numpy.isfinite(fp).all(), f"{ship}: the flying pose broke vertices")
+            moved = numpy.linalg.norm(fp - lp, axis=1)
+            self.assertGreater((moved > 1e-3).mean(), 0.02, f"{ship} did not move at all")
+            # An anim read in its own axes would turn the whole ship over and throw parts off; a
+            # real deploy only folds pieces in, so the ship keeps its size.
+            self.assertLess(span(fp), span(lp) * 1.4, f"{ship}: flying tipped it over or tore it apart")
+            self.assertLess(moved.max(), span(lp), f"{ship}: a part flew off on its own")
 
 
 class Designs(unittest.TestCase):

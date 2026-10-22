@@ -212,6 +212,13 @@ def _matrix(t) -> np.ndarray:
     return m
 
 
+def _local(name, t, pose):
+    """A node's local transform, moved by the flying pose when that node is one the deploy moves."""
+    m = _matrix(t)
+    d = pose.get(name.upper()) if pose else None
+    return d @ m if d is not None else m
+
+
 def _nodes(path):
     """Parsed scene: (geometry path, root node) with nodes as (type, name, transform, attrs, children)."""
     b = textures._scene(path)
@@ -250,49 +257,54 @@ def _canon(up, options, trunc):
 SPECIAL_SCENES = {"starborn_phoenix": "MODELS/COMMON/SPACECRAFT/FIGHTERS/WRACERSE.SCENE.MBIN"}
 
 
-def _scene_meshes(root):
+def _scene_meshes(root, pose=None):
     scene = _parsed(root)
     if not scene:
         raise FileNotFoundError(f"scene {root} not found")
     out = []
 
-    def walk(n, geometry, world, depth):
+    def walk(n, geometry, world, posed, depth):
         typ, name, t, attrs, children = n
         if depth > 12:
             return
         world = world @ _matrix(t)
+        posed = posed @ _local(name, t, pose)
         if typ == "MESH":
             suffix = LOD_SUFFIX.search(name)
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
                 return
             if attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
-                out.append((geometry, int(attrs["HASH"]), world, mat_class(attrs.get("MATERIAL", ""))))
+                out.append((geometry, int(attrs["HASH"]), world, mat_class(attrs.get("MATERIAL", "")), posed,
+                            int(attrs.get("FIRSTSKINMAT") or 0)))
         elif typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
             sub = _parsed(_scene_path(attrs["SCENEGRAPH"]))
             if sub:
-                walk(sub[1], sub[0], world, depth + 1)
-        elif typ in ("COLLISION", "LIGHT", "JOINT", "EMITTER"):
+                walk(sub[1], sub[0], world, posed, depth + 1)
+        elif typ in ("COLLISION", "LIGHT", "EMITTER"):
             return
         for c in children:
-            walk(c, geometry, world, depth)
-    walk(scene[1], scene[0], np.eye(4), 0)
+            walk(c, geometry, world, posed, depth)
+    walk(scene[1], scene[0], np.eye(4), np.eye(4), 0)
     kept = [m for m in out if m[3] != "skip"]
     if out and not [m for m in kept if m[3] not in ("glow", "glass")]:
-        kept = [(g, h, w, name_class(c)) for g, h, w, c in out if name_class(c) != "skip"]
+        kept = [(g, h, w, name_class(c), q, f) for g, h, w, c, q, f in out if name_class(c) != "skip"]
     return kept
 
 
-def ship_meshes(seed, ship, parts=None, fill=True):
+def ship_meshes(seed, ship, parts=None, fill=True, pose=None):
     if ship in SPECIAL_SCENES:
-        return _scene_meshes(SPECIAL_SCENES[ship])
-    """[(geometry path, hash, 4x4 world matrix, material class)] for the parts `seed` builds.
+        return _scene_meshes(SPECIAL_SCENES[ship], pose)
+    """[(geometry path, hash, 4x4 world matrix, material class, under a joint)] for `seed`'s parts.
+
+    A mesh "under a joint" hangs off the skeleton, so the deploy moves it bodily and it must not
+    also be skinned; everything else is placed by its own node and bends with the skin instead.
 
     With `parts` (the Designer's picks) and `fill`, the rest of the ship is filled in with the first
     option of every group the picks do not cover, so a half-finished design shows as a whole ship.
     Without `fill` only the picked parts are drawn: the ship is built up piece by piece.
     """
     if parts is not None and not fill:
-        return _picked_meshes(ship, {p.upper() for p in parts})
+        return _picked_meshes(ship, {p.upper() for p in parts}, pose)
     groups = all_parts(ship)
     options = {p for ps in groups.values() for p in ps}
     group_of = {p: g for g, ps in groups.items() for p in ps}
@@ -320,11 +332,12 @@ def ship_meshes(seed, ship, parts=None, fill=True):
             chosen.add((real or names)[0])
     out = []
 
-    def walk(n, geometry, world, depth):
+    def walk(n, geometry, world, posed, depth):
         typ, name, t, attrs, children = n
         if not keep(name) or depth > 12:
             return
         world = world @ _matrix(t)
+        posed = posed @ _local(name, t, pose)
         if typ == "MESH":
             # Lower-detail copies sit inside the full-detail mesh and poke through it. Some of them
             # claim LODLEVEL 0, so the name (...LOD2) decides as well.
@@ -333,33 +346,33 @@ def ship_meshes(seed, ship, parts=None, fill=True):
                 return
             cls = mat_class(attrs.get("MATERIAL", ""))
             if attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
-                out.append((geometry, int(attrs["HASH"]), world, cls))
+                out.append((geometry, int(attrs["HASH"]), world, cls, posed, int(attrs.get("FIRSTSKINMAT") or 0)))
         elif typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
             sub = _parsed(_scene_path(attrs["SCENEGRAPH"]))
             if sub:
-                walk(sub[1], sub[0], world, depth + 1)
-        elif typ in ("COLLISION", "LIGHT", "JOINT", "EMITTER"):
+                walk(sub[1], sub[0], world, posed, depth + 1)
+        elif typ in ("COLLISION", "LIGHT", "EMITTER"):
             return
         if designing and children:
             fill_defaults(children)
         for c in children:
-            walk(c, geometry, world, depth)
+            walk(c, geometry, world, posed, depth)
     root = "MODELS/" + ROOTS[ship][len("models/"):].upper().replace(".DESCRIPTOR.MBIN", ".SCENE.MBIN")
     scene = _parsed(root)
     if not scene:
         raise FileNotFoundError(f"scene {root} not found")
-    walk(scene[1], scene[0], np.eye(4), 0)
+    walk(scene[1], scene[0], np.eye(4), np.eye(4), 0)
     kept = [m for m in out if m[3] != "skip"]
     # Never hide the ship: if the material files say almost everything is invisible, they were
     # unreadable (a game update, or a half-finished copy), so fall back to the names alone.
     solid = [m for m in kept if m[3] not in ("glow", "glass")]
     if not solid and out:
-        kept = [(g, h, w, name_class(c)) for g, h, w, c in out]
+        kept = [(g, h, w, name_class(c), q, f) for g, h, w, c, q, f in out]
         kept = [m for m in kept if m[3] != "skip"]
     return kept
 
 
-def _picked_meshes(ship, chosen):
+def _picked_meshes(ship, chosen, pose=None):
     """Only the picked parts, placed where they sit on a finished ship.
 
     A picked part can sit inside a part that is not picked (a cockpit inside a hull option), so
@@ -371,7 +384,7 @@ def _picked_meshes(ship, chosen):
     lod = re.compile(r"LOD\d$")
     found: dict = {}  # part -> [(parents all picked, meshes)]
 
-    def walk(n, geometry, world, depth, owner, ok):
+    def walk(n, geometry, world, posed, depth, owner, ok):
         typ, name, t, attrs, children = n
         if depth > 12:
             return
@@ -387,26 +400,28 @@ def _picked_meshes(ship, chosen):
                 owner = None
             ok = ok and picked
         world = world @ _matrix(t)
+        posed = posed @ _local(name, t, pose)
         if typ == "MESH":
             suffix = LOD_SUFFIX.search(name)
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
                 return
             if owner is not None and attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
-                owner.append((geometry, int(attrs["HASH"]), world, mat_class(attrs.get("MATERIAL", ""))))
+                owner.append((geometry, int(attrs["HASH"]), world, mat_class(attrs.get("MATERIAL", "")), posed,
+                              int(attrs.get("FIRSTSKINMAT") or 0)))
         elif typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
             sub = _parsed(_scene_path(attrs["SCENEGRAPH"]))
             if sub:
-                walk(sub[1], sub[0], world, depth + 1, owner, ok)
-        elif typ in ("COLLISION", "LIGHT", "JOINT", "EMITTER"):
+                walk(sub[1], sub[0], world, posed, depth + 1, owner, ok)
+        elif typ in ("COLLISION", "LIGHT", "EMITTER"):
             return
         for c in children:
-            walk(c, geometry, world, depth, owner, ok)
+            walk(c, geometry, world, posed, depth, owner, ok)
     root = "MODELS/" + ROOTS[ship][len("models/"):].upper().replace(".DESCRIPTOR.MBIN", ".SCENE.MBIN")
     scene = _parsed(root)
     if not scene:
         raise FileNotFoundError(f"scene {root} not found")
     base: list = []  # fixed pieces no option owns (cockpit lid, landing gear, guns)
-    walk(scene[1], scene[0], np.eye(4), 0, base, True)
+    walk(scene[1], scene[0], np.eye(4), np.eye(4), 0, base, True)
     out = [m for m in base if m[3] != "glow"] if chosen else []
     for copies in found.values():
         best = [m for ok, m in copies if ok and m] or [m for _, m in copies if m][:1]
@@ -414,21 +429,36 @@ def _picked_meshes(ship, chosen):
             out += m
     kept = [m for m in out if m[3] != "skip"]
     if out and not [m for m in kept if m[3] not in ("glow", "glass")]:
-        kept = [m for m in ((g, h, w, name_class(c)) for g, h, w, c in out) if m[3] != "skip"]
+        kept = [m for m in ((g, h, w, name_class(c), q, f) for g, h, w, c, q, f in out) if m[3] != "skip"]
     return kept
 
 
-def ship_model(seed, ship, parts=None, fill=True) -> dict:
+def ship_model(seed, ship, parts=None, fill=True, pose=None) -> dict:
     """{"groups": {class: (positions float32 [n,3], indices uint32)}, "bounds": (min, max)} in the game's axes
-    (Y up, Z forward). The bounds frame exactly what is drawn."""
-    meshes = ship_meshes(seed, ship, parts, fill)
+    (Y up, Z forward). The bounds frame exactly what is drawn.
+
+    `pose` (anim.flight_delta) flies the ship: parts hung off the skeleton are carried by their
+    joint, and skinned parts are bent by it. Without it the ship is drawn landed, exactly as its
+    scene stores it."""
+    meshes = ship_meshes(seed, ship, parts, fill, pose)
     geos = _geometry(sorted({g for g, *_ in meshes if g}))
+    bend: dict = {}
+    if pose:
+        from . import skin
+        bend = {g: skin.prepare(g, pose) for g in geos}
     acc: dict = {}
-    for g, h, world, cls in meshes:
+    for g, h, world, cls, posed, first in meshes:
         m = geos.get(g, {}).get(h)
         if m is None:
             continue
         p = m[0].astype(np.float32)
+        # On a skinned part the skeleton does all the moving, so the mesh keeps the place its scene
+        # gives it and the skin bends it. A part with no skeleton is carried by its nodes instead,
+        # which is where the gear, guns and sail arms hanging off a joint get their movement.
+        if bend.get(g) is not None:
+            p = skin.deform(bend[g], h, p, first).astype(np.float32)
+        else:
+            world = posed
         p = p @ world[:3, :3].T + world[:3, 3]
         if np.linalg.det(world[:3, :3]) < 0:  # mirrored: keep triangles facing outwards
             idx = m[1].reshape(-1, 3)[:, ::-1].ravel()
@@ -441,12 +471,15 @@ def ship_model(seed, ship, parts=None, fill=True) -> dict:
     groups = {cls: (np.concatenate(v[0]).astype(np.float32), np.concatenate(v[1]).astype(np.uint32))
               for cls, v in acc.items() if v[0]}
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
-    return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist())}
+    from . import anim
+    return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()),
+            "posable": bool(anim.flight_delta(ship))}  # offers a landed/flying toggle
 
 
 def pack(model: dict, colours: dict | None = None) -> bytes:
     """Binary for the viewer: u32 header length, JSON header, then per group float32 xyz and uint32 indices."""
-    head, blobs, off = {"bounds": model["bounds"], "colours": colours or {}, "groups": []}, [], 0
+    head = {"bounds": model["bounds"], "colours": colours or {}, "posable": model.get("posable", False), "groups": []}
+    blobs, off = [], 0
     for cls, (p, ix) in model["groups"].items():
         head["groups"].append({"class": cls, "vertices": len(p), "indices": len(ix), "offset": off})
         blobs += [p.tobytes(), ix.tobytes()]

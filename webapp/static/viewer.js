@@ -109,10 +109,13 @@
 
     v.view = name => { v.auto = false; [v.yaw, v.pitch] = {front: [0, .05], side: [Math.PI / 2, .05], top: [0, 1.5], back: [Math.PI, .1], three: [-2.4, .35]}[name]; };
     v.spin = on => { v.auto = on ?? !v.auto; };
+    v.setPose = on => { v.posed = on; return v.srcUrl ? v.load(v.srcUrl) : null; };  // flying vs landed
     v.destroy = () => { v.alive = false; gl.getExtension('WEBGL_lose_context')?.loseContext(); };
     v.setColours = cols => { for (const g of v.groups) if (g.cls === 'paint' && cols.paint) g.col = cols.paint; else if (cols[g.cls]) g.col = cols[g.cls]; };
     v.load = async url => {
-      const r = await fetch(url); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+      v.srcUrl = url.replace(/&pose=flight\b/, '');  // remember the base so Fly/Land can reload it
+      const r = await fetch(v.posed ? v.srcUrl + '&pose=flight' : v.srcUrl);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
       const buf = await r.arrayBuffer(), hl = new DataView(buf).getUint32(0, true);
       const head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl))), base = 4 + hl;
       for (const g of v.groups) { gl.deleteVertexArray(g.vao); g.bufs.forEach(b => gl.deleteBuffer(b)); }
@@ -128,6 +131,9 @@
         return {cls: g.class, vao, bufs, count: g.indices, col: head.colours[g.class] || c.col || [.75, .75, .78],
                 emit: c.emit || 0, spec: c.spec ?? .4, alpha: c.alpha ?? 1, blend: c.blend || null};
       });
+      v.posable = !!head.posable;  // the viewBar shows Fly/Land only when the ship has a deploy anim
+      const pb = v.elId && document.getElementById('pose-' + v.elId);
+      if (pb) pb.style.display = v.posable ? '' : 'none';
       const [lo, hi] = head.bounds;
       v.center = [-(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
       v.radius = Math.max(.5, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2);

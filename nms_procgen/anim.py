@@ -1,6 +1,7 @@
 # Ship pose animation: reads the game's .ANIM.MBIN (cTkAnimMetadata) and gives the local
-# transform of each posed node at a frame. "Flight" = the last frame of a ship's takeoff anim,
-# "landed" = the ship's default scene pose (no override). See model3d.pose_model().
+# transform of each posed node at a frame. "Landed" is the ship's own scene, exactly as it is
+# drawn today; "flying" applies flight_delta() -- the movement between a deploy anim's first and
+# last frame -- on top of it. See model3d.ship_model(pose=).
 #
 # Format (verified vs sentineltakeoff.anim.mbin): rotations are 3 int16 per quaternion
 # (x,y,z = i16/32767, w = sqrt(max(0, 1-x^2-y^2-z^2))); translations/scales are Vec4f. Each node
@@ -16,11 +17,28 @@ import numpy as np
 from nms_save import gamefiles, gamemeta
 from nms_save.gamefiles import array, i32, read, vstr
 
-# ship type -> (anim folder relative to the ship root, takeoff anim file). Flight pose is this
-# anim's last frame; landed is the untouched scene. Only ships with a real deploy need an entry.
-TAKEOFF = {
-    "sentinel": "models/common/spacecraft/sentinelship/anims/sentineltakeoff.anim.mbin",
-    "solar": "models/common/spacecraft/sailship/sailshipparts/sailshipanims/sailship_takeoff.anim.mbin",
+# Which anims take a ship from parked to flying. Most ships have no single "takeoff" -- the gear,
+# wings and guns each animate in their own part's anim, and which ones bite depends on the parts the
+# seed picked, so every candidate for a ship type is listed and matched to the scene by node name.
+# A part the ship does not have simply poses nothing. Each entry's LAST frame is the flying pose.
+_SC = "models/common/spacecraft/"
+SHIPGUN = _SC + "shared/weapons/anim/shipgun_takeoff.anim.mbin"
+SHIP_ANIMS = {
+    "sentinel": [_SC + "sentinelship/anims/sentineltakeoff.anim.mbin"],
+    # The sail ship's "takeoff" throws its sail arms right over; its tuck-in, played backwards from
+    # stowed, is the one that folds the mast down the way the game flies it.
+    "solar": [(_SC + "sailship/sailshipparts/sailshipanims/sailship_tuckin.anim.mbin", True), SHIPGUN],
+    "fighter": [_SC + f"fighters/cockpit/anims/cockpit{c}_landinggear_retract.anim.mbin" for c in "abdef"]
+               + [_SC + "fighters/wings/wings_d/anims/wingd_takeoff.anim.mbin", SHIPGUN],
+    "explorer": [_SC + "scientific/accessories/landinggear/anims/landinggear_takeoff.anim.mbin", SHIPGUN],
+    "shuttle": [_SC + "shuttle/accessories/anims/landinggear_takeoff.anim.mbin", SHIPGUN],
+    "exotic": [_SC + "s-class/royalparts/landinggear/anims/landinggear_a_takeoff.anim.mbin",
+               _SC + "s-class/royalparts/engine/anims/engine_c_takeoff.anim.mbin",
+               _SC + "s-class/squidparts/landinggear/anims/landinggear_a_takeoff.anim.mbin",
+               _SC + "s-class/squidparts/engine/anims/engine_a_takeoff.anim.mbin",
+               _SC + "s-class/squidparts/nosesection/anims/nosesection_a_takeoff.anim.mbin", SHIPGUN]
+              + [_SC + f"s-class/royalparts/wings/anims/wings_{w}_takeoff.anim.mbin" for w in "abc"],
+    "hauler": [SHIPGUN],
 }
 ANIM_PAK = "NMSARC.AnimMBIN.pak"
 
@@ -108,7 +126,41 @@ def _extract_anim(rel_path: str):
     return full if os.path.exists(full) else None
 
 
-def flight_pose(ship: str) -> dict:
-    """{NODE_NAME_UPPER: local 4x4} for the flying pose, or {} if this ship has no deploy anim."""
-    rel = TAKEOFF.get(ship)
-    return pose_locals(rel, -1) if rel else {}
+@functools.lru_cache(maxsize=16)
+def flight_delta(ship: str) -> dict:
+    """{NODE_NAME_UPPER: 4x4} -- what flying does to each node, as a change rather than a pose.
+
+    An anim stores its nodes in its own axes (a node that never moves still reads as a constant
+    turn, the game's X->Y->Z swap), so using a frame as the pose outright would tip the whole ship
+    over. Taking `last @ inverse(first)` cancels that constant, leaving only the movement: a node
+    that does not animate comes out as the identity and is left alone, and the ship keeps the
+    orientation its scene gives it. Apply as `posed_local = delta @ scene_local`.
+    """
+    out: dict = {}
+    clash: set = set()
+    for entry in SHIP_ANIMS.get(ship, []):
+        rel, backwards = entry if isinstance(entry, tuple) else (entry, False)
+        try:
+            first, last = pose_locals(rel, 0), pose_locals(rel, -1)
+            if backwards:  # an anim that ends parked: its first frame is the flying one
+                first, last = last, first
+        except Exception:  # a part anim this game build does not ship: the rest still works
+            continue
+        for name, a0 in first.items():
+            aL = last.get(name)
+            if aL is None or np.allclose(a0, aL, atol=1e-6):
+                continue  # this node is still for the whole anim
+            try:
+                d = aL @ np.linalg.inv(a0)
+            except np.linalg.LinAlgError:
+                continue
+            was = out.get(name)
+            if was is not None and not np.allclose(was, d, atol=1e-6):
+                clash.add(name)  # two parts' anims disagree about this node
+            out[name] = d
+    # A ship carries one of the alternative part sets, not both, and the names repeat between them
+    # (two landing gears both calling a node BackLeg2JNT). Guessing tears the ship apart, so a node
+    # the candidates disagree about is left where the scene has it.
+    for name in clash:
+        out.pop(name, None)
+    return out

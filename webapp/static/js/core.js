@@ -13,11 +13,18 @@ function show3d(id, url, fallback) {
   const v = VIEWERS[id] = window.ShipViewer && ShipViewer.mount(el);
   const fail = msg => { v?.destroy(); el.classList.remove('v3d'); el.innerHTML = fallback || `<span class="muted">${esc(msg)}</span>`; };
   if (!v) return fail('3D view needs WebGL2');
+  v.elId = id;  // lets the viewer find its own Fly/Land button in the viewBar
   v.load(url).catch(e => fail(e.message));
 }
 const viewBar = id => `<div class="row viewbar">${[['three', '3/4'], ['front', 'Front'], ['side', 'Side'], ['top', 'Top'], ['back', 'Back']]
   .map(([k, l]) => `<button class="btn" onclick="VIEWERS['${id}']?.view('${k}')">${l}</button>`).join('')}<button class="btn" onclick="VIEWERS['${id}']?.spin()">Spin</button>
+  <button class="btn" id="pose-${id}" style="display:none" onclick="togglePose('${id}', this)" title="Landed vs flying pose">Fly</button>
   <span class="muted" style="font-size:12px">Drag to turn, scroll to zoom, double-click to reset</span></div>`;
+function togglePose(id, btn) {
+  const v = VIEWERS[id]; if (!v || !v.posable) return;
+  const on = !v.posed; v.setPose(on);
+  btn.classList.toggle('active', on); btn.textContent = on ? 'Land' : 'Fly';
+}
 
 async function api(url, opts) {
   const r = await fetch(url, opts);
