@@ -445,6 +445,14 @@ class SentinelOverlay(unittest.TestCase):
         so a sentinel picked no overlay at all and its trim could not be predicted."""
         self.assertIsNotNone(self._overlay("0xDABDF53F4A1E40C3"), "sentinel picked no overlay")
 
+    def test_a_ship_offers_the_paint_slots_it_really_draws(self):
+        """Checked in game 2026-10-23 against painting each slot a different colour: a hauler
+        showed all five, the two-tone interceptor two, and the single-colour one just the body."""
+        chan = lambda seed, ship: [c["alt"] for c in self.textures.paint_channels(int(seed, 16), ship)]
+        self.assertEqual(len(chan("0x498F1B99E01FF550", "hauler")), 5)
+        self.assertEqual(chan("0xDABDF53F4A1E40C3", "sentinel"), ["Primary", "Alternative1"])
+        self.assertEqual(chan("0xDABDF53F4A1F41C3", "sentinel"), ["Primary"])
+
     def test_the_overlay_says_which_ships_can_take_a_trim(self):
         """Checked in game 2026-10-23: painted identically, the first renders blue hull with
         green pincers and the second comes out one colour. Only overlay "4" reads Alternative1."""

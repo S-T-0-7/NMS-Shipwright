@@ -360,6 +360,26 @@ def ship_look(seed, ship):
     }
 
 
+PAINT_ALTS = ("Primary", "Alternative1", "Alternative2", "Alternative3", "Alternative4")
+
+
+def paint_channels(seed, ship):
+    """[{"alt", "layers"}] -- the paint slots this ship really draws, and what each paints.
+
+    A ship is not one colour and a trim: the game gives it five paint slots, and which of them a
+    ship uses comes out of its own texture lists. A fighter spends Alternative2 on signage and
+    Alternative4 on a tertiary trim; a sentinel interceptor draws its hull from Alternative1 and
+    only its pincers from Primary, and then only on seeds whose overlay reads Alternative1 (see
+    USE_SENTINEL). Offering a slot the ship never draws paints nothing.
+    """
+    used = {}
+    for t in ship_look(seed, ship)["textures"]:
+        if t["palette"] != "Paint" or t["alt"] not in PAINT_ALTS:
+            continue
+        used.setdefault(t["alt"], []).append(t["layer"])
+    return [{"alt": a, "layers": sorted(set(used[a]))} for a in PAINT_ALTS if a in used]
+
+
 # ------------------------------------------------------ search on the look --
 
 PRIMARY_LIST = "TEXTURES/COMMON/SPACECRAFT/FIGHTERS/SHARED/PRIMARY.TEXTURE.MBIN"
