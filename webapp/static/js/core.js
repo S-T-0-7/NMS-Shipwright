@@ -7,23 +7,53 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '
 const hex = c => '#' + (c || [0, 0, 0]).map(v => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('');
 const modelUrl = (ship, q) => `/api/model?ship=${encodeURIComponent(ship)}&${q}`;
 const VIEWERS = {};
+// Line art for the viewer's buttons: a 16px box, drawn in whatever colour the button is.
+const ICON = {fly: '<path d="M8 2.6v8.2M4.6 6 8 2.6 11.4 6M2.6 13.4h10.8"/>',
+              land: '<path d="M8 10.8V2.6M11.4 7.4 8 10.8 4.6 7.4M2.6 13.4h10.8"/>',
+              spin: '<path d="M13.4 8a5.4 5.4 0 1 1-1.6-3.8"/><path d="M13.7 2.2v3.4h-3.4"/>'};
+const svg = d => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
+  stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const VIEWS = [['three', '3/4'], ['front', 'Front'], ['side', 'Side'], ['top', 'Top'], ['back', 'Back']];
+
 function show3d(id, url, fallback) {
   const el = $('#' + id); if (!el) return;
   VIEWERS[id]?.destroy(); el.classList.add('v3d');
   const v = VIEWERS[id] = window.ShipViewer && ShipViewer.mount(el);
   const fail = msg => { v?.destroy(); el.classList.remove('v3d'); el.innerHTML = fallback || `<span class="muted">${esc(msg)}</span>`; };
   if (!v) return fail('3D view needs WebGL2');
-  v.elId = id;  // lets the viewer find its own Fly/Land button in the viewBar
+  v.elId = id;  // lets the viewer find its own Fly/Land button in the HUD
+  hud(el, id);
   v.load(url).catch(e => fail(e.message));
 }
-const viewBar = id => `<div class="row viewbar">${[['three', '3/4'], ['front', 'Front'], ['side', 'Side'], ['top', 'Top'], ['back', 'Back']]
-  .map(([k, l]) => `<button class="btn" onclick="VIEWERS['${id}']?.view('${k}')">${l}</button>`).join('')}<button class="btn" onclick="VIEWERS['${id}']?.spin()">Spin</button>
-  <button class="btn" id="pose-${id}" style="display:none" onclick="togglePose('${id}', this)" title="Landed vs flying pose">Fly</button>
-  <span class="muted" style="font-size:12px">Drag to turn, scroll to zoom, double-click to reset</span></div>`;
-function togglePose(id, btn) {
-  const v = VIEWERS[id]; if (!v || !v.posable) return;
-  const on = !v.posed; v.setPose(on);
-  btn.classList.toggle('active', on); btn.textContent = on ? 'Land' : 'Fly';
+
+/* The viewer's controls, laid over the canvas in its corners rather than stacked underneath:
+   the model is the thing worth the room, and the buttons belong to it. */
+function hud(el, id) {
+  const v = VIEWERS[id], d = document.createElement('div');
+  d.className = 'vhud';
+  d.innerHTML = `<div class="hudrow end"><div class="glass pad">
+      <button class="iconbtn on" title="Keep it turning">${svg(ICON.spin)}</button>
+      <button class="iconbtn" id="pose-${id}" style="display:none" title="Show it flying">${svg(ICON.fly)}</button></div></div>
+    <div class="hudrow"><div class="glass seg">${VIEWS.map(([k, l]) => `<button data-v="${k}">${l}</button>`).join('')}</div>
+      <span class="vhint">Drag to turn &middot; scroll to zoom &middot; double-click to reset</span></div>`;
+  el.appendChild(d);
+  const [spin, pose] = d.querySelectorAll('.iconbtn'), seg = d.querySelector('.seg');
+  spin.onclick = () => v.spin();
+  // A drag or an angle button stops the spin too, so the button follows the viewer, not the click.
+  v.onauto = on => { spin.classList.toggle('on', on); if (on) seg.querySelectorAll('.on').forEach(b => b.classList.remove('on')); };
+  seg.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    v.view(b.dataset.v);
+    seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  };
+  pose.onclick = () => {
+    if (!v.posable) return;
+    const on = !v.posed;
+    v.setPose(on);
+    pose.classList.toggle('on', on);
+    pose.innerHTML = svg(on ? ICON.land : ICON.fly);
+    pose.title = on ? 'Show it landed' : 'Show it flying';
+  };
 }
 
 async function api(url, opts) {

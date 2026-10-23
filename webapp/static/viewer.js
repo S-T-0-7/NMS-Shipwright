@@ -61,6 +61,8 @@
     const U = n => gl.getUniformLocation(prog, n);
     const v = {yaw: -2.4, pitch: .35, dist: 1, auto: true, groups: [], center: [0, 0, 0], radius: 1, alive: true};
     const reset = () => { v.yaw = -2.4; v.pitch = .35; v.dist = v.radius * 2.6; };
+    // The HUD's Spin button follows the spin, which a drag or a view button also stops.
+    const setAuto = on => { v.auto = on; v.onauto?.(on); };
 
     function draw() {
       if (!v.alive) return;
@@ -92,7 +94,7 @@
     }
 
     let drag = null, pinch = null;
-    canvas.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; v.auto = false; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; });
+    canvas.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; setAuto(false); canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; });
     canvas.addEventListener('pointermove', e => {
       if (!drag) return;
       v.yaw -= (e.clientX - drag[0]) * .008; v.pitch = Math.max(-1.5, Math.min(1.5, v.pitch + (e.clientY - drag[1]) * .008));
@@ -105,10 +107,10 @@
       const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
       if (pinch) v.dist = Math.max(v.radius * .6, Math.min(v.radius * 8, v.dist * pinch / d)); pinch = d;
     });
-    canvas.addEventListener('dblclick', () => { reset(); v.auto = true; });
+    canvas.addEventListener('dblclick', () => { reset(); setAuto(true); });
 
-    v.view = name => { v.auto = false; [v.yaw, v.pitch] = {front: [0, .05], side: [Math.PI / 2, .05], top: [0, 1.5], back: [Math.PI, .1], three: [-2.4, .35]}[name]; };
-    v.spin = on => { v.auto = on ?? !v.auto; };
+    v.view = name => { setAuto(false); [v.yaw, v.pitch] = {front: [0, .05], side: [Math.PI / 2, .05], top: [0, 1.5], back: [Math.PI, .1], three: [-2.4, .35]}[name]; };
+    v.spin = on => setAuto(on ?? !v.auto);
     v.setPose = on => { v.posed = on; return v.srcUrl ? v.load(v.srcUrl) : null; };  // flying vs landed
     v.destroy = () => { v.alive = false; gl.getExtension('WEBGL_lose_context')?.loseContext(); };
     v.setColours = cols => { for (const g of v.groups) if (g.cls === 'paint' && cols.paint) g.col = cols.paint; else if (cols[g.cls]) g.col = cols[g.cls]; };
@@ -131,7 +133,7 @@
         return {cls: g.class, vao, bufs, count: g.indices, col: head.colours[g.class] || c.col || [.75, .75, .78],
                 emit: c.emit || 0, spec: c.spec ?? .4, alpha: c.alpha ?? 1, blend: c.blend || null};
       });
-      v.posable = !!head.posable;  // the viewBar shows Fly/Land only when the ship has a deploy anim
+      v.posable = !!head.posable;  // the HUD shows Fly/Land only when the ship has a deploy anim
       const pb = v.elId && document.getElementById('pose-' + v.elId);
       if (pb) pb.style.display = v.posable ? '' : 'none';
       const [lo, hi] = head.bounds;

@@ -26,7 +26,6 @@ function selectShip(slot) {
     <h2 style="margin:0">${esc(s.name || '(unnamed)')} <span class="muted" style="font-weight:400">&middot; ${esc(s.category)} &middot; slot ${s.index}</span></h2>
     <div class="hero" id="sView" style="margin-top:10px">${s.ship ? '<span class="muted">Loading 3D model...</span>'
       : `<span class="muted">${s.is_procedural ? 'No 3D model for this ship type yet' : 'Fixed model: the seed does not change its look'}</span>`}</div>
-    ${s.ship ? viewBar('sView') : ''}
     ${(s.wrong_tech || []).length ? `<div class="banner" style="margin:12px 0 0">This ship is carrying
       ${s.ship === 'sentinel' ? 'ordinary starship parts instead of the sentinel ones (Sentinel Cannon, Luminance Engine and so on)'
         : 'sentinel parts instead of ordinary starship ones'}, because it was copied from another ship.
