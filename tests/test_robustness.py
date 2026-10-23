@@ -220,21 +220,22 @@ class ShipModels(unittest.TestCase):
     def test_every_ship_that_deploys_can_be_flown(self):
         """Not just the Sentinel: each type with a gear or wing anim must offer a flying pose."""
         from nms_procgen import anim
-        for ship in ("sentinel", "fighter", "explorer", "shuttle", "exotic"):
-            self.assertTrue(anim.posable(ship), f"{ship} should have a flying pose")
+        for ship in ("sentinel", "fighter", "explorer", "shuttle"):
+            self.assertTrue(self.m.ship_model("0x1", ship)["posable"], f"{ship} should fly")
         # A ship whose anim does not line up with its scene is left parked rather than guessed at;
-        # the sail ship's is the odd one out, and a freighter never takes off at all.
+        # a freighter never takes off at all.
         for ship in ("freighter", "living", "hauler", "solar"):
-            self.assertFalse(anim.posable(ship), f"{ship} has nothing it can be shown flying with")
+            self.assertFalse(self.m.ship_model("0x1", ship)["posable"],
+                             f"{ship} has nothing it can be shown flying with")
 
     def test_the_flying_pose_bends_a_ship_without_breaking_it(self):
         """Flying moves the gear and wings only -- it must not tip, grow or tear the ship."""
         from nms_procgen import anim
         span = lambda p: float(numpy.linalg.norm(p.max(0) - p.min(0)))
-        for ship in ("sentinel", "fighter", "explorer", "exotic"):
-            landed = self.m.ship_model("0x1", ship, pose=anim.ship_pose(ship, False))
+        for ship in ("sentinel", "fighter", "explorer", "shuttle"):
+            landed = self.m.ship_model("0x1", ship)
             self.assertTrue(landed["posable"], f"{ship} should offer a flying pose")
-            flight = self.m.ship_model("0x1", ship, pose=anim.ship_pose(ship, True))
+            flight = self.m.ship_model("0x1", ship, flying=True)
             lp = numpy.concatenate([p for p, _ in landed["groups"].values()])
             fp = numpy.concatenate([p for p, _ in flight["groups"].values()])
             self.assertEqual(lp.shape, fp.shape, f"{ship}: the pose changed the mesh itself")

@@ -213,21 +213,6 @@ def _matrix(t) -> np.ndarray:
     return m
 
 
-def _posed_joints(ship, pose):
-    """Names of the joints a ship's deploy anim drives, and so the ones we can place.
-
-    Everything else hanging off a joint is a rig the game drives at run time -- the gun turret it
-    aims, the rig it stretches a thrust trail with -- and the scene only holds those at an
-    authoring pose, which is nowhere in particular. Drawing them put guns through the hull at odd
-    angles and left thrust trails out beside the ship, so they stay out, as they were before.
-    """
-    from . import anim
-    try:
-        return frozenset(pose or ()) | frozenset(anim.ship_pose(ship, False))
-    except Exception:
-        return frozenset(pose or ())
-
-
 def _local(name, t, pose):
     """A node's local transform, or the one the parked/flying pose gives it (anim.ship_pose)."""
     posed = pose.get(name.upper()) if pose else None
@@ -306,7 +291,7 @@ def _scene_meshes(root, pose=None):
     return kept
 
 
-def ship_meshes(seed, ship, parts=None, fill=True, pose=None):
+def ship_meshes(seed, ship, parts=None, fill=True, pose=None, joints=frozenset(), collect=None):
     if ship in SPECIAL_SCENES:
         return _scene_meshes(SPECIAL_SCENES[ship], pose)
     """[(geometry path, hash, 4x4 world matrix, material class, under a joint)] for `seed`'s parts.
@@ -319,7 +304,7 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None):
     Without `fill` only the picked parts are drawn: the ship is built up piece by piece.
     """
     if parts is not None and not fill:
-        return _picked_meshes(ship, {p.upper() for p in parts}, pose)
+        return _picked_meshes(ship, {p.upper() for p in parts}, pose, joints, collect)
     groups = all_parts(ship)
     options = {p for ps in groups.values() for p in ps}
     group_of = {p: g for g, ps in groups.items() for p in ps}
@@ -347,13 +332,13 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None):
             chosen.add((real or names)[0])
     out = []
 
-    joints = _posed_joints(ship, pose)
-
     def walk(n, geometry, world, posed, depth, rig):
         typ, name, t, attrs, children = n
         if not keep(name) or depth > 12:
             return
         rig = rig or (typ == "JOINT" and name.upper() not in joints)
+        if collect is not None:
+            collect.setdefault(name.upper(), []).append(_matrix(t))
         world = world @ _matrix(t)
         posed = posed @ _local(name, t, pose)
         if typ == "MESH":
@@ -392,7 +377,7 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None):
     return kept
 
 
-def _picked_meshes(ship, chosen, pose=None):
+def _picked_meshes(ship, chosen, pose=None, joints=frozenset(), collect=None):
     """Only the picked parts, placed where they sit on a finished ship.
 
     A picked part can sit inside a part that is not picked (a cockpit inside a hull option), so
@@ -404,13 +389,13 @@ def _picked_meshes(ship, chosen, pose=None):
     lod = re.compile(r"LOD\d$")
     found: dict = {}  # part -> [(parents all picked, meshes)]
 
-    joints = _posed_joints(ship, pose)
-
     def walk(n, geometry, world, posed, depth, owner, ok, rig):
         typ, name, t, attrs, children = n
         if depth > 12:
             return
         rig = rig or (typ == "JOINT" and name.upper() not in joints)
+        if collect is not None:
+            collect.setdefault(name.upper(), []).append(_matrix(t))
         up = _canon(name.upper(), options, trunc)
         if up in options:
             base = lod.sub("", up)
@@ -458,13 +443,21 @@ def _picked_meshes(ship, chosen, pose=None):
     return kept
 
 
-def ship_model(seed, ship, parts=None, fill=True, pose=None) -> dict:
+def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
     """{"groups": {class: (positions float32 [n,3], indices uint32)}, "bounds": (min, max)} in the game's axes
     (Y up, Z forward). The bounds frame exactly what is drawn.
 
-    `pose` (anim.ship_pose) parks or flies the ship: parts hung off the skeleton are carried by
+    `flying` flies the ship instead of parking it: parts hung off the skeleton are carried by
     their joint, and skinned parts are bent by it."""
-    meshes = ship_meshes(seed, ship, parts, fill, pose)
+    from . import anim
+    # One pass to see which parts this ship actually carries, so an anim is judged only against
+    # those, then the real pass with the pose that comes out of it.
+    here: dict = {}
+    ship_meshes(seed, ship, parts, fill, None, frozenset(), here)
+    parked, flown = anim.ship_pose(ship, False, here), anim.ship_pose(ship, True, here)
+    joints = frozenset(parked) | frozenset(flown)
+    pose = flown if flying else parked
+    meshes = ship_meshes(seed, ship, parts, fill, pose, joints)
     geos = _geometry(sorted({g for g, *_ in meshes if g}))
     bend: dict = {}
     if pose:
@@ -495,9 +488,9 @@ def ship_model(seed, ship, parts=None, fill=True, pose=None) -> dict:
     groups = {cls: (np.concatenate(v[0]).astype(np.float32), np.concatenate(v[1]).astype(np.uint32))
               for cls, v in acc.items() if v[0]}
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
-    from . import anim
     return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()),
-            "posable": anim.posable(ship)}  # offers a landed/flying toggle
+            "posable": any(k not in parked or not np.allclose(parked[k], m, atol=1e-6)
+                           for k, m in flown.items())}  # offers a landed/flying toggle
 
 
 def pack(model: dict, colours: dict | None = None) -> bytes:

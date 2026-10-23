@@ -181,36 +181,65 @@ def _scene_locals(ship: str) -> dict:
     return out
 
 
-@functools.lru_cache(maxsize=32)
-def ship_pose(ship: str, flying: bool) -> dict:
+FITS = 0.6  # how much of an anim must land on the scene before it is this ship's
+
+
+def ship_pose(ship: str, flying: bool, loc=None) -> dict:
     """{NODE_NAME_UPPER: 4x4} -- the local transform each node takes, parked or flying.
 
     A deploy anim's first frame is the ship parked and its last is it flying, and a frame holds a
     node's transform outright, so this replaces the node's scene transform rather than adding to
     it. A node no anim covers keeps the transform its scene gives it.
 
-    A node is only posed when the anim's parked frame agrees with where this ship's scene puts it.
-    That is what picks the right anim out of the candidates: a ship carries one of the alternative
-    part sets, and they reuse each other's node names (all three of the later cockpits call a node
-    J_FrontPad), so the one that matches the scene is the one this ship actually has. It also keeps
-    an anim that was never meant for the ship from moving anything.
+    An anim is taken or left as a whole, by whether the nodes it drives start where this ship's
+    scene puts them. That picks the right one out of the candidates -- a ship carries one of the
+    alternative part sets and they reuse each other's node names, so of the five cockpit gears only
+    the one this ship wears fits -- and drops an anim that was never this ship's. Judging each node
+    on its own looked safer but was worse: a node can sit a little off where its anim starts and
+    still be driven by it, and dropping those left a Sentinel opening one wing and not the other.
     """
-    loc = _scene_locals(ship)
+    if loc is None:
+        loc = _scene_locals(ship)
     out: dict = {}
-    for a in SHIP_ANIMS.get(ship, []):
+    # Best fit first, and the first to claim a node keeps it: where two candidates both drive a
+    # node (the later cockpits all call one J_FrontPad) the one that fits this ship decides.
+    for _, a in sorted(_fitting(ship, loc), key=lambda r: -r[0]):
         try:
-            parked = pose_locals(a.path, -1 if a.backwards else 0)
-            wanted = pose_locals(a.path, 0 if a.backwards else -1) if flying else parked
-        except Exception:  # a part anim this game build does not ship: the rest still works
+            frame = pose_locals(a.path, 0 if flying == a.backwards else -1)
+        except Exception:
             continue
-        for name, m in wanted.items():
-            here = loc.get(name)
-            if here and any(np.allclose(x, parked[name], atol=0.02) for x in here):
-                out[name] = m
+        for name, m in frame.items():
+            out.setdefault(name, m)
     return out
 
 
-def posable(ship: str) -> bool:
+def _fitting(ship: str, loc: dict) -> tuple:
+    """[(how well it fits, anim)] for the anims that are really this ship's.
+
+    `loc` holds only the nodes this ship actually carries, so an anim belonging to a part the seed
+    did not pick finds nothing of its own to land on and is left out. That is what tells one of a
+    ship's alternative part sets from another, since they reuse each other's node names.
+    """
+    out = []
+    for a in SHIP_ANIMS.get(ship, []):
+        try:
+            parked = pose_locals(a.path, -1 if a.backwards else 0)
+            flying = pose_locals(a.path, 0 if a.backwards else -1)
+        except Exception:  # a part anim this game build does not ship
+            continue
+        # Judge it on the nodes it actually drives. Counting the still ones too flatters an anim
+        # that happens to share a lot of a ship's skeleton without owning the parts that move: an
+        # Exotic's wings scored 80% that way and then swung themselves 165 degrees over.
+        here = [k for k in parked if k in loc and not np.allclose(parked[k], flying.get(k, parked[k]), atol=1e-6)]
+        if not here:
+            continue
+        fit = sum(any(np.allclose(x, parked[k], atol=0.02) for x in loc[k]) for k in here) / len(here)
+        if fit >= FITS:
+            out.append((fit, a))
+    return tuple(out)
+
+
+def posable(ship: str, loc=None) -> bool:
     """True when parking and flying this ship actually look different."""
-    land, fly = ship_pose(ship, False), ship_pose(ship, True)
+    land, fly = ship_pose(ship, False, loc), ship_pose(ship, True, loc)
     return any(k not in land or not np.allclose(land[k], m, atol=1e-6) for k, m in fly.items())
