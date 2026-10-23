@@ -2,18 +2,14 @@
 
 ## 1.8.6
 
-- **Landed and flying**: the ship viewer, in My Ships and under the Designer preview, has a **Fly**
-  button that folds a ship between the way it sits parked and the way it flies -- landing legs
-  pulling up into the hull, a Sentinel spreading its wings. It works for Sentinel interceptors,
-  Fighters, Explorers and Shuttles. The movement is read out of the game's own deploy animations
-  and the ship is skinned to it, so the shape is the game's rather than a guess, and the viewer
-  keeps the angle you were looking at. A ship whose animation does not line up with the way the
-  game actually builds it is left parked rather than guessed at, and simply shows no button.
-- **Ship guns are drawn now**, under the wing and pointing forward. They were missing entirely
-  before. The game aims that turret as you fly and only stores it at an angle it never rests at,
-  so with nothing to aim at the app points it along the ship.
-- A parked ship is drawn exactly as it was, so turning this on cannot change the view you already
-  had -- only flying moves anything.
+- **Fly button**: the ship viewer now shows a ship landed or flying -- landing legs tucking up
+  into the hull, a Sentinel spreading its wings. It is under the My Ships viewer and the Designer
+  preview. Works for Sentinel interceptors, Fighters, Explorers and Shuttles; ships it cannot do
+  yet simply show no button.
+- The movement is read out of the game's own takeoff animations, so the flying shape is the
+  game's rather than a guess.
+- **Ship guns are drawn now**, under the wing and pointing forward. They were missing before.
+- A parked ship looks exactly as it did, so nothing changes until you press Fly.
 
 ## 1.8.5
 
