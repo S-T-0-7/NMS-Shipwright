@@ -1,5 +1,24 @@
 # Changelog
 
+## UI update
+
+- **Quests read as quests now**, not as mission ids. The game names a storyline rather than its
+  steps -- all six steps of "Alone Amidst the Stars" share that one title -- so every row used to
+  say `ACT1_STEP3`. Each step is now labelled with the line the game writes into your log when you
+  reach it, with the id kept as a tag underneath, and a storyline's heading carries its subtitle.
+  Names the game fills in as you play ("Trade Surge: %SYSTEM% System") were being thrown away
+  whole for having a blank in them, which cost 46 quests their name; they are back. The internal
+  helper quests the game never names keep their id as written rather than being dressed up.
+- **The 3D viewer's buttons moved onto the model.** The angles are one control in the bottom
+  corner, and spin and landed/flying are icons in the top corner that light up when they are on,
+  so the ship gets the whole box. The New ship preview has them too, which it never did.
+- **One set of buttons across the app**: icons on the ones worth an icon, a single highlighted
+  button for whatever a panel is really for, and red for anything that throws work away (Remove
+  this ship, Remove my paint, Empty slot), so they stop all looking equally safe.
+- The Designer's three rows of buttons are grouped and labelled, with installing a design into
+  your save set apart as its own step, and the seed search says which of its two searches is
+  which. Inventory separates the bulk fixes from the slot count. The menu carries page icons.
+
 ## 1.8.6
 
 - **Fly button**: the ship viewer now shows a ship landed or flying -- landing legs tucking up
