@@ -102,7 +102,7 @@ async function loadBackups() {
   if (!S.path) return;
   const list = await api('/api/backups?path=' + encodeURIComponent(S.path));
   $('#bRows').innerHTML = list.length ? list.map((b, i) => `<tr><td><code>${esc(b.file.split(/[\\/]/).pop())}</code></td><td>${esc(b.made)}</td>
-    <td>${(b.size / 1024).toFixed(0)} KB</td><td><button class="btn" data-i="${i}">Restore</button></td></tr>`).join('')
+    <td>${(b.size / 1024).toFixed(0)} KB</td><td><button class="btn" data-i="${i}">${ic('up')}Restore</button></td></tr>`).join('')
     : '<tr><td colspan="4" class="muted">No backups for this save yet.</td></tr>';
   $$('#bRows button').forEach(btn => btn.onclick = () => guard(async () => {
     if (!confirm('Restore this backup over the current save? The current file is backed up first.')) return;
@@ -112,6 +112,7 @@ async function loadBackups() {
 }
 
 (async () => {
+  paintIcons();
   await guard(async () => {
     await loadStatus(); S.palettes = await api('/api/palettes');
     await loadSaves(); await loadShips(); await initDesigner();

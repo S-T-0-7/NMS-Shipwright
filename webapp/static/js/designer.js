@@ -312,7 +312,7 @@ async function pollJob() {
   for (let i = box.children.length; i < j.results.length; i++) {
     const res = j.results[i], d = document.createElement('div'); d.className = 'card res';
     d.innerHTML = `${lookBadge(res.look)}
-      <div class="row" style="margin-top:6px;justify-content:space-between"><code>${res.seed}</code><button class="btn">Put in my save...</button></div>`;
+      <div class="row" style="margin-top:6px;justify-content:space-between"><code>${res.seed}</code><button class="btn">${ic('box')}Put in my save...</button></div>`;
     d.querySelector('button').onclick = () => applySeed(res.seed, job.ship); box.append(d);
   }
   if (j.status === 'running') setTimeout(() => guard(pollJob), 800);

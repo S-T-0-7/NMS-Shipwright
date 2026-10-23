@@ -51,13 +51,13 @@ function slotEditor(s) {
   const locked = !INV.data.valid.some(v => v[0] === x && v[1] === y);
   $('#iSlot').innerHTML = `
     ${locked ? `<div class="row"><b>This slot is not part of the inventory</b>
-      <button class="btn primary" id="sUnlock">Add this slot</button></div>` : ''}
+      <button class="btn primary" id="sUnlock">${ic('plus')}Add this slot</button></div>` : ''}
     ${s ? `<div class="row"><b>${esc(s.name)}</b><span class="muted mono">${esc(s.id)}</span><span class="badge">${esc(s.type)}</span>${s.damaged ? '<span class="badge hot">DAMAGED</span>' : ''}</div>
       <div class="row" style="margin-top:8px"><label class="muted">${s.type === 'Technology' ? 'Charge' : 'Amount'}</label>
         <input id="sAmt" type="number" min="0" value="${s.amount}" style="width:110px"><span class="muted">max ${s.max}</span>
-        <button class="btn primary" id="sAmtGo">Set</button><button class="btn" id="sMax">Max</button><button class="btn" id="sDel">Empty slot</button></div>`
+        <button class="btn primary" id="sAmtGo">${ic('check')}Set</button><button class="btn" id="sMax">${ic('expand')}Max</button><button class="btn danger" id="sDel">${ic('trash')}Empty slot</button></div>`
       : (locked ? '' : `<div class="row"><span class="muted">Empty slot.</span>
-        <button class="btn" id="sLock">Remove this slot</button></div>`)}
+        <button class="btn danger" id="sLock">${ic('trash')}Remove this slot</button></div>`)}
     <div class="row" style="margin-top:12px" ${locked ? 'hidden' : ''}><label class="muted">${s ? 'Replace with' : 'Add'}</label>
       <input id="sQ" placeholder="Search items, e.g. carbon, hyperdrive..." style="min-width:280px">
       <select id="sType"><option value="">All</option><option>Substance</option><option>Product</option><option>Technology</option></select></div>

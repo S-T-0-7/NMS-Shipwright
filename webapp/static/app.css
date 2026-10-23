@@ -13,7 +13,7 @@ main{overflow:auto;padding:18px}.page{display:none}.page.active{display:block}
 h2{margin:0 0 12px;font-size:18px}h3{margin:18px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}
 .btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}.btn:hover{border-color:#3d4453}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn:disabled{opacity:.5;cursor:default}
 input,select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 10px}input:focus,select:focus{outline:2px solid #3b4252;border-color:transparent}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.muted{color:var(--muted)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row.end{justify-content:flex-end}.muted{color:var(--muted)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
 .split{display:grid;grid-template-columns:minmax(300px,370px) 1fr;gap:16px;align-items:start}
 .shiplist{display:flex;flex-direction:column;gap:8px}
@@ -114,3 +114,46 @@ nav button.active{background:linear-gradient(90deg,#ffffff0d,transparent)}
 .vhint{margin-left:auto;align-self:center;font-size:11px;color:var(--muted);opacity:0;transition:opacity .2s}
 .hero.v3d:hover .vhint{opacity:.85}
 @media (max-width:900px){.vhint{display:none}}
+
+/* ---- buttons, toolbars and section rules ---- */
+/* One button vocabulary, so weight says what a button does rather than where it sits:
+   plain for the ordinary ones, .primary for the single action a panel is for, .danger for the
+   ones that throw something away, .ghost for the ones that are just there if you want them. */
+.btn{display:inline-flex;align-items:center;gap:7px;line-height:1.3}
+[hidden]{display:none !important}  /* a laid-out button would otherwise outrank the browser's rule */
+.btn svg{width:14px;height:14px;flex:none;opacity:.8}
+.btn:hover svg{opacity:1}
+.btn.primary svg{opacity:1}
+.btn.sq{padding:7px 8px}
+.btn.sq svg{width:15px;height:15px}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover{background:var(--panel2);border-color:var(--line);color:var(--text)}
+.btn.danger{background:#231416;border-color:#4a2429;color:#ff9ea1}
+.btn.danger:hover{background:#2d171b;border-color:var(--err);color:#ffc4c6}
+.btn.danger:disabled:hover{background:#231416;border-color:#4a2429;color:#ff9ea1}
+.iconbtn.solid{background:var(--panel2);border:1px solid var(--line)}
+.iconbtn.solid:hover{border-color:var(--line2);background:#20252f}
+.spacer{flex:1}
+
+/* A toolbar is groups of related controls under their own small heading, divided by a hairline,
+   instead of one long row of buttons that all look equally important. */
+.toolbar{display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px 16px;padding:12px 14px;margin-top:10px}
+.tgroup{display:flex;flex-direction:column;gap:7px;min-width:0}
+/* installing is what the whole panel builds up to, so it gets its own band under the rest */
+.tgroup.wide{flex:1 0 100%;border-top:1px solid var(--line);padding-top:12px}
+.tlabel{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.tnote{font-size:12px;margin:0}
+.tnote:empty{display:none}
+.tsep{align-self:stretch;flex:none;width:1px;min-height:26px;background:var(--line)}
+.seek{display:flex;flex-direction:column;gap:9px;padding:13px 14px}
+.seek.top{border-top:1px solid var(--line)}
+
+/* nav entries carry their page's icon, lit on the one you are on */
+nav button{display:flex;align-items:center;gap:10px;padding:9px 11px}
+nav button svg{width:16px;height:16px;flex:none;opacity:.7}
+nav button.active svg{opacity:1;color:var(--accent)}
+
+/* a heading trails off into a rule, so a page reads as sections rather than a list of bold text */
+h3{display:flex;align-items:center;gap:12px}
+h3::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+.card{background:linear-gradient(180deg,#ffffff07,#ffffff00 46%),var(--panel)}

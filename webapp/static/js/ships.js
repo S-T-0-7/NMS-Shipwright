@@ -29,11 +29,12 @@ function selectShip(slot) {
     ${(s.wrong_tech || []).length ? `<div class="banner" style="margin:12px 0 0">This ship is carrying
       ${s.ship === 'sentinel' ? 'ordinary starship parts instead of the sentinel ones (Sentinel Cannon, Luminance Engine and so on)'
         : 'sentinel parts instead of ordinary starship ones'}, because it was copied from another ship.
-      <button class="btn" id="sRefit">Fit its own parts</button></div>` : ''}
+      <button class="btn" id="sRefit">${ic('wrench')}Fit its own parts</button></div>` : ''}
     <h3>Seed</h3>
     <div class="row"><input id="sSeed" class="mono" value="${esc(s.seed)}" style="width:230px">
-      <button class="btn primary" id="sApply">Apply seed</button><button class="btn" id="sReroll">Reroll</button>
-      ${s.ship ? '<button class="btn" id="sEdit">Change its parts</button>' : ''}</div>
+      <button class="btn primary" id="sApply">${ic('check')}Apply seed</button>
+      <button class="btn" id="sReroll">${ic('dice')}Reroll</button>
+      ${s.ship ? `<button class="btn ghost" id="sEdit">${ic('sliders')}Change its parts</button>` : ''}</div>
     ${s.ship ? '<p class="muted" style="margin:6px 0 0">"Change its parts" opens this ship in the Designer with its own parts filled in.</p>' : ''}
     <h3>Stats</h3>
     <div class="card" style="padding:14px" id="sStats"><span class="muted">Loading...</span></div>
@@ -43,7 +44,8 @@ function selectShip(slot) {
     <div class="row">
       <button class="btn chip" id="pPri"><i></i><span>Body</span></button><button class="btn chip" id="pAcc"><i></i><span>Trim</span></button>
       <span class="muted" id="pPicking"></span><span style="flex:1"></span>
-      <button class="btn primary" id="pApply">Save these colours</button><button class="btn" id="pClear">Remove my paint</button></div>
+      <button class="btn primary" id="pApply">${ic('check')}Save these colours</button>
+      <button class="btn danger" id="pClear">${ic('trash')}Remove my paint</button></div>
     <div class="row" style="margin-top:10px"><label class="muted">Paint set</label><select id="pPal" title="Which set of paints"></select>
       <input type="color" id="pAny" title="Any colour: it snaps to the nearest paint in this set" style="width:38px;height:30px;padding:0;border:0;background:none">
       <span class="muted" id="pNote"></span></div>
@@ -56,7 +58,7 @@ function selectShip(slot) {
     <div class="row"><select id="sModel">${S.models.map(m => `<option value="${m.ship}" ${m.ship === s.ship ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}${s.ship ? '' : `<option value="" selected>${esc(s.category)} (fixed model)</option>`}</select>
       <button class="btn" id="sModelApply">Change type</button></div>
     <h3>Remove</h3>
-    <div class="row"><button class="btn" id="sRemove">Remove this ship</button>
+    <div class="row"><button class="btn danger" id="sRemove">${ic('trash')}Remove this ship</button>
       <span class="muted">Empties the slot. A backup is made first -- undo it from Save &gt; Backups.</span></div>
     </details>
     ${s.is_procedural && s.ship ? '<h3>Colours &amp; finish from the seed</h3><div id="sLook"><span class="muted">Working out the look...</span></div>' : ''}
@@ -217,8 +219,8 @@ async function loadStats(slot) {
       <span class="muted">${s.min} to ${s.max}${s.value > s.max || s.value < s.min ? ' — outside that range' : ''}</span></div>`).join('')}
     <div class="row" style="margin-top:12px"><label class="muted" style="min-width:150px">Class</label>
       <select id="sClass">${['C', 'B', 'A', 'S'].map(c => `<option ${c === d.class ? 'selected' : ''}>${c}</option>`).join('')}</select>
-      <button class="btn primary" id="sStatsSave">Save stats</button>
-      <button class="btn" id="sStatsBest">Best possible</button></div>`;
+      <button class="btn primary" id="sStatsSave">${ic('check')}Save stats</button>
+      <button class="btn" id="sStatsBest">${ic('bolt')}Best possible</button></div>`;
   $('#sStatsSave').onclick = () => guard(async () => {
     const values = {};
     $$('#sStats [data-stat]').forEach(i => values[i.dataset.stat] = +i.value);
@@ -286,7 +288,7 @@ function newShipPanel() {
     <p class="muted" id="nSpecialNote" style="margin:8px 0 0;display:none">★ Special ship — spawns exactly as it is (its own model, stats and tech). Seed and inventory options don't apply.</p>
     <p class="muted" id="nSlotNote" style="margin:8px 0 0"></p>
     <div class="hero" id="nPrev" style="margin-top:12px"></div>
-    <div class="row" style="margin-top:12px"><button class="btn primary" id="nCreate">Create ship</button><button class="btn" id="nCancel">Cancel</button></div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="nCreate">${ic('plus')}Create ship</button><button class="btn ghost" id="nCancel">Cancel</button></div>
     <p class="muted">Tip: design it in the Designer first and paste the seed here. Replacing a slot keeps that ship's inventory &amp; tech; filling an empty slot copies the inventory you pick, or a standard empty one. Recolour afterwards from the ship page.</p>`;
   $('#nSlot').value = String(firstEmpty);
   const special = () => S.models.find(x => x.ship === $('#nModel').value)?.special;

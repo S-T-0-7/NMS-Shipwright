@@ -11,16 +11,16 @@
 <header>
   <div class="brand"><i></i>NMS Shipwright</div>
   <select id="saveSel" title="Save file -- the game loads the newest"></select>
-  <button class="btn" id="refresh" title="Re-read saves (picks the newest)">Refresh</button>
+  <button class="iconbtn solid" id="refresh" data-icon="spin" title="Re-read saves (picks the newest)"></button>
   <span class="pill" id="gamePill">checking...</span>
 </header>
 <nav>
-  <button data-page="ships" class="active">My Ships</button>
-  <button data-page="designer">Design &amp; Find</button>
-  <button data-page="inventory">Inventory</button>
-  <button data-page="unlocks">Unlocks &amp; Fleet</button>
-  <button data-page="quests">Quests</button>
-  <button data-page="player">Save</button>
+  <button data-page="ships" data-icon="ship" class="active">My Ships</button>
+  <button data-page="designer" data-icon="sliders">Design &amp; Find</button>
+  <button data-page="inventory" data-icon="grid">Inventory</button>
+  <button data-page="unlocks" data-icon="key">Unlocks &amp; Fleet</button>
+  <button data-page="quests" data-icon="list">Quests</button>
+  <button data-page="player" data-icon="disk">Save</button>
   <span class="navver" id="navVer" title="Installed version"></span>
 </nav>
 <div id="banner" class="banner" hidden></div>
@@ -28,26 +28,33 @@
   <section class="page active" id="page-ships">
     <div class="split">
       <div><div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Ships</h2>
-        <button class="btn primary" id="newShip">+ New ship</button></div><div class="shiplist" id="shipList"></div></div>
+        <button class="btn primary" id="newShip" data-icon="plus">New ship</button></div><div class="shiplist" id="shipList"></div></div>
       <div class="card detail" id="shipDetail"><p class="muted">Select a ship.</p></div>
     </div>
   </section>
 
   <section class="page" id="page-designer">
     <h2>Designer</h2>
-    <div class="row"><label class="muted">Ship type</label><select id="dShip"></select><button class="btn" id="dReset">Reset</button>
+    <div class="row"><label class="muted">Ship type</label><select id="dShip"></select>
+      <button class="btn ghost" id="dReset" data-icon="spin">Reset</button>
       <span class="muted">Pick the parts you want; leave the rest on "Any".</span></div>
-    <div class="card" style="padding:12px;margin-top:10px">
-      <div class="row"><label class="muted" style="min-width:110px">Saved designs</label><select id="dSaved" style="min-width:220px"></select>
-        <button class="btn" id="dLoad">Load</button><button class="btn" id="dSave">Save current as...</button>
-        <button class="btn" id="dDelete" hidden>Delete</button><span class="muted" id="dDesignNote"></span></div>
-      <div class="row" style="margin-top:8px"><label class="muted" style="min-width:110px">On this PC</label>
-        <button class="btn" id="dExport">Save design to a file...</button><button class="btn" id="dImport">Open a design file...</button>
-        <span class="muted">Keep designs as files, back them up or share them.</span></div>
-      <div class="row" style="margin-top:8px"><label class="muted" style="min-width:110px">Into your save</label>
-        <select id="dTarget" style="min-width:260px"></select>
-        <button class="btn primary" id="dInstall">Put this design in my save</button><button class="btn" id="dInstallStop" hidden>Stop</button>
-        <span class="muted" id="dInstallStatus"></span></div>
+    <div class="card toolbar">
+      <div class="tgroup"><span class="tlabel">Saved design</span>
+        <div class="row"><select id="dSaved" style="min-width:200px"></select>
+          <button class="btn" id="dLoad" data-icon="folder">Load</button>
+          <button class="btn" id="dSave" data-icon="disk">Save as...</button>
+          <button class="btn danger sq" id="dDelete" data-icon="trash" title="Delete this saved design" hidden></button></div>
+        <span class="muted tnote" id="dDesignNote"></span></div>
+      <div class="tsep"></div>
+      <div class="tgroup"><span class="tlabel">On this PC</span>
+        <div class="row"><button class="btn" id="dExport" data-icon="down">Export...</button>
+          <button class="btn" id="dImport" data-icon="up">Import...</button></div>
+        <span class="muted tnote">Keep designs as files, back them up or share them.</span></div>
+      <div class="tgroup wide"><span class="tlabel">Into your save</span>
+        <div class="row"><select id="dTarget" style="min-width:240px"></select>
+          <button class="btn primary" id="dInstall" data-icon="box">Put it in</button>
+          <button class="btn danger" id="dInstallStop" data-icon="stop" hidden>Stop</button></div>
+        <span class="muted tnote" id="dInstallStatus"></span></div>
     </div>
     <div id="dEdit"></div>
     <div class="grid2" style="margin-top:12px">
@@ -55,18 +62,21 @@
       <div>
         <div class="card hero" id="dPreview"><span class="muted">Pick parts to preview</span></div>
         <div class="card" style="padding:12px;margin-top:12px" id="dLook"></div>
-        <div class="card" style="padding:12px;margin-top:12px">
-          <div class="row"><label class="muted">Results</label><input id="dN" type="number" value="5" min="1" max="50" style="width:70px">
-            <label class="muted" title="Off: keep searching until you press Stop"><input type="checkbox" id="dLimit"> Give up after</label>
-            <input id="dSecs" type="number" value="10" min="1" max="1440" style="width:70px" disabled><label class="muted">min</label>
-            <button class="btn primary" id="dGo">Find seeds</button><button class="btn" id="dStop" disabled>Stop</button></div>
-          <div class="row" style="margin-top:8px"><label class="muted">Or search real star systems within</label>
-            <input id="dRad" type="number" value="0" min="0" max="6" style="width:60px"><label class="muted">regions of where you are</label>
-            <button class="btn" id="dFind">Find in game</button>
-            <label class="muted" title="Rank ships by how many of your parts they have, instead of requiring all of them">
-              <input type="checkbox" id="dClose" checked> closest matches</label></div>
-          <p class="muted" id="dOdds" style="margin:10px 0 0"></p>
-          <p class="muted" id="dStatus" style="margin:6px 0 0"></p>
+        <div class="card" style="padding:0;margin-top:12px">
+          <div class="seek"><span class="tlabel">Search seeds</span>
+            <div class="row"><label class="muted">Results</label><input id="dN" type="number" value="5" min="1" max="50" style="width:70px">
+              <label class="muted" title="Off: keep searching until you press Stop"><input type="checkbox" id="dLimit"> Give up after</label>
+              <input id="dSecs" type="number" value="10" min="1" max="1440" style="width:70px" disabled><label class="muted">min</label></div>
+            <div class="row end"><button class="btn primary" id="dGo" data-icon="search">Find seeds</button>
+              <button class="btn danger" id="dStop" data-icon="stop" disabled>Stop</button></div>
+            <p class="muted tnote" id="dOdds"></p>
+            <p class="muted tnote" id="dStatus"></p></div>
+          <div class="seek top"><span class="tlabel">Search real star systems</span>
+            <div class="row"><label class="muted">Within</label>
+              <input id="dRad" type="number" value="0" min="0" max="6" style="width:60px"><label class="muted">regions of where you are</label>
+              <label class="muted" title="Rank ships by how many of your parts they have, instead of requiring all of them">
+                <input type="checkbox" id="dClose" checked> closest matches</label></div>
+            <div class="row end"><button class="btn" id="dFind" data-icon="globe">Find in game</button></div></div>
         </div>
       </div>
     </div>
@@ -103,15 +113,16 @@
       <div class="row"><label class="muted" style="min-width:96px">Game folder</label>
         <input id="hDir" class="mono" style="flex:1;min-width:280px" placeholder="No Man's Sky was not found">
         <button class="btn" id="hPick">Choose...</button><button class="btn" id="hDirSave">Use this folder</button></div>
-      <div class="row" style="margin-top:8px"><button class="btn" id="hCheck">Run full check</button><button class="btn" id="hRefresh">Re-read game files</button>
+      <div class="row" style="margin-top:8px"><button class="btn" id="hCheck" data-icon="check">Run full check</button>
+        <button class="btn" id="hRefresh" data-icon="spin">Re-read game files</button>
         <span class="muted" id="hBuild"></span></div>
       <div class="hlist" id="hList" style="margin-top:10px"></div>
     </div>
     <h3>Export / import</h3>
     <div class="card" style="padding:14px;max-width:760px">
       <p class="muted" style="margin-top:0">Download the whole save as readable JSON (to keep, share or edit), or load a JSON file back into this save slot.</p>
-      <div class="row"><a class="btn" id="xExport" download>Download as JSON</a>
-        <label class="btn">Import JSON...<input type="file" id="xImport" accept=".json,application/json" hidden></label></div>
+      <div class="row"><a class="btn" id="xExport" data-icon="down" download>Download as JSON</a>
+        <label class="btn" data-icon="up">Import JSON...<input type="file" id="xImport" accept=".json,application/json" hidden></label></div>
     </div>
     <details class="fold" id="rawBox"><summary>Advanced: edit any value in the save</summary>
       <p class="muted" style="margin-top:0">Browse the save like NomNom's JSON view. Values are checked to keep their type. A backup is made on every change.</p>
@@ -129,12 +140,17 @@
     <div class="invwrap">
       <div class="card invlist" id="iList"></div>
       <div>
-        <div class="row" style="margin-bottom:10px"><b id="iTitle"></b><span class="muted" id="iInfo"></span>
-          <span style="flex:1"></span>
-          <button class="btn" data-op="fill">Fill stacks</button><button class="btn" data-op="recharge">Recharge tech</button>
-          <button class="btn" data-op="repair">Repair all</button>
-          <label class="muted">Slots</label><input id="iSlots" type="number" min="1" max="120" style="width:64px">
-          <button class="btn" id="iSetSlots">Set</button><button class="btn" data-op="expand">Max</button></div>
+        <div class="card row" style="margin-bottom:10px;padding:10px 12px">
+          <b id="iTitle"></b><span class="muted" id="iInfo"></span>
+          <span class="spacer"></span>
+          <div class="row" style="gap:6px"><button class="btn" data-op="fill" data-icon="layers">Fill stacks</button>
+            <button class="btn" data-op="recharge" data-icon="bolt">Recharge</button>
+            <button class="btn" data-op="repair" data-icon="wrench">Repair</button></div>
+          <span class="tsep"></span>
+          <div class="row" style="gap:6px"><label class="muted">Slots</label>
+            <input id="iSlots" type="number" min="1" max="120" style="width:64px">
+            <button class="btn" id="iSetSlots" data-icon="check">Set</button>
+            <button class="btn" data-op="expand" data-icon="expand">Max</button></div></div>
         <div class="invgrid" id="iGrid"></div>
         <div class="card" style="padding:12px;margin-top:12px" id="iSlot"><span class="muted">Click a slot to change it.</span></div>
       </div>
