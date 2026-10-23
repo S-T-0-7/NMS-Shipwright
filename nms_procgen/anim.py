@@ -153,43 +153,16 @@ def _extract_anim(rel_path: str):
     return full if os.path.exists(full) else None
 
 
-@functools.lru_cache(maxsize=16)
-def _scene_locals(ship: str) -> dict:
-    """{NODE_NAME_UPPER: [local 4x4, ...]} for every node of a ship's scene, instances included."""
-    from . import model3d
-    from .generator import ROOTS
-    if ship not in ROOTS:
-        return {}
-    root = "MODELS/" + ROOTS[ship][len("models/"):].upper().replace(".DESCRIPTOR.MBIN", ".SCENE.MBIN")
-    scene = model3d._parsed(root)
-    if not scene:
-        return {}
-    out: dict = {}
-
-    def walk(n, depth):
-        typ, name, t, attrs, children = n
-        if depth > 14:
-            return
-        out.setdefault(name.upper(), []).append(model3d._matrix(t))
-        if typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
-            sub = model3d._parsed(model3d._scene_path(attrs["SCENEGRAPH"]))
-            if sub:
-                walk(sub[1], depth + 1)
-        for c in children:
-            walk(c, depth)
-    walk(scene[1], 0)
-    return out
-
-
 FITS = 0.6  # how much of an anim must land on the scene before it is this ship's
 
 
-def ship_pose(ship: str, flying: bool, loc=None) -> dict:
+def ship_pose(ship: str, flying: bool, loc: dict) -> dict:
     """{NODE_NAME_UPPER: 4x4} -- the local transform each node takes, parked or flying.
 
     A deploy anim's first frame is the ship parked and its last is it flying, and a frame holds a
     node's transform outright, so this replaces the node's scene transform rather than adding to
-    it. A node no anim covers keeps the transform its scene gives it.
+    it. A node no anim covers keeps the transform its scene gives it. `loc` is {node name: [local
+    4x4, ...]} for the nodes this ship carries -- see _fitting.
 
     An anim is taken or left as a whole, by whether the nodes it drives start where this ship's
     scene puts them. That picks the right one out of the candidates -- a ship carries one of the
@@ -198,8 +171,6 @@ def ship_pose(ship: str, flying: bool, loc=None) -> dict:
     on its own looked safer but was worse: a node can sit a little off where its anim starts and
     still be driven by it, and dropping those left a Sentinel opening one wing and not the other.
     """
-    if loc is None:
-        loc = _scene_locals(ship)
     out: dict = {}
     # Best fit first, and the first to claim a node keeps it: where two candidates both drive a
     # node (the later cockpits all call one J_FrontPad) the one that fits this ship decides.
@@ -237,9 +208,3 @@ def _fitting(ship: str, loc: dict) -> tuple:
         if fit >= FITS:
             out.append((fit, a))
     return tuple(out)
-
-
-def posable(ship: str, loc=None) -> bool:
-    """True when parking and flying this ship actually look different."""
-    land, fly = ship_pose(ship, False, loc), ship_pose(ship, True, loc)
-    return any(k not in land or not np.allclose(land[k], m, atol=1e-6) for k, m in fly.items())
