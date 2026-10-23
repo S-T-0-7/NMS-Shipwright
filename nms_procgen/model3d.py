@@ -31,6 +31,15 @@ _LOCK = threading.Lock()
 MAT_SKIP = {12: "decal", 14: "mask", 58: "reflection plane", 59: "shadow only", 70: "volume", 71: "volume"}
 MAT_GLOW = {2, 9, 10, 18, 19, 22}  # lights, glows and holograms: added on top, never solid
 MAT_JET = 2                        # an engine's jet flame, which the scene puts at its nozzle
+
+# The gun turret is one of the rigs the game aims as you fly, and the scene only holds it at an
+# authoring angle -- barrels down and back under the wing, which is how it looked when drawn as the
+# scene has it. No frame of its own anims aims it either; they all point it backwards. With nothing
+# to aim at, it is pointed where the ship is going: the turret's own turn is dropped and swung a
+# quarter turn, which takes the barrels from straight up to level and forward.
+GUN_JOINTS = frozenset({"TURRENTROOT", "TURRETROOT", "TURRETJNT", "TURRETENDJNT",  # the game spells it TURRENTROOT
+                        "HINGE1JNT", "HINGE2JNT", "HINGE3JNT"})
+GUN_AIM = np.array([[1., 0., 0.], [0., 0., -1.], [0., 1., 0.]])
 MAT_GLASS = {62}                   # canopies, screens, refraction
 SKIP_SHADERS = ("PARTICLE", "DEFERREDDECAL")  # effects and decals the game draws over the hull
 
@@ -270,6 +279,9 @@ def _scene_meshes(root, pose=None):
             return
         world = world @ _matrix(t)
         posed = posed @ _local(name, t, pose)
+        if gun:  # see GUN_AIM
+            world, posed = world.copy(), posed.copy()
+            world[:3, :3] = posed[:3, :3] = GUN_AIM
         if typ == "MESH":
             suffix = LOD_SUFFIX.search(name)
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
@@ -337,11 +349,15 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None, joints=frozenset()
         typ, name, t, attrs, children = n
         if not keep(name) or depth > 12:
             return
-        rig = rig or (typ == "JOINT" and name.upper() not in joints)
+        gun = typ == "JOINT" and name.upper() in GUN_JOINTS
+        rig = rig or (typ == "JOINT" and not gun and name.upper() not in joints)
         if collect is not None:
             collect.setdefault(name.upper(), []).append(_matrix(t))
         world = world @ _matrix(t)
         posed = posed @ _local(name, t, pose)
+        if gun:  # see GUN_AIM
+            world, posed = world.copy(), posed.copy()
+            world[:3, :3] = posed[:3, :3] = GUN_AIM
         if typ == "MESH":
             # Lower-detail copies sit inside the full-detail mesh and poke through it. Some of them
             # claim LODLEVEL 0, so the name (...LOD2) decides as well.
@@ -350,7 +366,7 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None, joints=frozenset()
                 return
             cls = mat_class(attrs.get("MATERIAL", ""))
             if rig and _material_class(attrs.get("MATERIAL", ""))[0] != MAT_JET:
-                return  # see _posed_joints: only the jet still belongs where the scene put it
+                return  # a rig the game drives: only its jet still belongs where it is: only the jet still belongs where the scene put it
             if attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
                 out.append((geometry, int(attrs["HASH"]), world, cls, posed, int(attrs.get("FIRSTSKINMAT") or 0)))
         elif typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
@@ -394,7 +410,8 @@ def _picked_meshes(ship, chosen, pose=None, joints=frozenset(), collect=None):
         typ, name, t, attrs, children = n
         if depth > 12:
             return
-        rig = rig or (typ == "JOINT" and name.upper() not in joints)
+        gun = typ == "JOINT" and name.upper() in GUN_JOINTS
+        rig = rig or (typ == "JOINT" and not gun and name.upper() not in joints)
         if collect is not None:
             collect.setdefault(name.upper(), []).append(_matrix(t))
         up = _canon(name.upper(), options, trunc)
@@ -410,12 +427,15 @@ def _picked_meshes(ship, chosen, pose=None, joints=frozenset(), collect=None):
             ok = ok and picked
         world = world @ _matrix(t)
         posed = posed @ _local(name, t, pose)
+        if gun:  # see GUN_AIM
+            world, posed = world.copy(), posed.copy()
+            world[:3, :3] = posed[:3, :3] = GUN_AIM
         if typ == "MESH":
             suffix = LOD_SUFFIX.search(name)
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
                 return
             if rig and _material_class(attrs.get("MATERIAL", ""))[0] != MAT_JET:
-                return  # see _posed_joints
+                return  # a rig the game drives: only its jet still belongs where it is
             if owner is not None and attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
                 owner.append((geometry, int(attrs["HASH"]), world, mat_class(attrs.get("MATERIAL", "")), posed,
                               int(attrs.get("FIRSTSKINMAT") or 0)))
