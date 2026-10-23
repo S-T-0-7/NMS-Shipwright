@@ -1,5 +1,10 @@
 """Quests (missions) in a save: list them by name and skip whole quests.
 
+Where the names come from (see title, subtitle and step_name): a mission record holds a title,
+a subtitle and a description, each a localisation id looked up in the game's English table. A
+storyline shares one title across all of its steps, so what names a single step is its
+description -- the line the game writes into your log when you reach it.
+
 How the game decides a quest is finished (NMS.exe mission manager):
   * IsMissionComplete: Progress >= the quest's stage count.
   * IsMissionInProgress: 0 <= Progress < stage count.
@@ -62,11 +67,13 @@ def _no_match(what):
 
 @functools.lru_cache(maxsize=None)
 def missions():
-    """{mission id: {"title_key", "title_count", "final": [(progress, version)], ...}} from the game."""
+    """{mission id: {"text", "objective", "final": [(progress, version)], ...}} from the game."""
     L = _layouts()
     table, seq, fin = L["table"], L["seq"], L["final"]
     o_id, id_len = seq.off("MissionID"), seq.fields["MissionID"]["size"]
-    o_titles, o_final = seq.off("MissionTitles"), seq.off("FinalStageVersions")
+    o_final = seq.off("FinalStageVersions")
+    text_offs = {f: seq.off("Mission" + f.capitalize() + "s") for f in ("title", "subtitle", "description")}
+    o_obj, obj_len = seq.off("MissionObjective"), seq.fields["MissionObjective"]["size"]
     o_flags = [seq.off(f) for f in ("IsRecurring", "RestartOnCompletion")]
     o_critical = seq.off("MissionIsCritical")
     f_progress, f_version = fin.off("Progress"), fin.off("Version")
@@ -87,8 +94,9 @@ def missions():
             fb, fc = _array(b, r + o_final)
             out[mid] = {
                 "table": os.path.basename(path)[:-5],
-                "title_key": _vss(b, r + o_titles),
-                "title_count": _i32(b, r + o_titles + 0x10),
+                # each of these is a localisation id plus how many numbered variants it has
+                "text": {f: (_vss(b, r + o), _i32(b, r + o + 0x10)) for f, o in text_offs.items()},
+                "objective": _cstr(b, r + o_obj, obj_len),
                 "final": [(_i32(b, fb + k * fin.size + f_progress), _i32(b, fb + k * fin.size + f_version))
                           for k in range(fc)],
                 "critical": bool(b[r + o_critical]),
@@ -134,18 +142,93 @@ def final_stage(mission_id, version):
     return (best or max(info["final"], key=lambda p: p[1]))[0]
 
 
+def _text(key, count):
+    """The English line behind a localisation id, markup stripped."""
+    if not key:
+        return ""
+    if count > 1:  # a numbered set (step 1, step 2, ...); the first one names the lot
+        key = key.replace("%d", "1")
+    raw = strings().get(key)
+    if raw is None:
+        # A handful of records (the game's own test missions, mostly) hold the words themselves
+        # rather than an id for them, and are written as notes to a developer: "icon setting".
+        return key[:1].upper() + key[1:] if " " in key else ""
+    return _MARKUP.sub("", raw).strip()
+
+
+# The game writes the planet, system or ship you are at into these as you play. Without this
+# a whole name used to be thrown away for having one -- "Trade Surge: %SYSTEM% System" and 45
+# others showed as their mission id instead.
+_PLACEHOLDER = re.compile(r"%[A-Z0-9_]+%")
+_GAP = re.compile(r"\s{2,}")
+_BEFORE_PUNCT = re.compile(r"\s+([,.;:!?])")
+_DANGLING = re.compile(r"(?:\s+(?:from|of|on|in|at|for|to|the|a|an))*[\s:,.\u2013-]*\Z", re.I)
+
+
+def _close(text):
+    """A line with the game's blanks taken out and closed up around.
+
+    There is no planet or system here to put in them, and a stand-in word reads worse than
+    nothing ("in the nearby this system system"), so the blank simply goes.
+    """
+    if "%" not in text:
+        return text
+    closed = _GAP.sub(" ", _PLACEHOLDER.sub("", text))
+    return _BEFORE_PUNCT.sub(lambda m: m.group(1), closed).strip()
+
+
+def _name(text):
+    """A short label with the blanks gone: "Depot Raid: Planet %PLANET%" -> "Depot Raid"."""
+    if "%" not in text:
+        return text
+    head = text.split(":")[0].strip()
+    if head and "%" not in head:  # the blank is only in the qualifier after the colon
+        return head
+    return _DANGLING.sub("", _close(text)).strip()  # "Take a photo of %CREATURE%" -> "Take a photo"
+
+
 def game_title(mission_id):
     """The quest's name as the game shows it, or "" for internal helper quests."""
     info = missions().get(mission_id)
-    key = info["title_key"] if info else ""
-    if key and info["title_count"] > 1:
-        key = key.replace("%d", "1")
-    text = _MARKUP.sub("", strings().get(key, "")).strip() if key else ""
-    return "" if "%" in text else text
+    return _name(_text(*info["text"]["title"])) if info else ""
+
+
+def subtitle(mission_id):
+    """The line the game shows under the name -- who or what the quest is about."""
+    info = missions().get(mission_id)
+    return _name(_text(*info["text"]["subtitle"])) if info else ""
+
+
+STEP_CHARS = 120
+
+
+def step_name(mission_id):
+    """What this one step of a quest is, in the game's own words.
+
+    The game does not name steps -- a storyline's steps all share its title. What it does hold
+    per step is the line it writes in your log when you reach it, so that is the step's name
+    here, cut to its first sentence. Where that line opens with a blank it loses its subject
+    along with it ("of planet in the system requests assistance"), so those fall back to what
+    the step asks you to do, and then to the quest's subtitle.
+    """
+    info = missions().get(mission_id)
+    if not info:
+        return ""
+    raw = _text(*info["text"]["description"])
+    if raw and not raw.startswith("%"):
+        first = re.split(r"(?<=[.!?])\s", _close(raw), maxsplit=1)[0]
+        return first[:STEP_CHARS].rsplit(" ", 1)[0] + "\u2026" if len(first) > STEP_CHARS else first
+    return _name(_text(info["objective"], 1)) or _name(_text(*info["text"]["subtitle"]))
 
 
 def title(mission_id):
-    return game_title(mission_id) or mission_id.replace("_", " ").title()
+    """What to call this quest: its name, else what it is about, else its id.
+
+    The id is left as the game writes it. Roughly 750 of the game's missions are plumbing it
+    never shows you -- they carry no text at all, and title-casing the id into "Dm Nexusmiles"
+    only dresses a code up as a name.
+    """
+    return game_title(mission_id) or subtitle(mission_id) or mission_id
 
 
 # --------------------------------------------------------------- save edits --
@@ -185,7 +268,8 @@ def list_quests(readable):
         final = final_stage(mid, version)
         rows[key] = {
             "key": key, "id": mid, "seed": entry.get("Seed", 0), "title": title(mid), "named": bool(game_title(mid)),
-            "group": info.get("title_key") or mid, "progress": progress, "final": final,
+            "subtitle": subtitle(mid), "step": step_name(mid),
+            "group": info.get("text", {}).get("title", ("",))[0] or mid, "progress": progress, "final": final,
             "status": _status(progress, final), "current": mid == current, "known": bool(info),
             "recurring": bool(info.get("recurring")), "critical": bool(info.get("critical")),
         }

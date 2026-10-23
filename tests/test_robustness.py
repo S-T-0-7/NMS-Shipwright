@@ -376,6 +376,51 @@ class GeneratorVectors(unittest.TestCase):
             self.assertLessEqual(want, got, f"{t['seed']} ({t['ship']}) lost {sorted(want - got)}")
 
 
+class QuestNames(unittest.TestCase):
+    """Quests must read as the game's own words, not as mission ids."""
+
+    @classmethod
+    def setUpClass(cls):
+        from nms_save import quests
+        cls.quests = quests
+        try:
+            quests.missions()
+        except Exception as e:
+            raise unittest.SkipTest(f"game files not available: {e}")
+
+    def test_a_storyline_names_its_steps_apart(self):
+        """The game gives a storyline one title for all of its steps, so the step's own log
+        line is what tells them apart. Without it every row read "ACT1_STEP3"."""
+        steps = ["ACT1_STEP3", "ACT1_STEP4", "ACT1_STEP5"]
+        self.assertEqual({self.quests.title(s) for s in steps}, {"Alone Amidst the Stars"})
+        lines = [self.quests.step_name(s) for s in steps]
+        self.assertTrue(all(lines), f"a step has no line of its own: {lines}")
+        self.assertEqual(len(set(lines)), len(lines), f"steps share a line: {lines}")
+
+    def test_a_name_with_a_blank_in_it_is_kept(self):
+        """Names the game completes as you play ("Trade Surge: %SYSTEM% System") used to be
+        thrown away whole, leaving the mission id on screen."""
+        for mid, want in (("TRADE_SURGE", "Trade Surge"), ("PP_BUI_KILL", "Sentinel Hunt"),
+                          ("SENTINEL_CRASH", "Salvage Site")):
+            self.assertEqual(self.quests.title(mid), want)
+
+    def test_no_name_or_line_is_left_half_written(self):
+        """Taking a blank out must not leave a gap, a stranded "of", or a lost subject."""
+        for mid in self.quests.missions():
+            for text in (self.quests.title(mid), self.quests.step_name(mid)):
+                if not text:
+                    continue
+                self.assertNotIn("%", text, mid)
+                self.assertNotIn("  ", text, mid)
+                self.assertFalse(text[0].islower(), f"{mid}: {text!r}")
+                self.assertFalse(text.rstrip().endswith((" of", " the", " from", " in")), f"{mid}: {text!r}")
+
+    def test_most_of_the_games_quests_can_be_named(self):
+        """A guard on the naming itself: if a game update moves the text, this drops."""
+        named = sum(bool(self.quests.game_title(m)) for m in self.quests.missions())
+        self.assertGreater(named, 1000)
+
+
 class OtherPeoplesPCs(unittest.TestCase):
     """The app has to work on a PC that is not the one it was built on."""
 

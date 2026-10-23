@@ -58,8 +58,14 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;
 .qlist{display:flex;flex-direction:column;gap:10px;margin-top:12px;max-width:900px}
 .qgroup{padding:10px 14px}.qhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.qhead b{font-size:15px}.qhead .btn{margin-left:auto}
 .qrow{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:6px 0;border-top:1px solid var(--line);margin-top:6px}
-.qrow.done{opacity:.55}.qrow code{flex:0 0 170px;font-size:12px;color:var(--muted);overflow-wrap:anywhere}.qrow>div:last-child{margin-left:auto}
-.qstate{flex:1 1 180px;display:flex;align-items:center;gap:8px;font-size:12.5px;min-width:0}.qstate span{white-space:nowrap}
+.qrow.done{opacity:.55}.qrow>div:last-child{margin-left:auto}
+/* the game names a storyline, not its steps -- a step is labelled with its own log line, and
+   the mission id drops to a tag under it (see quests.step_name) */
+.qname{flex:3 1 260px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.qname span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qname code{font-size:11px;color:var(--muted);opacity:.75;overflow-wrap:anywhere}
+.qsub{font-size:12.5px}
+.qstate{flex:0 1 230px;display:flex;align-items:center;gap:8px;font-size:12.5px;min-width:0}.qstate span{white-space:nowrap}
 .qstate progress{flex:0 1 160px;min-width:60px;height:8px;accent-color:var(--accent)}.badge.ok{background:#173326;color:var(--ok)}
 .lookrow{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px;align-items:center;margin:6px 0}
 .sw{display:inline-block;width:18px;height:18px;border-radius:4px;border:1px solid #fff4;vertical-align:-4px}

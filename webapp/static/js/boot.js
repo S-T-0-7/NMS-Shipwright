@@ -61,7 +61,7 @@ function renderQuests() {
   }
   const has = (g, st) => g.some(r => r.status === st || (st === 'in_progress' && r.status === 'unknown'));
   const list = [...groups.values()].filter(g => (show === 'all' || has(g, show)) &&
-      (!text || g.some(r => (r.title + ' ' + r.id).toLowerCase().includes(text))))
+      (!text || g.some(r => (r.title + ' ' + r.step + ' ' + r.id).toLowerCase().includes(text))))
     .sort((a, b) => (b.some(r => r.current) - a.some(r => r.current)) || (has(b, 'in_progress') - has(a, 'in_progress')) ||
       a[0].title.localeCompare(b[0].title));
   $('#qCount').textContent = `${list.length} quest${list.length === 1 ? '' : 's'}`;
@@ -73,8 +73,11 @@ function renderQuests() {
       (g.every(r => r.recurring) ? '<span class="badge">Repeatable</span>' : '') +
       (g.length > 1 ? `<span class="badge">${done} of ${g.length} steps finished</span>` : '');
     const head = open.length > 1 ? `<button class="btn primary" data-g="${gi}">Skip whole storyline (${open.length} steps)</button>` : '';
-    return `<div class="card qgroup"><div class="qhead"><b>${esc(g[0].title)}</b>${badges}${head}</div>` +
-      g.map((r, ri) => `<div class="qrow ${r.status === 'done' ? 'done' : ''}"><code title="Quest id">${esc(r.id)}${r.seed ? ' #' + esc(r.seed) : ''}</code>
+    const sub = g[0].subtitle && g[0].subtitle !== g[0].title ? `<span class="muted qsub">${esc(g[0].subtitle)}</span>` : '';
+    return `<div class="card qgroup"><div class="qhead"><b>${esc(g[0].title)}</b>${sub}${badges}${head}</div>` +
+      g.map((r, ri) => `<div class="qrow ${r.status === 'done' ? 'done' : ''}">
+        <div class="qname"><span title="${esc(r.step || '')}">${esc(r.step || r.title)}</span>
+          ${r.step || r.title !== r.id ? `<code title="Quest id">${esc(r.id)}${r.seed ? ' #' + esc(r.seed) : ''}</code>` : ''}</div>
         <div class="qstate">${questState(r)}</div>
         <div>${r.status === 'done' ? '' : `<button class="btn" data-g="${gi}" data-r="${ri}">Skip</button>`}</div></div>`).join('') + '</div>';
   }).join('') : '<p class="muted">No quests match.</p>';
