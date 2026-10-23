@@ -345,14 +345,17 @@ class ShipEquipment(unittest.TestCase):
         save, entry = self._save(self.FIGHTER, ["LAUNCHER", "SHIPJUMP1"])
         self.assertEqual(self.ships.wrong_core_tech(entry), [])
 
-    def test_a_sentinel_recolour_snaps_to_the_only_palette_the_game_draws(self):
-        """The game renders only the metallic palette on an interceptor; any other set shows
-        its default colour instead. A sentinel recolour must land in SHIP_METALLIC so it shows."""
-        for filename, want in ((self.SENTINEL, "SHIP_METALLIC"), (self.FIGHTER, "FREIGHTER")):
+    def test_every_ship_takes_the_paint_set_it_was_given(self):
+        """Interceptors were thought to take only metallic paint, so a recolour was snapped to
+        that set. Checked in game 2026-10-23: an interceptor painted FREIGHTER black renders
+        black, so the snap only cost the player true black, which metallic has not got."""
+        for filename in (self.SENTINEL, self.FIGHTER):
             save, _ = self._save(filename, [])
             save["BaseContext"]["PlayerStateData"]["CharacterCustomisationData"] = [{} for _ in range(26)]
-            got = self.ships.set_ship_paint(save, 0, primary=(1.0, 1.0, 1.0), palette_id="FREIGHTER")
-            self.assertEqual(got["palette"], want)
+            got = self.ships.set_ship_paint(save, 0, primary=(0.0, 0.0, 0.0), palette_id="FREIGHTER")
+            self.assertEqual(got["palette"], "FREIGHTER")
+            paint = self.ships.get_ship_paint(save, 0)
+            self.assertEqual([round(c, 3) for c in paint["primary"]], [0.0, 0.0, 0.0])
 
 
 class GeneratorVectors(unittest.TestCase):

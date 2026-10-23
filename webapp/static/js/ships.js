@@ -49,7 +49,6 @@ function selectShip(slot) {
     <div class="row" style="margin-top:10px"><label class="muted">Paint set</label><select id="pPal" title="Which set of paints"></select>
       <input type="color" id="pAny" title="Any colour: it snaps to the nearest paint in this set" style="width:38px;height:30px;padding:0;border:0;background:none">
       <span class="muted" id="pNote"></span></div>
-    <p class="muted" id="pSentinel" hidden style="margin:6px 0 0;color:var(--accent2)">The game only renders the <b>metallic</b> palette on Sentinel interceptors &mdash; colours from other sets are saved but never drawn, so the ship shows its default red. Recolour uses metallic paints here so your choice actually appears.</p>
     <div class="swatches" id="pSw"></div>
     <details class="more"><summary>More: rename, change ship type, remove</summary>
     <h3>Name</h3>
@@ -99,7 +98,7 @@ function selectShip(slot) {
          <div class="decals">${l.textures.filter(t => t.option).map(t => `<div><span class="sw" style="background:${t.rgb ? hex(t.rgb) : 'transparent'}"></span>
            ${esc(t.list.toLowerCase().replace(/_/g, ' '))} ${esc(t.layer.toLowerCase())}: <b>${esc(t.option)}</b></div>`).join('')}</div>`;
   });
-  setupPaint(slot, s.ship === 'sentinel');
+  setupPaint(slot);
   guard(() => loadStats(slot));
   if (s.is_procedural) guard(async () => {
     const r = await api(`/api/parts?ship=${encodeURIComponent(s.ship || s.filename)}&seed=${encodeURIComponent(s.seed)}`);
@@ -153,15 +152,12 @@ function namedColours(cols) {
 const nearestColour = (cols, c) => cols.reduce((best, x) =>
   (x.rgb || x).reduce((s, v, k) => s + (v - c[k]) ** 2, 0) < (best.rgb || best).reduce((s, v, k) => s + (v - c[k]) ** 2, 0) ? x : best, cols[0]);
 
-function setupPaint(slot, sentinel) {
+function setupPaint(slot) {
   const pal = $('#pPal');
-  const sets = sentinel ? {SHIP_METALLIC: PAINT_SETS.SHIP_METALLIC} : PAINT_SETS;  // sentinels only take metallic
-  if (sentinel) S.paint.palette = 'SHIP_METALLIC';
-  else if (!(S.paint.palette in PAINT_SETS)) S.paint.palette = 'FREIGHTER';
-  pal.innerHTML = Object.entries(sets).filter(([k]) => S.palettes[k])
+  if (!(S.paint.palette in PAINT_SETS)) S.paint.palette = 'FREIGHTER';
+  pal.innerHTML = Object.entries(PAINT_SETS).filter(([k]) => S.palettes[k])
     .map(([k, label]) => `<option value="${k}" ${k === S.paint.palette ? 'selected' : ''}>${esc(label)}</option>`).join('');
-  pal.disabled = !!sentinel;
-  if ($('#pSentinel')) $('#pSentinel').hidden = !sentinel;
+  pal.disabled = false;
   const livePreview = () => VIEWERS.sView && VIEWERS.sView.setColours({paint: S.paint.primary, secondary: S.paint.accent});
   const chips = () => {
     const cols = namedColours(S.palettes[pal.value] || []);

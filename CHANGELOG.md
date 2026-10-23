@@ -2,6 +2,13 @@
 
 ## UI update
 
+- **Recolour works on Sentinel interceptors, in any paint set.** 1.8.5 forced them to the
+  metallic set, believing the game drew nothing else on an interceptor. It does: an interceptor
+  painted from the Freighter set comes out that colour, **including true black**, which the
+  metallic set has not got. Every set is offered again for every ship. An unpainted interceptor
+  is also not "default red" as the old note claimed -- it wears the colour its seed gives it,
+  which runs from black through orange to near-white.
+
 - **Quests read as quests now**, not as mission ids. The game names a storyline rather than its
   steps -- all six steps of "Alone Amidst the Stars" share that one title -- so every row used to
   say `ACT1_STEP3`. Each step is now labelled with the line the game writes into your log when you
