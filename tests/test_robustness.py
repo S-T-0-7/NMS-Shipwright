@@ -220,9 +220,12 @@ class ShipModels(unittest.TestCase):
     def test_every_ship_that_deploys_can_be_flown(self):
         """Not just the Sentinel: each type with a gear or wing anim must offer a flying pose."""
         from nms_procgen import anim
-        for ship in ("sentinel", "solar", "fighter", "explorer", "shuttle", "exotic"):
+        for ship in ("sentinel", "fighter", "explorer", "shuttle", "exotic"):
             self.assertTrue(anim.posable(ship), f"{ship} should have a flying pose")
-        self.assertFalse(anim.posable("freighter"), "a freighter never takes off")
+        # A ship whose anim does not line up with its scene is left parked rather than guessed at;
+        # the sail ship's is the odd one out, and a freighter never takes off at all.
+        for ship in ("freighter", "living", "hauler", "solar"):
+            self.assertFalse(anim.posable(ship), f"{ship} has nothing it can be shown flying with")
 
     def test_the_flying_pose_bends_a_ship_without_breaking_it(self):
         """Flying moves the gear and wings only -- it must not tip, grow or tear the ship."""

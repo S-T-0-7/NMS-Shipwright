@@ -213,10 +213,9 @@ def _matrix(t) -> np.ndarray:
 
 
 def _local(name, t, pose):
-    """A node's local transform, moved by the flying pose when the deploy moves that node."""
-    m = _matrix(t)
-    d = pose.get(name.upper()) if pose else None
-    return d @ m if d is not None else m
+    """A node's local transform, or the one the parked/flying pose gives it (anim.ship_pose)."""
+    posed = pose.get(name.upper()) if pose else None
+    return _matrix(t) if posed is None else posed
 
 
 def _nodes(path):

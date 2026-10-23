@@ -23,10 +23,9 @@ from nms_save.gamefiles import array, i32, read, vstr
 # seed picked, so every candidate for a ship type is listed and matched to the scene by node name.
 # A part the ship does not have simply poses nothing.
 #
-# Only the MOVEMENT between an anim's first and last frame is used, laid on top of where the scene
-# puts the part. An anim frame cannot be used as the pose outright: a mesh is skinned to the pose
-# its own scene stores, so a skin matrix has to come out as the identity when nothing is animating,
-# and taking the skeleton from the anim instead drags the whole ship out of shape.
+# An anim's first frame is the ship parked and its last is it flying, and a frame gives a node's
+# transform outright, so it replaces the one the scene holds. The two line up: of the Sentinel's
+# 231 posed nodes, 221 start exactly where its scene puts them.
 #
 # `backwards` is for an anim that ends parked rather than starting there.
 #
@@ -57,11 +56,6 @@ SHIP_ANIMS = {
 }
 ANIM_PAK = "NMSARC.AnimMBIN.pak"
 
-# Anims are authored with the axes cycled round (X->Y->Z), so a node that never moves still reads
-# as a constant turn. Undoing it turns an anim's transform back into one the scene can use.
-AXES = np.eye(4)
-AXES[:3, :3] = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]], float)
-UNAXES = AXES.T
 
 
 @functools.lru_cache(maxsize=1)
@@ -74,14 +68,29 @@ def _layouts():
 
 
 def _frame_channels(b, off, frame_lay):
-    """(rotations [n,3] int16, scales [n,3] float, translations [n,3] float) of one frame block."""
+    """(rotations [n,3] packed uint16, scales [n,3] float, translations [n,3] float) of a frame."""
     rb, rn = array(b, off + frame_lay.off("Rotations"))
     sb, sn = array(b, off + frame_lay.off("Scales"))
     tb, tn = array(b, off + frame_lay.off("Translations"))
-    rot = np.frombuffer(b, np.int16, rn, rb).reshape(-1, 3) if rn else np.zeros((0, 3), np.int16)
+    # The list counts uint16s and a quaternion packs into three of them.
+    rot = np.frombuffer(b, np.uint16, rn, rb).reshape(-1, 3) if rn else np.zeros((0, 3), np.uint16)
     scl = np.frombuffer(b, np.float32, sn * 4, sb).reshape(-1, 4)[:, :3] if sn else np.zeros((0, 3), np.float32)
     trs = np.frombuffer(b, np.float32, tn * 4, tb).reshape(-1, 4)[:, :3] if tn else np.zeros((0, 3), np.float32)
     return rot, scl, trs
+
+
+def _unpack_quat(c):
+    """One packed rotation -> (x, y, z, w).
+
+    Quaternions are stored "smallest three": the largest component is left out and rebuilt from
+    the others, since a unit quaternion's parts square to 1. Three uint16 hold the ones that were
+    kept, each scaled to +/-1/sqrt(2) (the biggest the smallest component can be), and the top bit
+    of the first two says which one was dropped, so the rebuilt value goes back in its own place.
+    """
+    dropped = 3 - (((int(c[0]) >> 15) << 1) | (int(c[1]) >> 15))
+    kept = [(int(v & 0x7FFF) - 0x3FFF) * (1.0 / 0x3FFF) / np.sqrt(2.0) for v in c]
+    rebuilt = np.sqrt(max(0.0, 1.0 - sum(k * k for k in kept)))
+    return tuple(kept[:dropped] + [rebuilt] + kept[dropped:])
 
 
 def _quat_to_m3(q):
@@ -114,10 +123,7 @@ def pose_locals(anim_path: str, frame: int = -1) -> dict:
     n_arot, n_ascl, n_atrs = len(arot), len(ascl), len(atrs)
 
     def rot(idx):
-        r = arot[idx] if idx < n_arot else srot[idx - n_arot]
-        xyz = r.astype(np.float64) / 32767.0
-        w = np.sqrt(max(0.0, 1.0 - float(xyz @ xyz)))
-        return _quat_to_m3((xyz[0], xyz[1], xyz[2], w))
+        return _quat_to_m3(_unpack_quat(arot[idx] if idx < n_arot else srot[idx - n_arot]))
 
     def vec(idx, anim, still, n_anim, default):
         if idx < n_anim:
@@ -147,46 +153,64 @@ def _extract_anim(rel_path: str):
     return full if os.path.exists(full) else None
 
 
-@functools.lru_cache(maxsize=32)
-def ship_pose(ship: str, flying: bool) -> dict:
-    """{NODE_NAME_UPPER: 4x4} -- what flying does to each node, as a movement, not a pose.
-
-    An anim stores its nodes in its own axes (a node that never moves still reads as a constant
-    turn, the game's X->Y->Z swap), so `last @ inverse(first)` is taken: that cancels the constant
-    and leaves only the movement, which is laid on the node's scene transform as `delta @ local`.
-    Parked is the scene untouched, so this is empty unless `flying`.
-    """
-    if not flying:
+@functools.lru_cache(maxsize=16)
+def _scene_locals(ship: str) -> dict:
+    """{NODE_NAME_UPPER: [local 4x4, ...]} for every node of a ship's scene, instances included."""
+    from . import model3d
+    from .generator import ROOTS
+    if ship not in ROOTS:
+        return {}
+    root = "MODELS/" + ROOTS[ship][len("models/"):].upper().replace(".DESCRIPTOR.MBIN", ".SCENE.MBIN")
+    scene = model3d._parsed(root)
+    if not scene:
         return {}
     out: dict = {}
-    clash: set = set()
+
+    def walk(n, depth):
+        typ, name, t, attrs, children = n
+        if depth > 14:
+            return
+        out.setdefault(name.upper(), []).append(model3d._matrix(t))
+        if typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
+            sub = model3d._parsed(model3d._scene_path(attrs["SCENEGRAPH"]))
+            if sub:
+                walk(sub[1], depth + 1)
+        for c in children:
+            walk(c, depth)
+    walk(scene[1], 0)
+    return out
+
+
+@functools.lru_cache(maxsize=32)
+def ship_pose(ship: str, flying: bool) -> dict:
+    """{NODE_NAME_UPPER: 4x4} -- the local transform each node takes, parked or flying.
+
+    A deploy anim's first frame is the ship parked and its last is it flying, and a frame holds a
+    node's transform outright, so this replaces the node's scene transform rather than adding to
+    it. A node no anim covers keeps the transform its scene gives it.
+
+    A node is only posed when the anim's parked frame agrees with where this ship's scene puts it.
+    That is what picks the right anim out of the candidates: a ship carries one of the alternative
+    part sets, and they reuse each other's node names (all three of the later cockpits call a node
+    J_FrontPad), so the one that matches the scene is the one this ship actually has. It also keeps
+    an anim that was never meant for the ship from moving anything.
+    """
+    loc = _scene_locals(ship)
+    out: dict = {}
     for a in SHIP_ANIMS.get(ship, []):
         try:
-            first, last = pose_locals(a.path, 0), pose_locals(a.path, -1)
+            parked = pose_locals(a.path, -1 if a.backwards else 0)
+            wanted = pose_locals(a.path, 0 if a.backwards else -1) if flying else parked
         except Exception:  # a part anim this game build does not ship: the rest still works
             continue
-        if a.backwards:  # an anim that ends parked: its first frame is the flying one
-            first, last = last, first
-        for name, a0 in first.items():
-            aL = last.get(name)
-            if aL is None or np.allclose(a0, aL, atol=1e-6):
-                continue  # this node is still for the whole anim: leave the scene alone
-            try:
-                d = aL @ np.linalg.inv(a0)
-            except np.linalg.LinAlgError:
-                continue
-            was = out.get(name)
-            if was is not None and not np.allclose(was, d, atol=1e-6):
-                clash.add(name)  # two parts' anims disagree about this node
-            out[name] = d
-    # A ship carries one of the alternative part sets, not both, and the names repeat between them
-    # (two landing gears both calling a node BackLeg2JNT). Guessing tears the ship apart, so a node
-    # the candidates disagree about is left where the scene has it.
-    for name in clash:
-        out.pop(name, None)
+        for name, m in wanted.items():
+            here = loc.get(name)
+            if here and any(np.allclose(x, parked[name], atol=0.02) for x in here):
+                out[name] = m
     return out
 
 
 def posable(ship: str) -> bool:
     """True when parking and flying this ship actually look different."""
-    return bool(ship_pose(ship, True))
+    land, fly = ship_pose(ship, False), ship_pose(ship, True)
+    return any(k not in land or not np.allclose(land[k], m, atol=1e-6) for k, m in fly.items())
