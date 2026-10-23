@@ -212,6 +212,21 @@ def _matrix(t) -> np.ndarray:
     return m
 
 
+def _posed_joints(ship, pose):
+    """Names of the joints a ship's deploy anim drives, and so the ones we can place.
+
+    Everything else hanging off a joint is a rig the game drives at run time -- the gun turret it
+    aims, the rig it stretches a thrust trail with -- and the scene only holds those at an
+    authoring pose, which is nowhere in particular. Drawing them put guns through the hull at odd
+    angles and left thrust trails out beside the ship, so they stay out, as they were before.
+    """
+    from . import anim
+    try:
+        return frozenset(pose or ()) | frozenset(anim.ship_pose(ship, False))
+    except Exception:
+        return frozenset(pose or ())
+
+
 def _local(name, t, pose):
     """A node's local transform, or the one the parked/flying pose gives it (anim.ship_pose)."""
     posed = pose.get(name.upper()) if pose else None
@@ -331,10 +346,14 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None):
             chosen.add((real or names)[0])
     out = []
 
+    joints = _posed_joints(ship, pose)
+
     def walk(n, geometry, world, posed, depth):
         typ, name, t, attrs, children = n
         if not keep(name) or depth > 12:
             return
+        if typ == "JOINT" and name.upper() not in joints:
+            return  # a rig the game drives itself: it has no pose we can place it at
         world = world @ _matrix(t)
         posed = posed @ _local(name, t, pose)
         if typ == "MESH":
@@ -383,10 +402,14 @@ def _picked_meshes(ship, chosen, pose=None):
     lod = re.compile(r"LOD\d$")
     found: dict = {}  # part -> [(parents all picked, meshes)]
 
+    joints = _posed_joints(ship, pose)
+
     def walk(n, geometry, world, posed, depth, owner, ok):
         typ, name, t, attrs, children = n
         if depth > 12:
             return
+        if typ == "JOINT" and name.upper() not in joints:
+            return  # see _posed_joints
         up = _canon(name.upper(), options, trunc)
         if up in options:
             base = lod.sub("", up)

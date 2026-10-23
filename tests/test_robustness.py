@@ -240,7 +240,10 @@ class ShipModels(unittest.TestCase):
             self.assertEqual(lp.shape, fp.shape, f"{ship}: the pose changed the mesh itself")
             self.assertTrue(numpy.isfinite(fp).all(), f"{ship}: the flying pose broke vertices")
             moved = numpy.linalg.norm(fp - lp, axis=1)
-            self.assertGreater((moved > 1e-3).mean(), 0.02, f"{ship} did not move at all")
+            # Some ships only fold a small gear away, so what matters is that a part of the ship
+            # visibly moves, not how much of it does.
+            self.assertGreater(moved.max(), 0.1, f"{ship} did not move at all")
+            self.assertGreater((moved > 1e-3).mean(), 0.002, f"{ship} barely moved a vertex")
             # An anim read in its own axes would turn the whole ship over and throw parts off; a
             # real deploy only folds pieces in, so the ship keeps its size.
             self.assertLess(span(fp), span(lp) * 1.4, f"{ship}: flying tipped it over or tore it apart")
