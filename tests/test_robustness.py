@@ -424,6 +424,36 @@ class QuestNames(unittest.TestCase):
         self.assertGreater(named, 1000)
 
 
+class SentinelOverlay(unittest.TestCase):
+    """A sentinel's second colour only shows on seeds whose overlay reads it."""
+
+    @classmethod
+    def setUpClass(cls):
+        from nms_procgen import textures
+        cls.textures = textures
+        try:
+            textures.palettes()
+        except Exception as e:
+            raise unittest.SkipTest(f"game files not available: {e}")
+
+    def _overlay(self, seed):
+        look = self.textures.ship_look(int(seed, 16), "sentinel")
+        return next((t for t in look["textures"] if t["layer"] == "OVERLAY"), None)
+
+    def test_the_overlay_layer_is_not_thrown_away(self):
+        """Its options are tagged with a gameplay use, which merge() used to drop outright --
+        so a sentinel picked no overlay at all and its trim could not be predicted."""
+        self.assertIsNotNone(self._overlay("0xDABDF53F4A1E40C3"), "sentinel picked no overlay")
+
+    def test_the_overlay_says_which_ships_can_take_a_trim(self):
+        """Checked in game 2026-10-23: painted identically, the first renders blue hull with
+        green pincers and the second comes out one colour. Only overlay "4" reads Alternative1."""
+        two_tone = self._overlay("0xDABDF53F4A1E40C3")
+        self.assertEqual((two_tone["palette"], two_tone["alt"]), ("Paint", "Alternative1"))
+        single = self._overlay("0xDABDF53F4A1F41C3")
+        self.assertNotEqual((single["palette"], single["alt"]), ("Paint", "Alternative1"))
+
+
 class OtherPeoplesPCs(unittest.TestCase):
     """The app has to work on a PC that is not the one it was built on."""
 

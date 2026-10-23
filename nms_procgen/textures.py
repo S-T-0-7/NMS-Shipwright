@@ -215,8 +215,18 @@ def pick(merged, seed, table):
     return [(l, c) for l, c, _ in out]
 
 
-def merge(lists):
-    """Merge the layers of several texture lists (one per material sampler), as the game does."""
+# TextureGameplayUse. A spacecraft list tags every option 0, but the robot list a sentinel ship
+# draws from tags its OVERLAY options: POLICE is 1 and the four ship ones are 2. Taking only 0
+# threw that whole layer away, which is why a sentinel never picked an overlay and its second
+# colour could not be predicted.
+USE_ANY, USE_SENTINEL = 0, 2
+
+
+def merge(lists, use=USE_ANY):
+    """Merge the layers of several texture lists (one per material sampler), as the game does.
+
+    `use` is the gameplay use whose options count here, besides the untagged ones.
+    """
     merged = []
     for layers in lists:
         for layer in layers:
@@ -233,7 +243,7 @@ def merge(lists):
                 okey = (o["name"], o["alt"], o["palette"])
                 have = next((x for x in slot[2] if x[0]["okey"] == okey), None)
                 if have is None:
-                    if o["use"] != 0:  # TextureGameplayUse: only for a requested name (never on ships)
+                    if o["use"] not in (USE_ANY, use):
                         continue
                     have = [dict(o, okey=okey, weight_sum=np.float32(0)), 0]
                     slot[2].append(have)
@@ -329,7 +339,8 @@ def ship_look(seed, ship):
         lists = material_lists(material)
         if not lists:
             continue
-        merged = merge([texture_list(p) for p, c in lists.items() for _ in range(c)])
+        merged = merge([texture_list(p) for p, c in lists.items() for _ in range(c)],
+                       USE_SENTINEL if ship == "sentinel" else USE_ANY)
         for layer, opt in pick(merged, seed, table):
             key = (os.path.basename(next(iter(lists))).split(".")[0], layer["name"])
             if opt is None or key in picks:
