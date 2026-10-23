@@ -30,6 +30,8 @@ running, because the game would overwrite it.
 
 ## Install
 
+### Windows
+
 1. Go to the [releases page](../../releases) and download `NMS Shipwright Setup.exe` from the
    latest release (under **Assets**).
 2. Run it. Windows will warn that it is from an unknown publisher (the app is not code-signed):
@@ -40,6 +42,25 @@ running, because the game would overwrite it.
    keeps your game-file cache.
 
 To remove it: Settings → Apps → NMS Shipwright, or run `Uninstall.exe` from the install folder.
+
+### Linux
+
+1. On the [releases page](../../releases), open **Assets** under the latest release and download
+   `NMS_Shipwright-x86_64.AppImage`.
+2. Make it executable and run it:
+
+   ```sh
+   chmod +x NMS_Shipwright-x86_64.AppImage
+   ./NMS_Shipwright-x86_64.AppImage
+   ```
+
+   If that fails with a FUSE error, your distribution does not have FUSE 2 installed; either
+   install it, or run the AppImage with `--appimage-extract-and-run`.
+3. There is no native window on Linux: the app serves a local page and opens your browser at it.
+   Close the terminal to stop it.
+
+Nothing is installed -- the AppImage is the whole app. To remove it, delete the file. It finds
+No Man's Sky through Steam/Proton, including the save inside the game's Proton prefix.
 
 ## First run
 
