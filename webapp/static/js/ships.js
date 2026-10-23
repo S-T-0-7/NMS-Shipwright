@@ -21,7 +21,7 @@ function selectShip(slot) {
   const s = S.ships.find(x => x.index === slot); if (!s) return;
   const p = s.paint || {};
   S.paint = {primary: p.primary || [0, 0, 0], accent: p.accent || p.primary || [0, 0, 0], palette: p.palette || 'FREIGHTER',
-             primary_index: p.primary_index, accent_index: p.accent_index};
+             primary_index: p.primary_index, accent_index: p.accent_index, channels: p.channels || null};
   $('#shipDetail').innerHTML = `
     <h2 style="margin:0">${esc(s.name || '(unnamed)')} <span class="muted" style="font-weight:400">&middot; ${esc(s.category)} &middot; slot ${s.index}</span></h2>
     <div class="hero" id="sView" style="margin-top:10px">${s.ship ? '<span class="muted">Loading 3D model...</span>'
@@ -39,10 +39,10 @@ function selectShip(slot) {
     <h3>Stats</h3>
     <div class="card" style="padding:14px" id="sStats"><span class="muted">Loading...</span></div>
     <h3>Recolour</h3>
-    <p class="muted" style="margin:0 0 8px">Step 1: click <b>Body</b> or <b>Trim</b>. Step 2: click a colour below. The preview above updates as you pick.
+    <p class="muted" style="margin:0 0 8px">Step 1: click a part of the ship below. Step 2: click a colour. The preview above updates as you pick.
       Step 3: press Save these colours. ${s.paint ? '<b>This ship is painted by you.</b>' : 'This ship still uses its own colours.'}</p>
-    <div class="row">
-      <button class="btn chip" id="pPri"><i></i><span>Body</span></button><button class="btn chip" id="pAcc"><i></i><span>Trim</span></button>
+    <div class="row" id="pChips"></div>
+    <div class="row" style="margin-top:8px">
       <span class="muted" id="pPicking"></span><span style="flex:1"></span>
       <button class="btn primary" id="pApply">${ic('check')}Save these colours</button>
       <button class="btn danger" id="pClear">${ic('trash')}Remove my paint</button></div>
@@ -98,7 +98,7 @@ function selectShip(slot) {
          <div class="decals">${l.textures.filter(t => t.option).map(t => `<div><span class="sw" style="background:${t.rgb ? hex(t.rgb) : 'transparent'}"></span>
            ${esc(t.list.toLowerCase().replace(/_/g, ' '))} ${esc(t.layer.toLowerCase())}: <b>${esc(t.option)}</b></div>`).join('')}</div>`;
   });
-  setupPaint(slot);
+  setupPaint(slot, s.ship, s.seed);
   guard(() => loadStats(slot));
   if (s.is_procedural) guard(async () => {
     const r = await api(`/api/parts?ship=${encodeURIComponent(s.ship || s.filename)}&seed=${encodeURIComponent(s.seed)}`);
@@ -152,29 +152,47 @@ function namedColours(cols) {
 const nearestColour = (cols, c) => cols.reduce((best, x) =>
   (x.rgb || x).reduce((s, v, k) => s + (v - c[k]) ** 2, 0) < (best.rgb || best).reduce((s, v, k) => s + (v - c[k]) ** 2, 0) ? x : best, cols[0]);
 
-function setupPaint(slot) {
+/* The game gives a ship five paint slots and each ship draws a different handful of them --
+   see textures.paint_channels. Ask which, and offer exactly those. */
+async function setupPaint(slot, ship, seed) {
   const pal = $('#pPal');
+  let channels = [{alt: 'Primary', name: 'Body'}];
+  if (ship && seed) {
+    try {
+      channels = (await api(`/api/ship/channels?ship=${encodeURIComponent(ship)}&seed=${encodeURIComponent(seed)}`)).channels;
+    } catch (e) { /* fall back to the body alone rather than offering slots we cannot vouch for */ }
+  }
+  const stored = (S.paint && S.paint.channels) || {};
+  S.channels = {};
+  for (const c of channels) {
+    const had = stored[c.alt];
+    S.channels[c.alt] = had ? {rgb: had.rgb, index: had.index}
+                            : {rgb: S.paint.primary || [0, 0, 0], index: S.paint.primary_index ?? -1};
+  }
+  S.target = channels[0].alt;
   if (!(S.paint.palette in PAINT_SETS)) S.paint.palette = 'FREIGHTER';
   pal.innerHTML = Object.entries(PAINT_SETS).filter(([k]) => S.palettes[k])
     .map(([k, label]) => `<option value="${k}" ${k === S.paint.palette ? 'selected' : ''}>${esc(label)}</option>`).join('');
   pal.disabled = false;
-  const livePreview = () => VIEWERS.sView && VIEWERS.sView.setColours({paint: S.paint.primary, secondary: S.paint.accent});
+  const body = () => S.channels[ship === 'sentinel' && S.channels.Alternative1 ? 'Alternative1' : 'Primary'];
+  const trim = () => S.channels[ship === 'sentinel' ? 'Primary' : 'Alternative1'] || body();
+  const livePreview = () => VIEWERS.sView && VIEWERS.sView.setColours({paint: body().rgb, secondary: trim().rgb});
+  const label = alt => (channels.find(c => c.alt === alt) || {}).name || alt;
   const chips = () => {
     const cols = namedColours(S.palettes[pal.value] || []);
-    for (const [id, key] of [['#pPri', 'primary'], ['#pAcc', 'accent']]) {
-      $(id + ' i').style.background = hex(S.paint[key]);
-      $(id + ' span').textContent = `${id === '#pPri' ? 'Body' : 'Trim'}: ${nearestColour(cols, S.paint[key]).name}`;
-      $(id).classList.toggle('primary', S.target === key);
-    }
-    $('#pPicking').textContent = `Click a colour to set the ${S.target === 'primary' ? 'body' : 'trim'}`;
+    $('#pChips').innerHTML = channels.map(c =>
+      `<button class="btn chip ${S.target === c.alt ? 'primary' : ''}" data-alt="${esc(c.alt)}"
+         title="paints ${esc((c.layers || []).join(', '))}"><i style="background:${hex(S.channels[c.alt].rgb)}"></i>
+         <span>${esc(c.name)}: ${esc(nearestColour(cols, S.channels[c.alt].rgb).name)}</span></button>`).join('');
+    $$('#pChips button').forEach(b => b.onclick = () => { S.target = b.dataset.alt; chips(); });
+    $('#pPicking').textContent = `Click a colour to set the ${label(S.target).toLowerCase()}`;
     livePreview();
   };
   const swatches = () => {
     const cols = namedColours(S.palettes[pal.value] || []);
     $('#pSw').innerHTML = cols.map(c => `<i title="${esc(c.name)}" data-i="${c.i}"><b style="background:${hex(c.rgb)}"></b>${esc(c.name)}</i>`).join('');
     $$('#pSw i').forEach(el => el.onclick = () => {
-      S.paint[S.target] = cols[+el.dataset.i].rgb;                  // the colour itself
-      S.paint[S.target + '_index'] = +el.dataset.i;                 // and which slot of the palette it is
+      S.channels[S.target] = {rgb: cols[+el.dataset.i].rgb, index: +el.dataset.i};
       chips();
     });
     $('#pNote').textContent = `${cols.length} paints in this set. The game only uses these, so any other colour snaps to the closest one.`;
@@ -183,17 +201,17 @@ function setupPaint(slot) {
   $('#pAny').oninput = e => {
     const v = e.target.value, want = [1, 3, 5].map(i => parseInt(v.substr(i, 2), 16) / 255);
     const near = nearestColour(namedColours(S.palettes[pal.value] || []), want);  // show what the game will really use
-    S.paint[S.target] = near.rgb; S.paint[S.target + '_index'] = near.i; chips();
+    S.channels[S.target] = {rgb: near.rgb, index: near.i}; chips();
     $('#pNote').textContent = `Nearest paint in this set: ${near.name}.`;
   };
-  $('#pPri').onclick = () => { S.target = 'primary'; chips(); };
-  $('#pAcc').onclick = () => { S.target = 'accent'; chips(); };
   $('#pApply').onclick = () => guard(async () => {
-    await post('/api/ship/paint', {path: S.path, slot, primary: S.paint.primary, accent: S.paint.accent, palette: pal.value,
-                                   primary_index: S.paint.primary_index, accent_index: S.paint.accent_index});
+    const b = body();
+    await post('/api/ship/paint', {path: S.path, slot, palette: pal.value, channels: S.channels,
+                                   primary: b.rgb, primary_index: b.index,
+                                   accent: trim().rgb, accent_index: trim().index});
     const cols = namedColours(S.palettes[pal.value] || []);
-    showBanner(`Painted slot ${slot}: body ${nearestColour(cols, S.paint.primary).name}, trim ${nearestColour(cols, S.paint.accent).name}`
-               + ` (${PAINT_SETS[pal.value]}). Backup made. Load this save in the game to see it.`, false);
+    const said = channels.map(c => `${c.name.toLowerCase()} ${nearestColour(cols, S.channels[c.alt].rgb).name}`).join(', ');
+    showBanner(`Painted slot ${slot}: ${said} (${PAINT_SETS[pal.value]}). Backup made. Load this save in the game to see it.`, false);
     await loadShips();
   });
   $('#pClear').onclick = () => guard(async () => { await post('/api/ship/paint/clear', {path: S.path, slot}); toast('Paint removed, back to its own colours. Backup made.'); await loadShips(); });

@@ -6,7 +6,7 @@ import warnings
 
 from flask import Blueprint, jsonify, request
 
-from nms_procgen import locate
+from nms_procgen import locate, textures
 from nms_save import items, locator, player, ships
 
 from webapp.common import (PALETTES, SHIP_LABELS, SHIP_MODELS, SPECIAL_SHIPS, body, game_running, model_filename,
@@ -158,7 +158,8 @@ def api_ship_paint():
     b = body()
     opened = open_save(b.get("path"))
     out = ships.set_ship_paint(opened.readable, int(b["slot"]), b.get("primary", [0, 0, 0]), b.get("accent"),
-                               b.get("palette", "FREIGHTER"), b.get("primary_index"), b.get("accent_index"))
+                               b.get("palette", "FREIGHTER"), b.get("primary_index"), b.get("accent_index"),
+                               b.get("channels"))
     return jsonify({"ok": True, **out, "backup": write(opened)})
 
 
@@ -191,6 +192,51 @@ def api_ship_refit():
 
     return jsonify({"ok": True, "backup": write(opened),
                     "swaps": [{"from": label(a), "to": label(c)} for a, c in swaps]})
+
+
+# What each paint slot is called on screen. The names come from the layers a ship draws with
+# that slot (see textures.paint_channels); an interceptor is named apart because its hull comes
+# from Alternative1 and only its pincers from Primary -- the reverse of every other ship.
+# Nearly every slot paints some BASE layer, so BASE says nothing about which slot this is. Only
+# the telling layer names are here; a slot with none of them falls back to what that slot is
+# usually for.
+_LAYER_NAMES = {"MARKINGS": "Markings", "NUMBER": "Markings", "SIGNAGE": "Signage",
+                "LETTERING": "Signage", "LOGO": "Signage", "SMALLSIGN": "Small signs",
+                "TERTIARY": "Trim"}
+_SLOT_NAMES = {"Primary": "Body", "Alternative1": "Markings", "Alternative2": "Signage",
+               "Alternative3": "Small signs", "Alternative4": "Trim"}
+
+
+@bp.route("/api/ship/channels")
+def api_ship_channels():
+    """The paint slots this ship really draws, named for what each one paints."""
+    a = request.args
+    ship, seed = a.get("ship"), a.get("seed")
+    if not ship or not seed:
+        raise ValueError("ship and seed are required")
+    found = textures.paint_channels(int(seed, 16), ship)
+    # An interceptor draws its hull from Alternative1 and only its pincers from Primary, so it is
+    # named apart -- but only when it has both. On a seed whose overlay never reads Alternative1
+    # the single colour it has IS the whole ship.
+    two_tone = ship == "sentinel" and any(c["alt"] == "Alternative1" for c in found)
+    out = []
+    for c in found:
+        alt, layers = c["alt"], c["layers"]
+        if two_tone and alt in ("Primary", "Alternative1"):
+            name = "Pincers" if alt == "Primary" else "Hull"
+        else:
+            named = [_LAYER_NAMES[x] for x in layers if x in _LAYER_NAMES]
+            name = named[0] if named else _SLOT_NAMES.get(alt, alt)
+        out.append({"alt": alt, "name": name, "layers": layers})
+    seen = {}
+    for c in out:  # two slots can paint the same kind of thing; number them rather than repeat
+        seen[c["name"]] = seen.get(c["name"], 0) + 1
+    count = {}
+    for c in out:
+        if seen[c["name"]] > 1:
+            count[c["name"]] = count.get(c["name"], 0) + 1
+            c["name"] = f'{c["name"]} {count[c["name"]]}'
+    return jsonify({"ship": ship, "seed": seed, "channels": out})
 
 
 @bp.route("/api/ship/paint/clear", methods=["POST"])

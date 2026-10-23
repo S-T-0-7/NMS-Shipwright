@@ -255,12 +255,17 @@ def palette_index(palette_id: str, rgb) -> int:
 
 def set_ship_paint(readable_json: dict, slot: int, primary=(0.0, 0.0, 0.0), accent=None,
                    palette_id: str = "FREIGHTER", primary_index: int | None = None,
-                   accent_index: int | None = None) -> dict:
+                   accent_index: int | None = None, channels: dict | None = None) -> dict:
     """Paint a ship: a palette plus the slot in it, as Starship Outfitting stores it.
 
     FREIGHTER has true black, SHIP does not. Every ship type takes every set, Sentinel
     interceptors included -- an interceptor painted FREIGHTER black renders black in game
     (checked 2026-10-23). Returns the slots written.
+
+    `channels` is {alt: {"rgb": [r, g, b], "index": n}} and paints each of the ship's slots
+    separately -- see textures.paint_channels for which ones it draws. Without it the old two
+    colours are used, the accent going to every Alternative, which is what the game does when
+    it has only the one trim colour to give.
     """
     _populated_entry(readable_json, slot)
     accent = primary if accent is None else accent
@@ -273,13 +278,18 @@ def set_ship_paint(readable_json: dict, slot: int, primary=(0.0, 0.0, 0.0), acce
         primary = colours[primary_index]
     if 0 <= accent_index < len(colours):
         accent = colours[accent_index]
+    per = {alt: {"rgb": primary if alt == "Primary" else accent,
+                 "index": primary_index if alt == "Primary" else accent_index} for alt in PAINT_ALTS}
+    for alt, want in (channels or {}).items():
+        if alt in per:
+            per[alt] = {"rgb": want["rgb"], "index": int(want.get("index", -1))}
     data = _dig(readable_json, CUSTOMISATION_PATH)[customisation_index(slot)].setdefault("CustomData", {})
     data["PaletteID"] = "^" + palette_id
-    data["Colours"] = [{"Palette": {"Palette": "Paint", "ColourAlt": alt,
-                                    "Index": int(primary_index if alt == "Primary" else accent_index)},
-                        "Colour": [float(c) for c in (primary if alt == "Primary" else accent)][:3] + [1.0]}
-                       for alt in PAINT_ALTS]
-    return {"palette": palette_id, "primary_index": int(primary_index), "accent_index": int(accent_index)}
+    data["Colours"] = [{"Palette": {"Palette": "Paint", "ColourAlt": alt, "Index": int(per[alt]["index"])},
+                        "Colour": [float(c) for c in per[alt]["rgb"]][:3] + [1.0]} for alt in PAINT_ALTS]
+    return {"palette": palette_id, "primary_index": int(primary_index), "accent_index": int(accent_index),
+            "channels": {a: {"rgb": [float(c) for c in per[a]["rgb"]][:3], "index": int(per[a]["index"])}
+                         for a in PAINT_ALTS}}
 
 
 def get_ship_paint(readable_json: dict, slot: int):
@@ -295,7 +305,8 @@ def get_ship_paint(readable_json: dict, slot: int):
            if c.get("Palette", {}).get("Palette") == "Paint"}
     return {"palette": data.get("PaletteID", "^").lstrip("^"), "primary": cols.get("Primary"),
             "accent": cols.get("Alternative1", cols.get("Primary")),
-            "primary_index": idx.get("Primary", -1), "accent_index": idx.get("Alternative1", -1)}
+            "primary_index": idx.get("Primary", -1), "accent_index": idx.get("Alternative1", -1),
+            "channels": {a: {"rgb": cols[a], "index": idx.get(a, -1)} for a in PAINT_ALTS if a in cols}}
 
 
 FREIGHTER_MODELS = {"freighter": "MODELS/COMMON/SPACECRAFT/INDUSTRIAL/FREIGHTER_PROC.SCENE.MBIN",
