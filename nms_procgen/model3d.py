@@ -39,7 +39,11 @@ MAT_JET = 2                        # an engine's jet flame, which the scene puts
 # quarter turn, which takes the barrels from straight up to level and forward.
 GUN_JOINTS = frozenset({"TURRENTROOT", "TURRETROOT", "TURRETJNT", "TURRETENDJNT",  # the game spells it TURRENTROOT
                         "HINGE1JNT", "HINGE2JNT", "HINGE3JNT"})
+GUN_ROOTS = frozenset({"TURRENTROOT", "TURRETROOT"})  # the one the whole gun hangs from
 GUN_AIM = np.array([[1., 0., 0.], [0., 0., -1.], [0., 1., 0.]])
+# Pointed forward the gun sits half inside the wing it hangs under, so it is dropped to hang below
+# it: on a fighter the gun stands 0.79 to 1.46 high and the wing around it 1.01 to 1.30.
+GUN_DROP = 0.45
 MAT_GLASS = {62}                   # canopies, screens, refraction
 SKIP_SHADERS = ("PARTICLE", "DEFERREDDECAL")  # effects and decals the game draws over the hull
 
@@ -282,6 +286,9 @@ def _scene_meshes(root, pose=None):
         if gun:  # see GUN_AIM
             world, posed = world.copy(), posed.copy()
             world[:3, :3] = posed[:3, :3] = GUN_AIM
+            if name.upper() in GUN_ROOTS:
+                world[1, 3] -= GUN_DROP
+                posed[1, 3] -= GUN_DROP
         if typ == "MESH":
             suffix = LOD_SUFFIX.search(name)
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
@@ -358,6 +365,9 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None, joints=frozenset()
         if gun:  # see GUN_AIM
             world, posed = world.copy(), posed.copy()
             world[:3, :3] = posed[:3, :3] = GUN_AIM
+            if name.upper() in GUN_ROOTS:
+                world[1, 3] -= GUN_DROP
+                posed[1, 3] -= GUN_DROP
         if typ == "MESH":
             # Lower-detail copies sit inside the full-detail mesh and poke through it. Some of them
             # claim LODLEVEL 0, so the name (...LOD2) decides as well.
@@ -430,6 +440,9 @@ def _picked_meshes(ship, chosen, pose=None, joints=frozenset(), collect=None):
         if gun:  # see GUN_AIM
             world, posed = world.copy(), posed.copy()
             world[:3, :3] = posed[:3, :3] = GUN_AIM
+            if name.upper() in GUN_ROOTS:
+                world[1, 3] -= GUN_DROP
+                posed[1, 3] -= GUN_DROP
         if typ == "MESH":
             suffix = LOD_SUFFIX.search(name)
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
