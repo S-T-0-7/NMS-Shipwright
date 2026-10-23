@@ -30,6 +30,7 @@ _LOCK = threading.Lock()
 # must stay invisible here, or it shows up as stray dark facets over the hull.
 MAT_SKIP = {12: "decal", 14: "mask", 58: "reflection plane", 59: "shadow only", 70: "volume", 71: "volume"}
 MAT_GLOW = {2, 9, 10, 18, 19, 22}  # lights, glows and holograms: added on top, never solid
+MAT_JET = 2                        # an engine's jet flame, which the scene puts at its nozzle
 MAT_GLASS = {62}                   # canopies, screens, refraction
 SKIP_SHADERS = ("PARTICLE", "DEFERREDDECAL")  # effects and decals the game draws over the hull
 
@@ -348,12 +349,11 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None):
 
     joints = _posed_joints(ship, pose)
 
-    def walk(n, geometry, world, posed, depth):
+    def walk(n, geometry, world, posed, depth, rig):
         typ, name, t, attrs, children = n
         if not keep(name) or depth > 12:
             return
-        if typ == "JOINT" and name.upper() not in joints:
-            return  # a rig the game drives itself: it has no pose we can place it at
+        rig = rig or (typ == "JOINT" and name.upper() not in joints)
         world = world @ _matrix(t)
         posed = posed @ _local(name, t, pose)
         if typ == "MESH":
@@ -363,23 +363,25 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None):
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
                 return
             cls = mat_class(attrs.get("MATERIAL", ""))
+            if rig and _material_class(attrs.get("MATERIAL", ""))[0] != MAT_JET:
+                return  # see _posed_joints: only the jet still belongs where the scene put it
             if attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
                 out.append((geometry, int(attrs["HASH"]), world, cls, posed, int(attrs.get("FIRSTSKINMAT") or 0)))
         elif typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
             sub = _parsed(_scene_path(attrs["SCENEGRAPH"]))
             if sub:
-                walk(sub[1], sub[0], world, posed, depth + 1)
+                walk(sub[1], sub[0], world, posed, depth + 1, rig)
         elif typ in ("COLLISION", "LIGHT", "EMITTER"):
             return
         if designing and children:
             fill_defaults(children)
         for c in children:
-            walk(c, geometry, world, posed, depth)
+            walk(c, geometry, world, posed, depth, rig)
     root = "MODELS/" + ROOTS[ship][len("models/"):].upper().replace(".DESCRIPTOR.MBIN", ".SCENE.MBIN")
     scene = _parsed(root)
     if not scene:
         raise FileNotFoundError(f"scene {root} not found")
-    walk(scene[1], scene[0], np.eye(4), np.eye(4), 0)
+    walk(scene[1], scene[0], np.eye(4), np.eye(4), 0, False)
     kept = [m for m in out if m[3] != "skip"]
     # Never hide the ship: if the material files say almost everything is invisible, they were
     # unreadable (a game update, or a half-finished copy), so fall back to the names alone.
@@ -404,12 +406,11 @@ def _picked_meshes(ship, chosen, pose=None):
 
     joints = _posed_joints(ship, pose)
 
-    def walk(n, geometry, world, posed, depth, owner, ok):
+    def walk(n, geometry, world, posed, depth, owner, ok, rig):
         typ, name, t, attrs, children = n
         if depth > 12:
             return
-        if typ == "JOINT" and name.upper() not in joints:
-            return  # see _posed_joints
+        rig = rig or (typ == "JOINT" and name.upper() not in joints)
         up = _canon(name.upper(), options, trunc)
         if up in options:
             base = lod.sub("", up)
@@ -427,23 +428,25 @@ def _picked_meshes(ship, chosen, pose=None):
             suffix = LOD_SUFFIX.search(name)
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
                 return
+            if rig and _material_class(attrs.get("MATERIAL", ""))[0] != MAT_JET:
+                return  # see _posed_joints
             if owner is not None and attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
                 owner.append((geometry, int(attrs["HASH"]), world, mat_class(attrs.get("MATERIAL", "")), posed,
                               int(attrs.get("FIRSTSKINMAT") or 0)))
         elif typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
             sub = _parsed(_scene_path(attrs["SCENEGRAPH"]))
             if sub:
-                walk(sub[1], sub[0], world, posed, depth + 1, owner, ok)
+                walk(sub[1], sub[0], world, posed, depth + 1, owner, ok, rig)
         elif typ in ("COLLISION", "LIGHT", "EMITTER"):
             return
         for c in children:
-            walk(c, geometry, world, posed, depth, owner, ok)
+            walk(c, geometry, world, posed, depth, owner, ok, rig)
     root = "MODELS/" + ROOTS[ship][len("models/"):].upper().replace(".DESCRIPTOR.MBIN", ".SCENE.MBIN")
     scene = _parsed(root)
     if not scene:
         raise FileNotFoundError(f"scene {root} not found")
     base: list = []  # fixed pieces no option owns (cockpit lid, landing gear, guns)
-    walk(scene[1], scene[0], np.eye(4), np.eye(4), 0, base, True)
+    walk(scene[1], scene[0], np.eye(4), np.eye(4), 0, base, True, False)
     out = [m for m in base if m[3] != "glow"] if chosen else []
     for copies in found.values():
         best = [m for ok, m in copies if ok and m] or [m for _, m in copies if m][:1]
