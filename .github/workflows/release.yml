@@ -4,7 +4,7 @@ name: Release
 # release. Nothing from No Man's Sky is needed to build: the installer only carries the app, which
 # reads the game's own files on the player's PC at runtime.
 #
-# To cut a release: bump VERSION in scripts/build_app.py and add a CHANGELOG entry, commit, then
+# To cut a release: bump VERSION in webapp/version.py and add a CHANGELOG entry, commit, then
 #     git tag v1.8.4 && git push origin v1.8.4
 # The workflow checks the tag matches VERSION, builds, and publishes the release with the installer
 # attached and the changelog section as the notes. "Run workflow" builds without releasing.
@@ -41,8 +41,8 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}".TrimStart("v")
-          $ver = (Select-String -Path scripts/build_app.py -Pattern '^VERSION = "(.+)"').Matches.Groups[1].Value
-          if ($tag -ne $ver) { throw "Tag $tag does not match VERSION $ver in scripts/build_app.py" }
+          $ver = (Select-String -Path webapp/version.py -Pattern '^VERSION = "(.+)"').Matches.Groups[1].Value
+          if ($tag -ne $ver) { throw "Tag $tag does not match VERSION $ver in webapp/version.py" }
           "Building version $ver" | Out-Host
 
       - name: Build the installer
@@ -93,7 +93,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          ver="$(grep -oP '^VERSION = "\K[^"]+' scripts/build_app.py)"
+          ver="$(grep -oP '^VERSION = "\K[^"]+' webapp/version.py)"
           [ "$tag" = "$ver" ] || { echo "Tag $tag does not match VERSION $ver"; exit 1; }
 
       - name: Build the AppImage
