@@ -157,31 +157,52 @@ FITS = 0.6  # how much of an anim must land on the scene before it is this ship'
 
 
 def ship_pose(ship: str, flying: bool, loc: dict) -> dict:
-    """{NODE_NAME_UPPER: 4x4} -- the local transform each node takes, parked or flying.
+    """{NODE_NAME_UPPER: 4x4} -- what flying does to a node, as a movement to lay on its scene
+    transform (`delta @ scene_local`). Parked is the scene untouched, so that comes back empty.
 
-    A deploy anim's first frame is the ship parked and its last is it flying, and a frame holds a
-    node's transform outright, so this replaces the node's scene transform rather than adding to
-    it. A node no anim covers keeps the transform its scene gives it. `loc` is {node name: [local
-    4x4, ...]} for the nodes this ship carries -- see _fitting.
+    The movement is `last @ inverse(first)` of a deploy anim: a node that does not animate comes
+    out as the identity and is left alone. Taking the frame as the pose outright would be the same
+    thing wherever the two agree -- and on a Sentinel 221 of its 231 nodes do -- but on the ten
+    that do not it drags the node off to where the anim holds it, which left a swing-wing turned
+    over on its hinge. Keeping the scene's own placing and adding only the movement cannot.
 
-    An anim is taken or left as a whole, by whether the nodes it drives start where this ship's
-    scene puts them. That picks the right one out of the candidates -- a ship carries one of the
-    alternative part sets and they reuse each other's node names, so of the five cockpit gears only
-    the one this ship wears fits -- and drops an anim that was never this ship's. Judging each node
-    on its own looked safer but was worse: a node can sit a little off where its anim starts and
-    still be driven by it, and dropping those left a Sentinel opening one wing and not the other.
+    `loc` is {node name: [local 4x4, ...]} for the nodes this ship carries -- see _fitting.
     """
+    if not flying:
+        return {}
     out: dict = {}
     # Best fit first, and the first to claim a node keeps it: where two candidates both drive a
     # node (the later cockpits all call one J_FrontPad) the one that fits this ship decides.
     for _, a in sorted(_fitting(ship, loc), key=lambda r: -r[0]):
         try:
-            frame = pose_locals(a.path, 0 if flying == a.backwards else -1)
+            parked = pose_locals(a.path, -1 if a.backwards else 0)
+            flown = pose_locals(a.path, 0 if a.backwards else -1)
         except Exception:
             continue
-        for name, m in frame.items():
-            out.setdefault(name, m)
+        for name, m in parked.items():
+            end = flown.get(name)
+            if end is None or np.allclose(m, end, atol=1e-6) or name in out:
+                continue
+            try:
+                out[name] = end @ np.linalg.inv(m)
+            except np.linalg.LinAlgError:
+                pass
     return out
+
+
+def driven(ship: str, loc: dict) -> frozenset:
+    """Every node this ship's deploy anims cover, moving or not.
+
+    What hangs off one of these joints can be placed, because the anim accounts for it. Anything
+    else on a joint is a rig the game drives itself -- see model3d's walk.
+    """
+    out: set = set()
+    for _, a in _fitting(ship, loc):
+        try:
+            out.update(pose_locals(a.path, 0))
+        except Exception:
+            pass
+    return frozenset(out)
 
 
 def _fitting(ship: str, loc: dict) -> tuple:

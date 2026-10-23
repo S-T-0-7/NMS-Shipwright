@@ -29,7 +29,14 @@ BLEND_INDEX, BLEND_WEIGHT = 5, 6  # cTkVertexElement SemanticIDs in the skinned 
 
 
 def _joint_worlds(scene_path: str, pose: dict) -> dict:
-    """{JOINTINDEX: (bind 4x4, posed 4x4)} in this part's model space (its scene from identity)."""
+    """{JOINTINDEX: (bind 4x4, posed 4x4)} in this part's model space (its scene from identity).
+
+    Only this scene's own joints count. JOINTINDEX is numbered per scene, not across a whole ship,
+    so following its references pulls in other parts numbering from 1 again: on a Sentinel index 3
+    names two dozen different joints that way, and the first one found drove the skin instead of
+    the right one, which left a swing-wing upside down and off its hinge. A part's scene holds its
+    whole skeleton anyway -- all 57 of the Sentinel's, with no number used twice.
+    """
     from . import model3d
     sc = model3d._parsed(scene_path)
     if not sc:
@@ -47,10 +54,6 @@ def _joint_worlds(scene_path: str, pose: dict) -> dict:
                 out.setdefault(int(attrs["JOINTINDEX"]), (wb, wp))
             except ValueError:
                 pass
-        if typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
-            sub = model3d._parsed(model3d._scene_path(attrs["SCENEGRAPH"]))
-            if sub:
-                walk(sub[1], wb, wp, depth + 1)
         for c in children:
             walk(c, wb, wp, depth)
     walk(sc[1], np.eye(4), np.eye(4), 0)

@@ -214,9 +214,10 @@ def _matrix(t) -> np.ndarray:
 
 
 def _local(name, t, pose):
-    """A node's local transform, or the one the parked/flying pose gives it (anim.ship_pose)."""
-    posed = pose.get(name.upper()) if pose else None
-    return _matrix(t) if posed is None else posed
+    """A node's local transform, with the flying pose's movement on it (see anim.ship_pose)."""
+    m = _matrix(t)
+    d = pose.get(name.upper()) if pose else None
+    return d @ m if d is not None else m
 
 
 def _nodes(path):
@@ -454,9 +455,9 @@ def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
     # those, then the real pass with the pose that comes out of it.
     here: dict = {}
     ship_meshes(seed, ship, parts, fill, None, frozenset(), here)
-    parked, flown = anim.ship_pose(ship, False, here), anim.ship_pose(ship, True, here)
-    joints = frozenset(parked) | frozenset(flown)
-    pose = flown if flying else parked
+    flown = anim.ship_pose(ship, True, here)
+    joints = anim.driven(ship, here)
+    pose = flown if flying else None
     meshes = ship_meshes(seed, ship, parts, fill, pose, joints)
     geos = _geometry(sorted({g for g, *_ in meshes if g}))
     bend: dict = {}
@@ -489,8 +490,7 @@ def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
               for cls, v in acc.items() if v[0]}
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
     return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()),
-            "posable": any(k not in parked or not np.allclose(parked[k], m, atol=1e-6)
-                           for k, m in flown.items())}  # offers a landed/flying toggle
+            "posable": bool(flown)}  # offers a landed/flying toggle
 
 
 def pack(model: dict, colours: dict | None = None) -> bytes:
