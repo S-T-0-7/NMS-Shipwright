@@ -12,7 +12,9 @@ cd "$(dirname "$0")/.."
 NAME="NMS Shipwright"
 APPDIR="dist/${NAME}.AppDir"
 OUT="dist/NMS_Shipwright-x86_64.AppImage"
-VERSION="$(grep -oP '^VERSION = "\K[^"]+' scripts/build_app.py)"
+# the version lives in webapp/version.py; say so rather than dying silently if it moves again
+VERSION="$(grep -oP '^VERSION = "\K[^"]+' webapp/version.py)" ||
+  { echo "no VERSION in webapp/version.py" >&2; exit 1; }
 
 echo ">> building the app folder"
 python scripts/build_app.py --no-installer
