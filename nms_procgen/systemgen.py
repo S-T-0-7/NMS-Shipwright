@@ -10,6 +10,7 @@
 # 3 gen steps touching live-only objects (asteroids, palettes) skipped, none seed ships.
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import threading
@@ -155,6 +156,62 @@ class SystemGen:
                          "levels": levels, "ok": r["ok"],
                          "sentinels": SENTINEL_LEVELS[lvl] if 0 <= lvl < len(SENTINEL_LEVELS) else "?"})
         return rows
+
+
+# ------------------------------------------------- confirming a reversed seed --
+
+_SHARED: dict = {"sg": None}
+_SHARED_LOCK = threading.Lock()
+
+
+@contextlib.contextmanager
+def borrow():
+    """The one SystemGen the web app's own requests take turns on (scans have their own pool).
+
+    An emulator is a single machine with one memory, so a caller holds it for the whole of
+    what it is doing, not just long enough to fetch it.
+    """
+    with _SHARED_LOCK:
+        if _SHARED["sg"] is None:
+            _SHARED["sg"] = SystemGen()
+        yield _SHARED["sg"]
+
+
+def confirm(seed, rows):
+    """Generate each candidate system from locate() and keep the ones that really hold `seed`.
+
+    Reversing a seed to a universe address is exact, but it has to guess how far back the
+    system is, and every guess it tries is another chance to land on an address that only
+    looks real -- better than one seed in ten invents a system that way. Generating the
+    candidate settles it: either the system makes this exact ship or it does not. Each row
+    gains "where" (crash site, space station, ...) and "what" (the kind of ship).
+
+    Rows it cannot check -- no game files, a generator failure -- come back untouched and
+    without "where", so the caller can tell "not there" from "could not look".
+    """
+    if isinstance(seed, str):
+        seed = int(seed, 16)
+    out = []
+    with borrow() as sg:
+        for row in rows:
+            ua = int(row["ua"], 16) if isinstance(row.get("ua"), str) else row.get("ua")
+            try:
+                s = sg.system(ua)
+                if s["interceptor"] == seed:  # only now is the slower planet pass worth it
+                    s = sg.system(ua, planets=True)
+            except Exception:  # an unreadable system is not evidence either way
+                out.append(dict(row))
+                continue
+            if s["interceptor"] == seed:
+                # the crash site itself only exists where the sentinels have gone corrupt
+                if not s.get("dissonant"):
+                    continue
+                out.append({**row, "where": "crash site", "what": "sentinel interceptor"})
+                continue
+            match = next((sh for sh in s["ships"] if sh["seed"] == seed), None)
+            if match:
+                out.append({**row, "where": match["kind"], "what": match["type"]})
+    return out
 
 
 SCAN_TYPES = ("sentinel", "fighter", "hauler", "explorer", "shuttle", "exotic", "solar", "freighter", "capital_freighter")

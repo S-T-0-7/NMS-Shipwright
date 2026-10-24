@@ -42,6 +42,7 @@ function selectShip(slot) {
     <p class="muted" style="margin:0 0 8px">Step 1: click a part of the ship below. Step 2: click a colour. The preview above updates as you pick.
       Step 3: press Save these colours. ${s.paint ? '<b>This ship is painted by you.</b>' : 'This ship still uses its own colours.'}</p>
     <div class="row" id="pChips"></div>
+    <p class="warn" id="pFixed" hidden></p>
     <div class="row" style="margin-top:8px">
       <span class="muted" id="pPicking"></span><span style="flex:1"></span>
       <button class="btn primary" id="pApply">${ic('check')}Save these colours</button>
@@ -111,9 +112,14 @@ function originHtml(s) {
   if (!s.ship) return '<p class="muted" style="margin:0">Fixed model: not generated from a star system.</p>';
   if (!s.origin || !s.origin.length) return `<p class="muted" style="margin:0">No star system generates this exact seed. Seeds from rerolls or the Designer
     only exist in your save; ships the game made (bought, crashed, interceptors) trace back to the system they came from.</p>`;
+  /* Every row here has been generated and checked, so `where` says what is waiting at the
+     address. A row without one could not be generated at all -- say so rather than send
+     someone across the galaxy on it. */
   const row = (o, main) => `<div style="margin:${main ? 0 : '8px 0 0'}">
       <b>${esc(o.galaxy_name)}</b>, system ${o.system} (0x${o.system.toString(16).toUpperCase()}) in region (${o.x}, ${o.y}, ${o.z})
       ${o.visited ? '<span class="badge hot">YOU VISITED IT</span>' : ''}
+      <div>${o.where ? `Waiting at the <b>${esc(o.where)}</b>${o.what ? ` as a ${esc(o.what)}` : ''}.`
+        : '<span class="muted">Could not generate this system to check what is there.</span>'}</div>
       <div>Galactic coordinates <span class="mono">${esc(o.coords)}</span> &middot; portal glyphs <span class="mono">${esc(o.glyphs)}</span></div>
       <small class="muted">${[...o.glyphs].map(c => GLYPHS[parseInt(c, 16)]).join(' &middot; ')} (first glyph picks the planet)</small></div>`;
   const [best, ...rest] = s.origin;
@@ -156,12 +162,21 @@ const nearestColour = (cols, c) => cols.reduce((best, x) =>
    see textures.paint_channels. Ask which, and offer exactly those. */
 async function setupPaint(slot, ship, seed) {
   const pal = $('#pPal');
-  let channels = [{alt: 'Primary', name: 'Body'}];
+  let channels = [{alt: 'Primary', name: 'Body'}], fixed = [];
   if (ship && seed) {
     try {
-      channels = (await api(`/api/ship/channels?ship=${encodeURIComponent(ship)}&seed=${encodeURIComponent(seed)}`)).channels;
+      const r = await api(`/api/ship/channels?ship=${encodeURIComponent(ship)}&seed=${encodeURIComponent(seed)}`);
+      channels = r.channels; fixed = r.fixed || [];
     } catch (e) { /* fall back to the body alone rather than offering slots we cannot vouch for */ }
   }
+  /* Half of all interceptor seeds colour their hull from the seed, and no paint reaches it.
+     Say so here, where someone is about to spend five minutes picking black. */
+  const note = $('#pFixed');
+  note.hidden = !fixed.length;
+  if (fixed.length) note.textContent = `${fixed.map(f => f.name).join(' and ')}: this seed colours `
+    + `${fixed.length > 1 ? 'these' : 'this'} itself and paint will not change `
+    + `${fixed.length > 1 ? 'them' : 'it'}. Everything below still works on the rest of the ship. `
+    + `To paint the whole thing, search the Designer for another seed that builds the same ship.`;
   const stored = (S.paint && S.paint.channels) || {};
   S.channels = {};
   for (const c of channels) {

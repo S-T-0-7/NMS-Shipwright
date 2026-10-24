@@ -24,6 +24,21 @@
   is also not "default red" as the old note claimed -- it wears the colour its seed gives it,
   which runs from black through orange to near-white.
 
+- **"Where to find it in the game" no longer invents a star system.** A seed can be run back
+  through the generator to the system that made it, but nothing in a seed says how far back that
+  system is, so the search tries thousands of distances and any one of them can land on an address
+  that merely looks real. Better than one seed in ten was given a home it never had -- fly there
+  and a different ship is parked at it. Every candidate is now generated and checked before you
+  are shown it, and the app says what is actually waiting: "Waiting at the space station as a
+  hauler", "Waiting at the crash site as a sentinel interceptor". 45 of 400 random seeds used to
+  be handed a system; of 3,000 put through the new check, none were.
+- **Says when a Sentinel's hull cannot be painted.** Roughly half of all interceptor seeds colour
+  their hull from the seed itself rather than from paint -- the game draws that part from its rock
+  palette -- so painting one of those changes its pincers and leaves the hull as it was. That is
+  why an interceptor sent to black comes back grey. Recolour now says so above the colours, and
+  the Designer marks those seeds **SEED COLOUR ONLY** in its results, so you can take one of the
+  other seeds that builds the same ship and paint the whole thing.
+
 - **Quests read as quests now**, not as mission ids. The game names a storyline rather than its
   steps -- all six steps of "Alone Amidst the Stars" share that one title -- so every row used to
   say `ACT1_STEP3`. Each step is now labelled with the line the game writes into your log when you

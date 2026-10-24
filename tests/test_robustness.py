@@ -462,6 +462,73 @@ class SentinelOverlay(unittest.TestCase):
         self.assertNotEqual((single["palette"], single["alt"]), ("Paint", "Alternative1"))
 
 
+class HullTakesPaint(unittest.TestCase):
+    """Half of all interceptor seeds colour their own hull, and the app has to say so."""
+
+    @classmethod
+    def setUpClass(cls):
+        from nms_procgen import textures
+        cls.textures = textures
+        try:
+            textures.palettes()
+        except Exception as e:
+            raise unittest.SkipTest(f"game files not available: {e}")
+
+    def test_a_seed_whose_overlay_is_rock_cannot_be_painted(self):
+        """Both seeds are a player's, reported as refusing to repaint: painted black, one came
+        back dark grey. Their overlay draws from Rock, which is built from the seed."""
+        for seed in ("0xFC6F557EE9CCD022", "0xC535CD22658F6F25"):
+            self.assertFalse(self.textures.hull_takes_paint(int(seed, 16), "sentinel"), seed)
+
+    def test_a_seed_whose_overlay_is_paint_can_be(self):
+        """Both were painted in game 2026-10-23 and took the colour given."""
+        for seed in ("0xDABDF53F4A1F40C3", "0xDABDF53F4A1E40C3"):
+            self.assertTrue(self.textures.hull_takes_paint(int(seed, 16), "sentinel"), seed)
+
+    def test_every_other_ship_type_paints_its_body(self):
+        """Only the robot texture list puts a ship's body on a layer that may skip the paint."""
+        for ship in ("fighter", "hauler", "explorer", "shuttle", "exotic", "solar"):
+            self.assertTrue(self.textures.hull_takes_paint(0xFC6F557EE9CCD022, ship), ship)
+
+
+class OriginsAreChecked(unittest.TestCase):
+    """A seed reversed to a star system is a lead until the generator agrees."""
+
+    @classmethod
+    def setUpClass(cls):
+        from nms_procgen import locate, systemgen
+        cls.locate, cls.systemgen = locate, systemgen
+        try:
+            with systemgen.borrow() as sg:
+                cls.ua = locate.pack_ua(116, 4, 1035, 0x4F)
+                cls.sys = sg.system(cls.ua)
+        except Exception as e:
+            raise unittest.SkipTest(f"game files not available: {e}")
+
+    def test_a_ship_the_system_really_makes_is_confirmed(self):
+        seed = self.sys["ships"][0]["seed"]
+        rows = self.locate.locate(seed)
+        got = self.systemgen.confirm(seed, rows)
+        self.assertTrue(any(int(r["ua"], 16) == self.ua and r.get("where") for r in got),
+                        f"0x{seed:016X} lost its own system")
+
+    def test_seeds_that_came_from_nowhere_say_so(self):
+        """A player sent in two interceptor seeds and flew to the system the app named for one
+        of them; a different ship was there. The reversal had invented it -- 45 of 400 random
+        seeds do -- and both the galaxy byte and the generator rule it out."""
+        for seed in ("0xFC6F557EE9CCD022", "0xC535CD22658F6F25"):
+            rows = self.locate.locate(seed)
+            self.assertEqual(self.systemgen.confirm(seed, rows), [], seed)
+
+    def test_designer_seeds_do_not_invent_a_home(self):
+        import random
+        rnd, claimed = random.Random(4), 0
+        for _ in range(400):
+            seed = rnd.getrandbits(64)
+            claimed += bool(self.systemgen.confirm(seed, self.locate.locate(seed)))
+        self.assertEqual(claimed, 0, "made up a star system for a seed no system generates")
+
+
 class OtherPeoplesPCs(unittest.TestCase):
     """The app has to work on a PC that is not the one it was built on."""
 

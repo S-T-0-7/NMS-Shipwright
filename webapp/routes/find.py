@@ -14,18 +14,6 @@ from webapp.common import JOBS, NO_SEED_LOOK, SHIP_LABELS, body, open_save, pars
 bp = Blueprint("find", __name__)
 
 
-SYSGEN = {"sg": None}
-
-
-SYSGEN_LOCK = threading.Lock()
-
-
-def system_gen():
-    if SYSGEN["sg"] is None:
-        SYSGEN["sg"] = systemgen.SystemGen()
-    return SYSGEN["sg"]
-
-
 @bp.route("/api/location")
 def api_location():
     opened = open_save(request.args.get("path"))
@@ -37,8 +25,8 @@ def api_location():
 @bp.route("/api/system")
 def api_system():
     ua = locate.parse_address(request.args.get("addr", ""), int(request.args.get("galaxy", 0)))
-    with SYSGEN_LOCK:
-        s = system_gen().system(ua, planets=True)
+    with systemgen.borrow() as sg:
+        s = sg.system(ua, planets=True)
     ships = [{**sh, "seed": f"0x{sh['seed']:016X}"}
              for sh in s["ships"]]
     return jsonify({**locate.describe(ua), "region_valid": s["region_valid"], "planets": s["planets"],

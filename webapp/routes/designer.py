@@ -116,7 +116,11 @@ def run_job(job, ship, want, n, seconds, look=None):
     try:
         for seed, parts in fast_search(ship, want, (), n, time_limit=seconds, stats=job["stats"],
                                        should_stop=lambda: job["cancel"], look=look):
+            # Which of these seeds can be painted is worth knowing before picking one: an
+            # interceptor whose hull comes from its seed is a fine ship and a dead end for anyone
+            # who wanted it in their own colours.
             job["results"].append({"seed": f"0x{seed:016X}", "parts": [p for _, p in parts],
+                                   "paints": textures.hull_takes_paint(seed, ship),
                                    "look": textures.look_keys(seed) if ship not in NO_SEED_LOOK else None})
         job["status"] = "cancelled" if job["cancel"] else "done"
     except Exception as e:  # reported to the UI

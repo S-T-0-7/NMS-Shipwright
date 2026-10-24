@@ -6,7 +6,7 @@ import warnings
 
 from flask import Blueprint, jsonify, request
 
-from nms_procgen import locate, textures
+from nms_procgen import locate, systemgen, textures
 from nms_save import items, locator, player, ships
 
 from webapp.common import (PALETTES, SHIP_LABELS, SHIP_MODELS, SPECIAL_SHIPS, body, game_running, model_filename,
@@ -55,7 +55,8 @@ def api_ships():
     out = []
     for s in ships.list_ships(opened.readable):
         alias = ship_alias(s.filename) if s.is_procedural else None
-        origin = locate.locate(s.seed, known_systems=known, galaxy=galaxy) if alias and s.seed else []
+        origin = (systemgen.confirm(s.seed, locate.locate(s.seed, known_systems=known, galaxy=galaxy))
+                  if alias and s.seed else [])
         out.append({"index": s.index, "name": s.name, "filename": s.filename, "seed": s.seed, "ship": alias,
                     "category": SHIP_LABELS.get(alias, s.category_guess), "is_procedural": s.is_procedural,
                     "is_golden_vector": s.is_golden_vector, "primary": s.index == primary,
@@ -215,15 +216,20 @@ def api_ship_channels():
     if not ship or not seed:
         raise ValueError("ship and seed are required")
     found = textures.paint_channels(int(seed, 16), ship)
-    # An interceptor draws its hull from Alternative1 and only its pincers from Primary, so it is
-    # named apart -- but only when it has both. On a seed whose overlay never reads Alternative1
-    # the single colour it has IS the whole ship.
+    # An interceptor wears its hull on the overlay layer and its pincers on the base one, so its
+    # slots are named apart. Which name Primary gets depends on the seed: with a hull that reads
+    # Alternative1 it is the pincers alone, with a hull that reads paint but has no slot of its
+    # own it is the whole ship, and with a hull the seed colours it is the pincers again -- and
+    # then `fixed` says the rest of the ship is out of reach.
+    hull_paints = textures.hull_takes_paint(int(seed, 16), ship)
     two_tone = ship == "sentinel" and any(c["alt"] == "Alternative1" for c in found)
     out = []
     for c in found:
         alt, layers = c["alt"], c["layers"]
-        if two_tone and alt in ("Primary", "Alternative1"):
-            name = "Pincers" if alt == "Primary" else "Hull"
+        if ship == "sentinel" and alt == "Primary":
+            name = "Whole ship" if hull_paints and not two_tone else "Pincers"
+        elif two_tone and alt == "Alternative1":
+            name = "Hull"
         else:
             named = [_LAYER_NAMES[x] for x in layers if x in _LAYER_NAMES]
             name = named[0] if named else _SLOT_NAMES.get(alt, alt)
@@ -236,7 +242,10 @@ def api_ship_channels():
         if seen[c["name"]] > 1:
             count[c["name"]] = count.get(c["name"], 0) + 1
             c["name"] = f'{c["name"]} {count[c["name"]]}'
-    return jsonify({"ship": ship, "seed": seed, "channels": out})
+    # Parts no paint can reach, so the UI can say so instead of letting someone pick black
+    # four times over and wonder why their interceptor is still grey.
+    fixed = [] if hull_paints else [{"name": "Hull", "palette": "Rock"}]
+    return jsonify({"ship": ship, "seed": seed, "channels": out, "fixed": fixed})
 
 
 @bp.route("/api/ship/paint/clear", methods=["POST"])

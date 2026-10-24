@@ -311,7 +311,10 @@ async function pollJob() {
   const box = $('#dResults');
   for (let i = box.children.length; i < j.results.length; i++) {
     const res = j.results[i], d = document.createElement('div'); d.className = 'card res';
-    d.innerHTML = `${lookBadge(res.look)}
+    // An interceptor seed that colours its own hull builds the ship you asked for and then
+    // refuses to be painted, so it is worth seeing before you pick one rather than after.
+    const stuck = res.paints === false ? '<span class="badge hot" title="This seed colours its hull itself">SEED COLOUR ONLY</span>' : '';
+    d.innerHTML = `${lookBadge(res.look)}${stuck}
       <div class="row" style="margin-top:6px;justify-content:space-between"><code>${res.seed}</code><button class="btn">${ic('box')}Put in my save...</button></div>`;
     d.querySelector('button').onclick = () => applySeed(res.seed, job.ship); box.append(d);
   }

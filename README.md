@@ -79,6 +79,25 @@ so new parts and items appear without a new version of this app.
 - It does not modify any game file, so your save is not marked as modded.
 - Your save is yours: nothing is uploaded anywhere. The app has no network access at all.
 
+## If an edit does not show up in game
+
+**Steam Cloud puts your old save back.** This is the usual answer. The app refuses to write while
+the game is running, but it cannot stop Steam restoring its own copy of the save the next time the
+game starts -- the edit is written, and then quietly replaced. Turn it off in Steam → Library →
+No Man's Sky → Properties → General → *Keep game saves in the Steam Cloud*, then edit and load
+again.
+
+**An interceptor went grey instead of black.** About half of all Sentinel interceptor seeds take
+their hull colour from the seed rather than from paint, and nothing in a save changes it; paint
+reaches only the pincers. Recolour tells you when your ship is one of those. Search the Designer
+for another seed that builds the same ship -- the ones it does not mark **SEED COLOUR ONLY** can
+be painted all over.
+
+**The ship at the system it named is a different ship.** It should not be, and from 1.8.6 it is
+not: candidate systems are generated and checked before you are shown them. Earlier versions
+guessed, and guessed wrong about one time in nine. Seeds from the Designer or from a reroll have
+no home system at all -- they only exist in your save.
+
 ## How the code is laid out
 
 ```
