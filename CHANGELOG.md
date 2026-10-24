@@ -1,7 +1,22 @@
 # Changelog
 
-## UI update
+## 1.8.6
 
+- **Fly button**: the ship viewer now shows a ship landed or flying -- landing legs tucking up
+  into the hull, a Sentinel spreading its wings. It is under the My Ships viewer and the Designer
+  preview. Works for Sentinel interceptors, Fighters, Explorers and Shuttles; ships it cannot do
+  yet simply show no button.
+- The movement is read out of the game's own takeoff animations, so the flying shape is the
+  game's rather than a guess.
+- **Ship guns are drawn now**, under the wing and pointing forward. They were missing before.
+- A parked ship looks exactly as it did, so nothing changes until you press Fly.
+- **Paint every part of a ship.** Recolour offered a body colour and a trim, and quietly wrote
+  that trim into all four of the game's other paint slots -- so signage, small signs and the
+  tertiary trim were forced to one colour. The game gives a ship **five** paint slots and draws a
+  different handful of them per ship, so Recolour now asks which ones your ship actually draws
+  and offers exactly those, each named for what it paints: body, markings, signage, small signs,
+  trim. A Sentinel interceptor is built the other way round and gets **hull** and **pincers**
+  instead, or just a body on the seeds that cannot take a second colour.
 - **Recolour works on Sentinel interceptors, in any paint set.** 1.8.5 forced them to the
   metallic set, believing the game drew nothing else on an interceptor. It does: an interceptor
   painted from the Freighter set comes out that colour, **including true black**, which the
@@ -25,17 +40,6 @@
 - The Designer's three rows of buttons are grouped and labelled, with installing a design into
   your save set apart as its own step, and the seed search says which of its two searches is
   which. Inventory separates the bulk fixes from the slot count. The menu carries page icons.
-
-## 1.8.6
-
-- **Fly button**: the ship viewer now shows a ship landed or flying -- landing legs tucking up
-  into the hull, a Sentinel spreading its wings. It is under the My Ships viewer and the Designer
-  preview. Works for Sentinel interceptors, Fighters, Explorers and Shuttles; ships it cannot do
-  yet simply show no button.
-- The movement is read out of the game's own takeoff animations, so the flying shape is the
-  game's rather than a guess.
-- **Ship guns are drawn now**, under the wing and pointing forward. They were missing before.
-- A parked ship looks exactly as it did, so nothing changes until you press Fly.
 
 ## 1.8.5
 
