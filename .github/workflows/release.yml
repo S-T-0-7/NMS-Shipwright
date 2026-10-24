@@ -75,7 +75,11 @@ jobs:
           fail_on_unmatched_files: true
 
   build-linux:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: an AppImage can only run on a glibc as new as the one it was
+    # built against, so building on the newest Ubuntu makes it refuse to start on older ones.
+    # The AppImage catalog tests on the oldest LTS still in standard support and rejected a
+    # build that wanted GLIBC_2.38. Build on the oldest runner offered instead.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -98,6 +102,14 @@ jobs:
 
       - name: Build the AppImage
         run: bash scripts/build_appimage.sh
+
+      # Reported, not enforced: the bar is whichever LTS is still supported, which moves. If this
+      # creeps up again the AppImage will not start on older distributions.
+      - name: Say which glibc the build needs
+        run: |
+          need="$(find "dist/NMS Shipwright.AppDir" -type f -exec strings -a {} + 2>/dev/null                   | grep -o 'GLIBC_[0-9][0-9.]*' | sort -V -u | tail -1)"
+          echo "highest glibc symbol required: ${need:-none found}"
+          echo "built on: $(. /etc/os-release && echo "$PRETTY_NAME"), glibc $(ldd --version | head -1 | grep -o '[0-9.]*$')"
 
       - name: Upload the build
         uses: actions/upload-artifact@v4
