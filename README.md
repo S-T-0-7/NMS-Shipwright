@@ -41,7 +41,7 @@ running, because the game would overwrite it.
    rights, no Python, nothing else to install. Running the setup again later updates in place and
    keeps your game-file cache.
 
-To remove it: Settings → Apps → NMS Shipwright, or run `Uninstall.exe` from the install folder.
+To remove it: Settings → Apps → NMS Shipwright, or run `unins000.exe` from the install folder.
 
 ### Linux
 
