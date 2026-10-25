@@ -32,13 +32,12 @@
   are shown it, and the app says what is actually waiting: "Waiting at the space station as a
   hauler", "Waiting at the crash site as a sentinel interceptor". 45 of 400 random seeds used to
   be handed a system; of 3,000 put through the new check, none were.
-- **Says when a Sentinel seed paints over your paint.** Roughly half of all interceptor seeds
-  draw a layer of their own on top of the base coat, coloured from the seed through the game's
-  rock palette and not settable from a save. Measured against the texture sheets, that layer
-  covers almost the whole ship, which is why an interceptor sent to black can come back grey.
-  How much of your colour survives varies by seed, so Recolour warns rather than forbids, and
-  the Designer marks those seeds **SEED COLOUR ONLY** in its results so you can pick one of the
-  others that builds the same ship.
+- **Says when a Sentinel seed paints over your paint.** One interceptor seed in four draws an
+  opaque layer of its own on top of the base coat, coloured from the seed and not settable from
+  a save, so the ship keeps the colour it had however you paint it. That is the long-standing
+  "Sentinels won't repaint" complaint, and it is a quarter of seeds rather than all of them.
+  Recolour says so above the colours and the Designer marks those seeds **SEED COLOUR ONLY**,
+  so you can pick one of the three in four that builds the same ship and paints properly.
 
 - **Smaller download.** The build was shipping the static library and C headers from the
   emulator package -- 50 MB of what you would link a C program against, sitting next to the
@@ -49,9 +48,8 @@
 
 - **The Designer can insist on a seed you can paint.** Which overlay an interceptor wears comes
   off a single draw from its seed, and so do its parts, so the two are tied together: a Stinger
-  top flap paints on 1 seed in 6 against 5 in 6 without one, and a Stinger on a Wide or Narrow
-  cockpit paints on about 1 seed in 17 million. Tick **Only seeds I can paint** and the search
-  skips the rest -- it costs nothing, being four more numbers per seed.
+  top flap paints on 58% of seeds against 92% with no top flap. Tick **Only seeds I can paint**
+  and the search skips the rest -- it costs nothing, being four more numbers per seed.
 
 - **Quests read as quests now**, not as mission ids. The game names a storyline rather than its
   steps -- all six steps of "Alone Amidst the Stars" share that one title -- so every row used to

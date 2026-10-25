@@ -169,16 +169,14 @@ async function setupPaint(slot, ship, seed) {
       channels = r.channels; fixed = r.fixed || [];
     } catch (e) { /* fall back to the body alone rather than offering slots we cannot vouch for */ }
   }
-  /* Half of all interceptor seeds draw a layer of their own over the paint. Say so here,
-     where someone is about to spend five minutes picking black. How much of it shows through
-     varies -- people have got the colour they wanted on seeds like this -- so this warns
-     rather than forbids. */
+  /* A quarter of interceptor seeds draw an opaque layer of their own right over the paint.
+     Say so here, where someone is about to spend five minutes picking black. */
   const note = $('#pFixed');
   note.hidden = !fixed.length;
-  if (fixed.length) note.textContent = `${fixed.map(f => f.name).join(' and ')}: this seed lays a `
-    + `colour of its own over the paint, taken from the seed and not settable. Your colour may come `
-    + `through muted, or barely at all -- dark colours suffer most. The Designer marks the seeds `
-    + `that do this, so you can search for another one that builds the same ship and paint it freely.`;
+  if (fixed.length) note.textContent = `${fixed.map(f => f.name).join(' and ')}: this seed covers `
+    + `the paint with a layer of its own, coloured by the seed and not settable, so the ship will `
+    + `keep the colour it has. Tick "Only seeds I can paint" in the Designer and search for another `
+    + `seed that builds the same ship -- three seeds in four are fine.`;
   const stored = (S.paint && S.paint.channels) || {};
   S.channels = {};
   for (const c of channels) {

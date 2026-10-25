@@ -474,15 +474,19 @@ class HullTakesPaint(unittest.TestCase):
         except Exception as e:
             raise unittest.SkipTest(f"game files not available: {e}")
 
-    def test_a_seed_whose_overlay_is_rock_cannot_be_painted(self):
-        """Both seeds are a player's, reported as refusing to repaint: painted black, one came
-        back dark grey. Their overlay draws from Rock, which is built from the seed."""
-        for seed in ("0xFC6F557EE9CCD022", "0xC535CD22658F6F25"):
+    def test_an_overlay_1_seed_cannot_be_painted(self):
+        """Painted green in game 2026-10-25, both came back their seed's orange -- one with
+        extra Rock palette rows in CustomData and one without, which made no difference."""
+        for seed in ("0xDBBDF53F4A1F40C3", "0xC6D38D577ACDE48D", "0xFC6F557EE9CCD022"):
             self.assertFalse(self.textures.hull_takes_paint(int(seed, 16), "sentinel"), seed)
 
-    def test_a_seed_whose_overlay_is_paint_can_be(self):
-        """Both were painted in game 2026-10-23 and took the colour given."""
-        for seed in ("0xDABDF53F4A1F40C3", "0xDABDF53F4A1E40C3"):
+    def test_every_other_overlay_takes_paint(self):
+        """The first two went green in the same test. Option 2 covers 85% of the sheet at an
+        average alpha of 218 and the paint shows through it; only option 1 is opaque. The last
+        is a player's own seed, reported as painting the purple they wanted."""
+        for seed in ("0xDABDF53F4B1F40C3", "0xDF8AC83A85E0A378",      # overlay 2, verified green
+                     "0xDABDF53F4A1F40C3", "0xDABDF53F4A1E40C3",      # overlay 3 and 4
+                     "0xB5049201BDF7B2B4", "0xC535CD22658F6F25"):     # players' own, painted fine
             self.assertTrue(self.textures.hull_takes_paint(int(seed, 16), "sentinel"), seed)
 
     def test_every_other_ship_type_paints_its_body(self):

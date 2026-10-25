@@ -382,37 +382,44 @@ def paint_channels(seed, ship):
 
 # Which overlay an interceptor wears is one draw: FIXED takes the first two steps of the
 # stream, then OVERLAY's own two, and its four options carry equal weight, so the fourth
-# output lands in one of four equal buckets. Options 3 and 4 read the paint, 1 and 2 the
-# seed's own Rock colour -- which makes "can this be painted" the top half of one number.
-# Checked against pick() over 300 seeds, 300 agreeing.
+# output lands in one of four equal buckets. Checked against pick() over 300 seeds, all
+# 300 agreeing.
+#
+# Only the first bucket, option "1", hides the paint. Checked in game 2026-10-25 by painting
+# four interceptors the same green: the two on option 2 came out green, the two on option 1
+# stayed their seed's orange. The sheets say why -- OVERLAY.1.DDS covers the whole sheet at
+# full alpha while OVERLAY.2.DDS covers 85% at an average of 218, so only the first is opaque
+# enough to bury what is underneath. Options 3 and 4 read the paint outright.
 OVERLAY_STEPS = 4
-PAINTED_FROM = 2  # buckets 2 and 3 of 4, i.e. options "3" and "4"
+OPAQUE_BUCKET = 0  # bucket 0 of 4 is option "1", the one that covers the paint
 
 
 def paintable_mask(s0, s1):
-    """Vectorised: True where an interceptor seed's overlay reads the paint."""
+    """Vectorised: True where an interceptor seed's overlay lets the paint show."""
     a0, a1 = s0, s1
     for _ in range(OVERLAY_STEPS):
         a0, a1 = _np_steps(a0, a1, 1)
     x = (a0.astype(np.float64) * INV).astype(np.float32)
-    return (x * np.float32(4.0)).astype(np.float32) >= np.float32(PAINTED_FROM)
+    return (x * np.float32(4.0)).astype(np.float32) >= np.float32(OPAQUE_BUCKET + 1)
 
 
 def hull_takes_paint(seed, ship):
-    """Whether paint reaches this ship's body, which on an interceptor is not a given.
+    """Whether paint shows on this ship, which on an interceptor is not a given.
 
     BASE is the coat under everything and always reads Paint/Primary. OVERLAY goes over it,
-    and the robot texture list offers four of those. Measuring the sheets each one draws
-    with says what they are: overlay 4 inks a few compact bands and nothing in between --
-    trim parts -- while 1 and 2 cover the sheet almost end to end and take their colour from
-    the Rock palette, which is built out of the seed and cannot be set from a save. On near
-    enough half of all seeds, then, the ship wears a coat of its own over the paint, which is
-    why an interceptor sent to black can come back grey. Every other ship type shows BASE.
+    and the robot texture list offers four. Three of them let the paint through: 3 and 4 read
+    it outright, and 2 takes the Rock palette but only covers 85% of the sheet at an average
+    alpha of 218, which in game leaves the paint plainly visible. Option 1 covers the whole
+    sheet at full alpha and buries it -- a quarter of all seeds, and the reason an interceptor
+    sent to black can come back its own colour. Every other ship type shows BASE.
+
+    Checked in game 2026-10-25: four interceptors given the same green, the two on option 2
+    came out green and the two on option 1 stayed orange.
     """
     if ship != "sentinel":
         return True
-    return any(t["layer"] == "OVERLAY" and t["palette"] == "Paint"
-               for t in ship_look(seed, ship)["textures"])
+    overlay = next((t for t in ship_look(seed, ship)["textures"] if t["layer"] == "OVERLAY"), None)
+    return overlay is None or overlay["option"] != "1"
 
 
 # ------------------------------------------------------ search on the look --
