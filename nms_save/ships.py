@@ -616,10 +616,42 @@ def clear_ship_paint(readable_json: dict, slot: int, texture: bool = True, custo
         data["PaletteID"], data["Colours"] = "^", []
 
 
+def set_seed_layer_colour(readable_json: dict, slot: int, rgb, palette: str = "Rock") -> list:
+    """Add CustomData colours for a palette other than Paint, keeping the paint already there.
+
+    Why this should work: CustomData.Colours names the palette it is setting, and the game
+    writes non-Paint entries itself -- a player's character carries Custom_Torso, Custom_Legs
+    and Custom_Head rows in exactly this shape. An interceptor whose overlay reads Rock is
+    reading a palette built from its seed, and this says what that palette's colours are.
+    Written for all five alts because the layer's own alt is "None" and it is not yet known
+    which one it resolves to.
+
+    UNVERIFIED in game. If it holds, the overlay stops being the seed's decision.
+    """
+    _populated_entry(readable_json, slot)
+    data = _dig(readable_json, CUSTOMISATION_PATH)[customisation_index(slot)].setdefault("CustomData", {})
+    rgba = [float(c) for c in rgb][:3] + [1.0]
+    kept = [c for c in (data.get("Colours") or [])
+            if c.get("Palette", {}).get("Palette") != palette]
+    data["Colours"] = kept + [{"Palette": {"Palette": palette, "ColourAlt": alt, "Index": -1},
+                               "Colour": list(rgba)} for alt in PAINT_ALTS + ("None",)]
+    return data["Colours"]
+
+
+def _tkid(v):
+    """TkID fields are stored with a ^ prefix in saves."""
+    v = str(v)
+    return v if v.startswith("^") else "^" + v
+
+
 def set_texture_options(readable_json: dict, slot: int, options) -> list:
     """Pin texture layers for a ship slot, as CharacterCustomisationData.TextureOptions.
 
-    UNPROVEN -- nothing has been seen to read this back in game yet. The field is
+    The game keeps its own here: a player's character carries ARMOUR_FOURTH/1, TORSO_ASTRO/
+    TORSO_4 and the rest, ^-prefixed, so the shape below is the game's own. What is not known
+    is whether a ship's layers can be addressed this way at all -- the group is what names a
+    layer, and a normal ship's decal layers have one (DECALLOGO, DECALLET) while the robot
+    list an interceptor draws from has none. The field is
     cGcCharacterCustomisationTextureOptionData, a group name and an option name, and it sits
     in the same CustomData as the paint, which is why it is worth trying: an interceptor's
     overlay option decides whether paint reaches it at all, and the seed alone decides the
@@ -628,7 +660,7 @@ def set_texture_options(readable_json: dict, slot: int, options) -> list:
     """
     _populated_entry(readable_json, slot)
     data = _dig(readable_json, CUSTOMISATION_PATH)[customisation_index(slot)].setdefault("CustomData", {})
-    data["TextureOptions"] = [{"TextureOptionGroupName": str(g), "TextureOptionName": str(n)}
+    data["TextureOptions"] = [{"TextureOptionGroupName": _tkid(g), "TextureOptionName": _tkid(n)}
                               for g, n in options]
     return data["TextureOptions"]
 
