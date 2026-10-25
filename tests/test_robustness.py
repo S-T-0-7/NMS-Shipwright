@@ -462,6 +462,55 @@ class SentinelOverlay(unittest.TestCase):
         self.assertNotEqual((single["palette"], single["alt"]), ("Paint", "Alternative1"))
 
 
+class RotationOrder(unittest.TestCase):
+    """Scene transforms are euler angles, and the order they go in is not a free choice."""
+
+    @classmethod
+    def setUpClass(cls):
+        from nms_procgen import anim, model3d
+        cls.anim, cls.model3d = anim, model3d
+        try:
+            model3d._parsed("MODELS/COMMON/SPACECRAFT/SCIENTIFIC/ACCESSORIES/LANDINGGEAR/"
+                            "LANDINGGEAR_POD.SCENE.MBIN")
+        except Exception as e:
+            raise unittest.SkipTest(f"game files not available: {e}")
+
+    def _check(self, scene_path, anim_path, least):
+        """A deploy anim holds the same joints as matrices. Where its first frame is the rest
+        pose, the scene's own angles have to come out the same -- which pins the order."""
+        import numpy
+        sc = self.model3d._parsed(scene_path)
+        raw = {}
+
+        def walk(n):
+            raw[n[1].upper()] = n[2]
+            for c in n[4]:
+                walk(c)
+
+        walk(sc[1])
+        frame = self.anim.pose_locals(anim_path, 0)
+        # one axis reads the same in any order; only these tell the six apart
+        multi = [k for k in frame if k in raw and sum(abs(raw[k][i]) > 1e-3 for i in range(3)) >= 2]
+        self.assertGreaterEqual(len(multi), least, f"{scene_path}: too few multi-axis joints to judge")
+        worst = max(numpy.abs(self.model3d._matrix(raw[k])[:3, :3] - frame[k][:3, :3]).max() for k in multi)
+        self.assertLess(worst, 0.02, f"{scene_path}: rotation order is wrong (worst {worst:.3f})")
+
+    def test_the_explorers_landing_gear_rig_reads_the_same_as_its_anim(self):
+        self._check("MODELS/COMMON/SPACECRAFT/SCIENTIFIC/ACCESSORIES/LANDINGGEAR/LANDINGGEAR_POD.SCENE.MBIN",
+                    "models/common/spacecraft/scientific/accessories/landinggear/anims/"
+                    "landinggear_takeoff.anim.mbin", 7)
+
+    def test_a_ship_sits_on_the_ground_landed_and_lifts_off_it_flying(self):
+        """What the order being wrong looked like: the explorer's gear ended up 2 units below
+        the ground when flying, in pieces, instead of folding up."""
+        for ship, seed in (("explorer", "0x12345678ABCDEF01"), ("sentinel", "0xDABDF53F4A1E40C3"),
+                           ("fighter", "0xA547AB958C97E439"), ("shuttle", "0x781F9C58D6645FA9")):
+            landed = self.model3d.ship_model(seed, ship)["bounds"][0][1]
+            flying = self.model3d.ship_model(seed, ship, flying=True)["bounds"][0][1]
+            self.assertLess(abs(landed), 0.1, f"{ship} landed does not reach the ground")
+            self.assertGreater(flying, landed - 0.01, f"{ship} hangs below its landed self when flying")
+
+
 class HullTakesPaint(unittest.TestCase):
     """Half of all interceptor seeds colour their own hull, and the app has to say so."""
 

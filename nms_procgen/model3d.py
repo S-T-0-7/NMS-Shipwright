@@ -214,14 +214,23 @@ def _geometry(geometries) -> dict:
 # ------------------------------------------------------------------- scenes --
 
 def _matrix(t) -> np.ndarray:
-    """cTkTransformData (rot degrees XYZ, scale, translation) -> 4x4; rotation applied X, then Y, then Z."""
+    """cTkTransformData (rot degrees XYZ, scale, translation) -> 4x4.
+
+    The rotation goes Y, then X, then Z. Read off the game's own data rather than guessed:
+    a deploy anim stores the same joints as matrices, and where its first frame is the rest
+    pose the two must agree. Of the six orders only this one does -- on the explorer's gear
+    rig, 7 joints turning about more than one axis, to 1e-4, and on the Sentinel's takeoff,
+    23 joints, to 6e-3. Z @ Y @ X, which this used to do, is out by a half turn on both.
+    A joint turning about one axis reads the same whatever the order, which is why most of
+    a ship looked right regardless and only the multi-axis rigs came out wrong.
+    """
     rx, ry, rz = np.radians(t[0:3])
     cx, sx, cy, sy, cz, sz = np.cos(rx), np.sin(rx), np.cos(ry), np.sin(ry), np.cos(rz), np.sin(rz)
     X = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
     Y = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
     Z = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
     m = np.eye(4)
-    m[:3, :3] = Z @ Y @ X @ np.diag(t[3:6])
+    m[:3, :3] = Y @ X @ Z @ np.diag(t[3:6])
     m[:3, 3] = t[6:9]
     return m
 
