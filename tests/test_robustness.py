@@ -578,18 +578,19 @@ class HullTakesPaint(unittest.TestCase):
         except Exception as e:
             raise unittest.SkipTest(f"game files not available: {e}")
 
-    def test_an_overlay_1_seed_cannot_be_painted(self):
-        """Painted green in game 2026-10-25, both came back their seed's orange -- one with
-        extra Rock palette rows in CustomData and one without, which made no difference."""
-        for seed in ("0xDBBDF53F4A1F40C3", "0xC6D38D577ACDE48D", "0xFC6F557EE9CCD022"):
+    def test_the_overlays_that_draw_their_own_body(self):
+        """Watched in game 2026-10-25. Overlay 1: painted green, came back orange. Overlay 3:
+        three ships, one bare, one green, one black -- all three kept black bodies, the green
+        one showing it only on its pincers, which are the base coat and always take paint."""
+        for seed in ("0xDBBDF53F4A1F40C3", "0xC6D38D577ACDE48D", "0xFC6F557EE9CCD022",  # overlay 1
+                     "0x16D9A653A77D1710", "0xDABDF53F4A1F40C3", "0xDABDF43F4A1F40C3"):  # overlay 3
             self.assertFalse(self.textures.hull_takes_paint(int(seed, 16), "sentinel"), seed)
 
-    def test_every_other_overlay_takes_paint(self):
-        """The first two went green in the same test. Option 2 covers 85% of the sheet at an
-        average alpha of 218 and the paint shows through it; only option 1 is opaque. The last
-        is a player's own seed, reported as painting the purple they wanted."""
+    def test_the_overlays_that_let_paint_through(self):
+        """Overlay 2 went green in the same test; overlay 4 takes a separate trim as well. The
+        last two are players' own seeds, both reported as painting the colour they wanted."""
         for seed in ("0xDABDF53F4B1F40C3", "0xDF8AC83A85E0A378",      # overlay 2, verified green
-                     "0xDABDF53F4A1F40C3", "0xDABDF53F4A1E40C3",      # overlay 3 and 4
+                     "0xDABDF53F4A1E40C3", "0xDABDF53F4A1F40C2",      # overlay 4
                      "0xB5049201BDF7B2B4", "0xC535CD22658F6F25"):     # players' own, painted fine
             self.assertTrue(self.textures.hull_takes_paint(int(seed, 16), "sentinel"), seed)
 

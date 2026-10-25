@@ -226,7 +226,9 @@ def api_ship_channels():
     for c in found:
         alt, layers = c["alt"], c["layers"]
         if ship == "sentinel" and alt == "Primary":
-            name = "Whole ship" if hull_paints and not two_tone else "Body"
+            # Primary is the base coat: the whole ship where nothing covers it, the body where
+            # there is a separate trim, and the pincers alone where the seed draws the body.
+            name = "Body" if two_tone else ("Whole ship" if hull_paints else "Pincers")
         elif two_tone and alt == "Alternative1":
             name = "Trim"
         else:
@@ -241,10 +243,11 @@ def api_ship_channels():
         if seen[c["name"]] > 1:
             count[c["name"]] = count.get(c["name"], 0) + 1
             c["name"] = f'{c["name"]} {count[c["name"]]}'
-    # The seed's own layer, where it has one, so the UI can warn instead of letting someone
-    # pick black four times over and wonder why their interceptor is still grey. It is not a
-    # separate part of the ship: it is a coat over the paint, and it covers most of the sheet.
-    fixed = [] if hull_paints else [{"name": "Most of the ship", "palette": "Rock"}]
+    # Where the seed draws the body itself, say which colour it is stuck with: overlay 1 is
+    # orange-brown and overlay 3 near black, and knowing which turns a warning into a reason.
+    # The pincers still take the paint either way, so this is the body alone.
+    body_colour = {"1": "orange", "3": "black"}.get(textures.overlay_of(seed) if ship == "sentinel" else "")
+    fixed = [] if hull_paints else [{"name": "Body", "colour": body_colour or "its own colour"}]
     return jsonify({"ship": ship, "seed": seed, "channels": out, "fixed": fixed})
 
 

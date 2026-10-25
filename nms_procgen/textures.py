@@ -391,7 +391,12 @@ def paint_channels(seed, ship):
 # full alpha while OVERLAY.2.DDS covers 85% at an average of 218, so only the first is opaque
 # enough to bury what is underneath. Options 3 and 4 read the paint outright.
 OVERLAY_STEPS = 4
-OPAQUE_BUCKET = 0  # bucket 0 of 4 is option "1", the one that covers the paint
+# Options 1 and 3 draw their own body colour and the paint never reaches it; 2 and 4 let it
+# through. Watched in game 2026-10-25, one variable at a time: three overlay-3 ships, one
+# left alone, one painted green, one painted black, came out black, black with green pincers,
+# and black. The green pincers are the BASE layer, which takes the paint on any seed -- it is
+# the body that is fixed. Overlay 1 does the same in orange-brown instead.
+PAINTED_BODY = (1, 3)   # buckets of four, i.e. options "2" and "4"
 
 # What each overlay draws with, measured off its own sheet, and what that comes out as on an
 # unpainted ship -- every interceptor watched in game so far agrees:
@@ -422,8 +427,12 @@ def overlay_mask(s0, s1, options):
 
 
 def paintable_mask(s0, s1):
-    """Vectorised: True where an interceptor seed's overlay lets the paint show."""
-    return overlay_bucket(s0, s1) > OPAQUE_BUCKET
+    """Vectorised: True where an interceptor seed's overlay lets the paint reach its body."""
+    bucket = overlay_bucket(s0, s1)
+    keep = np.zeros(len(bucket), bool)
+    for b in PAINTED_BODY:
+        keep |= bucket == b
+    return keep
 
 
 def overlay_of(seed):
@@ -433,22 +442,20 @@ def overlay_of(seed):
 
 
 def hull_takes_paint(seed, ship):
-    """Whether paint shows on this ship, which on an interceptor is not a given.
+    """Whether paint reaches this ship's body, which on an interceptor is not a given.
 
-    BASE is the coat under everything and always reads Paint/Primary. OVERLAY goes over it,
-    and the robot texture list offers four. Three of them let the paint through: 3 and 4 read
-    it outright, and 2 takes the Rock palette but only covers 85% of the sheet at an average
-    alpha of 218, which in game leaves the paint plainly visible. Option 1 covers the whole
-    sheet at full alpha and buries it -- a quarter of all seeds, and the reason an interceptor
-    sent to black can come back its own colour. Every other ship type shows BASE.
+    BASE is the coat under everything and takes the paint on any seed -- on an interceptor it
+    is the pincers. OVERLAY goes over the body, and of its four options two draw a colour of
+    their own that the paint never gets through: 1 in orange-brown and 3 in near black. Half
+    of all seeds, then, and which half decides the colour the ship is stuck with. 2 and 4 let
+    the paint through, 4 giving a separate trim as well. Every other ship type shows BASE.
 
-    Checked in game 2026-10-25: four interceptors given the same green, the two on option 2
-    came out green and the two on option 1 stayed orange.
+    Watched in game 2026-10-25, a colour at a time: overlay 2 went green, overlay 1 stayed
+    orange, and three overlay-3 ships -- bare, green, and black -- all kept black bodies.
     """
     if ship != "sentinel":
         return True
-    overlay = next((t for t in ship_look(seed, ship)["textures"] if t["layer"] == "OVERLAY"), None)
-    return overlay is None or overlay["option"] != "1"
+    return overlay_of(seed) in ("2", "4")
 
 
 # ------------------------------------------------------ search on the look --
