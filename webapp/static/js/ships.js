@@ -209,9 +209,10 @@ async function setupPaint(slot, ship, seed) {
   const note = $('#pFixed');
   note.hidden = !fixed.length;
   if (fixed.length) note.textContent = `${fixed.map(f => f.name).join(' and ')}: this seed covers `
-    + `the paint with a layer of its own, coloured by the seed and not settable, so the ship will `
-    + `keep the colour it has. Tick "Only seeds I can paint" in the Designer and search for another `
-    + `seed that builds the same ship -- three seeds in four are fine.`;
+    + `the paint with a layer of its own, so the ship keeps the colour the seed gives it whatever `
+    + `you pick here. That is how a pure-black interceptor happens -- the paint is stored but never `
+    + `drawn. To choose the colour instead, tick "Only seeds I can paint" in the Designer and find `
+    + `another seed for the same ship; three seeds in four are fine.`;
   const stored = (S.paint && S.paint.channels) || {};
   S.channels = {};
   for (const c of channels) {

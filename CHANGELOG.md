@@ -29,7 +29,10 @@
   about roughly half of all seeds when the real figure is a quarter: of the game's four overlay
   patterns only one is opaque enough to bury the paint, and the other three let it through.
   Checked in game on four ships given the same colour, one difference at a time. If you were
-  told a seed could not be painted in 1.8.6, there is a fair chance it can.
+  told a seed could not be painted in 1.8.6, there is a fair chance it can. Recolour also puts
+  the warning the useful way up: a seed like that keeps whatever colour it was born with, which
+  is where pure-black interceptors come from. No paint will give you one -- the blackest paint
+  the game has is matte, and matte black still catches the light.
 - **The Designer can insist on a seed you can paint.** Which overlay an interceptor wears comes
   off a single draw from its seed, and so do its parts, so the two are tied together: a Stinger
   top flap paints on 58% of seeds against 92% with no top flap. Tick **Only seeds I can paint**
