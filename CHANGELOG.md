@@ -33,6 +33,14 @@
   the warning the useful way up: a seed like that keeps whatever colour it was born with, which
   is where pure-black interceptors come from. No paint will give you one -- the blackest paint
   the game has is matte, and matte black still catches the light.
+- **Find a pure-black interceptor.** The black ones people hunt for are not painted -- paint
+  cannot make one, because the game's blackest paint is matte and still catches the light.
+  They come from one of the four patterns an interceptor's seed can draw with: the third,
+  whose sheet is far darker than the others, which comes out black whatever colour the rest of
+  the seed is. Every interceptor watched in game agrees -- the three black ones all draw it and
+  the two orange ones draw the first, whose sheet is warm brown. The Designer's new **Colour**
+  choice searches for them, so "the shape I want, in black" is a search rather than luck.
+
 - **The Designer can insist on a seed you can paint.** Which overlay an interceptor wears comes
   off a single draw from its seed, and so do its parts, so the two are tied together: a Stinger
   top flap paints on 58% of seeds against 92% with no top flap. Tick **Only seeds I can paint**

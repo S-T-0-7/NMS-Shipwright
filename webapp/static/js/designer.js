@@ -288,7 +288,7 @@ function preview() {
 $('#dGo').onclick = () => guard(async () => {
   const want = wanted(); if (!want.length && !lookSet()) throw new Error('Pick at least one part or colour first.');
   const r = await post('/api/design/search', {ship: $('#dShip').value, want, n: +$('#dN').value,
-    seconds: searchSeconds(), look: S.look, paintable: $('#dPaintable').checked});
+    seconds: searchSeconds(), look: S.look, colour: $('#dColour').value});
   S.job = {id: r.job, ship: $('#dShip').value, want: +$('#dN').value, oneIn: oddsOneIn()}; $('#dResults').innerHTML = '';
   $('#dGo').disabled = $('#dFind').disabled = true; $('#dStop').disabled = false; pollJob();
 });
@@ -317,7 +317,7 @@ async function pollJob() {
     const res = j.results[i], d = document.createElement('div'); d.className = 'card res';
     // An interceptor seed that colours its own hull builds the ship you asked for and then
     // refuses to be painted, so it is worth seeing before you pick one rather than after.
-    const stuck = res.paints === false ? '<span class="badge hot" title="This seed colours its hull itself">SEED COLOUR ONLY</span>' : '';
+    const stuck = res.paints === false ? '<span class="badge hot" title="This seed colours itself and ignores paint -- which is how the black ones happen">SEED COLOUR ONLY</span>' : '';
     d.innerHTML = `${lookBadge(res.look)}${stuck}
       <div class="row" style="margin-top:6px;justify-content:space-between"><code>${res.seed}</code><button class="btn">${ic('box')}Put in my save...</button></div>`;
     d.querySelector('button').onclick = () => applySeed(res.seed, job.ship); box.append(d);

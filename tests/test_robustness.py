@@ -629,6 +629,23 @@ class PaintableFilter(unittest.TestCase):
         for s in found:
             self.assertTrue(self.textures.hull_takes_paint(s, "sentinel"), f"0x{s:016X}")
 
+    def test_the_black_search_returns_the_overlay_that_draws_black(self):
+        """Every interceptor seen in game on overlay 3 has come out black, whatever colour the
+        rest of its palette is -- including the one a player sent in as "pure black"."""
+        from nms_procgen.fastsearch import fast_search
+        found = [s for s, _ in fast_search("sentinel", ["_PIT_C"], (), 5, time_limit=40, overlay=["3"])]
+        self.assertTrue(found, "no overlay-3 seed found at all")
+        for s in found:
+            self.assertEqual(self.textures.overlay_of(s), "3", f"0x{s:016X}")
+
+    def test_the_seeds_watched_in_game_sit_where_the_overlay_says(self):
+        """The four black ones all draw overlay 3 and the two orange ones overlay 1, which is
+        what makes the option worth searching on at all."""
+        for seed in ("0x16D9A653A77D1710", "0xDABDF53F4A1F40C3", "0xDABDF43F4A1F40C3"):
+            self.assertEqual(self.textures.overlay_of(seed), "3", seed)
+        for seed in ("0xC6D38D577ACDE48D", "0xDBBDF53F4A1F40C3"):
+            self.assertEqual(self.textures.overlay_of(seed), "1", seed)
+
 
 class OriginsAreChecked(unittest.TestCase):
     """A seed reversed to a star system is a lead until the generator agrees."""

@@ -393,14 +393,43 @@ def paint_channels(seed, ship):
 OVERLAY_STEPS = 4
 OPAQUE_BUCKET = 0  # bucket 0 of 4 is option "1", the one that covers the paint
 
+# What each overlay draws with, measured off its own sheet, and what that comes out as on an
+# unpainted ship -- every interceptor watched in game so far agrees:
+#   1  warm brown, covers the sheet outright  -> orange
+#   2  neutral grey, lets the base through    -> whatever the base is, muted
+#   3  the darkest sheet of the four          -> near black, whatever the seed
+#   4  blue, and only a sixth of the sheet    -> the base, with a trim
+BLACK_OVERLAY = "3"
 
-def paintable_mask(s0, s1):
-    """Vectorised: True where an interceptor seed's overlay lets the paint show."""
+
+def overlay_bucket(s0, s1):
+    """Vectorised: which of the four overlay options a seed draws, as 0-3."""
     a0, a1 = s0, s1
     for _ in range(OVERLAY_STEPS):
         a0, a1 = _np_steps(a0, a1, 1)
     x = (a0.astype(np.float64) * INV).astype(np.float32)
-    return (x * np.float32(4.0)).astype(np.float32) >= np.float32(OPAQUE_BUCKET + 1)
+    return (x * np.float32(4.0)).astype(np.float32).astype(np.int64)
+
+
+def overlay_mask(s0, s1, options):
+    """Vectorised: True where the seed's overlay is one of `options` (names, "1".."4")."""
+    want = {int(o) - 1 for o in options}
+    bucket = overlay_bucket(s0, s1)
+    keep = np.zeros(len(bucket), bool)
+    for b in want:
+        keep |= bucket == b
+    return keep
+
+
+def paintable_mask(s0, s1):
+    """Vectorised: True where an interceptor seed's overlay lets the paint show."""
+    return overlay_bucket(s0, s1) > OPAQUE_BUCKET
+
+
+def overlay_of(seed):
+    """The overlay option one interceptor seed draws, as the texture list names it."""
+    overlay = next((t for t in ship_look(seed, "sentinel")["textures"] if t["layer"] == "OVERLAY"), None)
+    return overlay["option"] if overlay else ""
 
 
 def hull_takes_paint(seed, ship):

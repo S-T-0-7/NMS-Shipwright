@@ -67,9 +67,12 @@
             <div class="row"><label class="muted">Results</label><input id="dN" type="number" value="5" min="1" max="50" style="width:70px">
               <label class="muted" title="Off: keep searching until you press Stop"><input type="checkbox" id="dLimit"> Give up after</label>
               <input id="dSecs" type="number" value="10" min="1" max="1440" style="width:70px" disabled><label class="muted">min</label></div>
-            <div class="row" id="dPaintRow" hidden><label class="muted"
-                title="Half of all interceptor seeds colour themselves and ignore most of your paint"><input
-                type="checkbox" id="dPaintable"> Only seeds I can paint</label></div>
+            <div class="row" id="dPaintRow" hidden><label class="muted">Colour</label>
+              <select id="dColour" title="An interceptor's seed decides whether your paint shows at all">
+                <option value="">Any seed</option>
+                <option value="paintable">Only ones I can paint</option>
+                <option value="black">Pure black ones (the seed's own)</option>
+              </select></div>
             <div class="row end"><button class="btn primary" id="dGo" data-icon="search">Find seeds</button>
               <button class="btn danger" id="dStop" data-icon="stop" disabled>Stop</button></div>
             <p class="muted tnote" id="dOdds"></p>

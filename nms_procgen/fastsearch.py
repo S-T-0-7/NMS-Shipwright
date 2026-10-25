@@ -125,7 +125,7 @@ def matches(seed, ship, want, avoid, gamedata=None):
 
 def fast_search(ship="fighter", want=(), avoid=(), limit=5, max_seeds=10 ** 11, batch=1 << 20,
                 time_limit=None, rng=None, stats=None, should_stop=None, gamedata=None, look=None,
-                paintable=False):
+                paintable=False, overlay=None):
     """Yields (seed, [(group_type, part_id), ...]) for seeds meeting want/avoid and `look`
     ({"primary"/"secondary"/"undercoat": colour indices, "mode": hull texture modes}).
     paintable keeps only interceptor seeds whose overlay reads the paint rather than
@@ -139,6 +139,7 @@ def fast_search(ship="fighter", want=(), avoid=(), limit=5, max_seeds=10 ** 11, 
     want, avoid = _closure(root, set(want), gamedata), set(avoid)
     plan = _compile(root, want, avoid, gamedata)
     want_paint = bool(paintable) and ship == "sentinel"  # only interceptors have the choice
+    want_overlay = list(overlay or ()) if ship == "sentinel" else []
     rng = rng or np.random.default_rng()
     stats = {} if stats is None else stats
     stats.update(tested=0, seconds=0.0)
@@ -153,13 +154,16 @@ def fast_search(ship="fighter", want=(), avoid=(), limit=5, max_seeds=10 ** 11, 
                 mask &= textures.look_mask(*st, look)
             if want_paint:
                 mask &= textures.paintable_mask(*st)
-            hits = seeds[mask] if (plan or look or want_paint) else seeds[:1]
+            if want_overlay:
+                mask &= textures.overlay_mask(*st, want_overlay)
+            hits = seeds[mask] if (plan or look or want_paint or want_overlay) else seeds[:1]
             stats["tested"] += batch
             stats["seconds"] = time.time() - t0
             for s in map(int, hits):
                 if (matches(s, ship, want, avoid, gamedata)
                         and (not look or textures.look_matches(s, look))
-                        and (not want_paint or textures.hull_takes_paint(s, ship))):
+                        and (not want_paint or textures.hull_takes_paint(s, ship))
+                        and (not want_overlay or textures.overlay_of(s) in want_overlay)):
                     found += 1
                     yield s, generate(s, ship, gamedata)
                     if found >= limit:
