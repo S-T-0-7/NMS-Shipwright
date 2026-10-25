@@ -16,8 +16,8 @@
 - **Smaller download.** The build was shipping the static library and C headers from the
   emulator package -- 50 MB of what you would link a C program against, sitting next to the
   library the app actually loads and opened by nothing. The Windows installer drops from 27 MB
-  to 23 MB and the install on disk from 118 MB to 70 MB; the Linux AppImage loses its own copy
-  of the same thing and is packed with xz rather than zstd on top of that.
+  to 23 MB and the install on disk from 118 MB to 70 MB, and the Linux AppImage sheds 33 MB of
+  the same thing before it is even packed.
 - Upgrading from an older build no longer leaves the files it dropped behind, so the saving
   reaches installs that are updated in place and not only fresh ones.
 
