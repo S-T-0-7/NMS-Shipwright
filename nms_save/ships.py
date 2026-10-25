@@ -572,8 +572,49 @@ def create_ship(readable_json: dict, slot: int, filename: str, seed: str, name: 
         legacy[slot] = legacy[clone_from]
 
 
+# What a free slot has that a used one does not, read off a save holding both: the ship goes,
+# and all three inventories shrink to a single empty square.
+_BLANK_LISTS = ("Slots", "ValidSlotIndices", "BaseStatValues", "SpecialSlots")
+_INVENTORIES = ("Inventory", "Inventory_Cargo", "Inventory_TechOnly")
+
+
+def _blanked(entry: dict) -> dict:
+    """A free slot built out of the ship standing in it.
+
+    Copying another free slot is the surer way and stays the first choice, but a save with
+    all twelve full has none to copy -- which is exactly when someone wants a slot emptied,
+    and it used to be refused, leaving the game's own "destroy it from your freighter" as
+    the only way out.
+    """
+    import copy
+
+    e = copy.deepcopy(entry)
+    e["Name"] = ""
+    r = e.setdefault("Resource", {})
+    r["Filename"], r["AltId"] = "", ""
+    r["Seed"] = [False, "0x0"]
+    r["ProceduralTexture"] = {"Samplers": []}
+    for key in _INVENTORIES:
+        inv = e.get(key)
+        if not isinstance(inv, dict):
+            continue
+        for f in _BLANK_LISTS:
+            if f in inv:
+                inv[f] = []
+        inv["Width"] = inv["Height"] = 1
+        group = inv.get("StackSizeGroup")
+        if isinstance(group, dict):
+            group["InventoryStackSizeGroup"] = "Default"
+    layout = e.get("InventoryLayout")
+    if isinstance(layout, dict):
+        layout["Slots"] = 10
+        if isinstance(layout.get("Seed"), list) and len(layout["Seed"]) > 1:
+            layout["Seed"][1] = "0x1"
+    return e
+
+
 def remove_ship(readable_json: dict, slot: int) -> None:
-    """Empty a ship slot, turning it back into a free slot. Copies the save's own empty-slot shape."""
+    """Empty a ship slot, turning it back into a free slot."""
     import copy
 
     entries = _dig(readable_json, SHIP_PATH)
@@ -583,9 +624,7 @@ def remove_ship(readable_json: dict, slot: int) -> None:
         raise ShipLookupError(f"Slot {slot} is already empty")
     blank = next((e for i, e in enumerate(entries)
                   if i != slot and not e.get("Resource", {}).get("Filename")), None)
-    if blank is None:
-        raise ShipLookupError("every ship slot is full -- keep one slot empty to use as the blank template")
-    entries[slot] = copy.deepcopy(blank)
+    entries[slot] = copy.deepcopy(blank) if blank is not None else _blanked(entries[slot])
     clear_ship_paint(readable_json, slot)
     legacy = _dig(readable_json, SHIP_PATH[:-1]).get("ShipUsesLegacyColours")
     if isinstance(legacy, list) and slot < len(legacy):

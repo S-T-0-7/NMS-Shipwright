@@ -2,6 +2,20 @@
 
 ## 1.8.7
 
+- **Pick a colour, not a paint set.** Recolour asked which of three sets you wanted before it
+  would show you any colours, which meant guessing where a colour lived: 16 of the 20 metallics
+  are in no other set, true black is only in the freighter paints, and the rest mostly overlap.
+  All 40 are on screen at once now, named, with the metallics kept in their own band because
+  they look different. Whichever set can supply what you picked is worked out and stored for
+  you. If one slot's colour is not in the same set as the others -- a save keeps one set per
+  ship -- it is snapped to the nearest in that set and the message says so.
+- **Emptying a ship slot works on a full save.** It needed a free slot to copy the shape of,
+  so with all twelve full it refused -- which is exactly when you want it, and left having the
+  game destroy a ship from your freighter as the only way out. It now builds the empty slot
+  from the ship standing in it, which matches what the game writes field for field.
+- The ship preview had an interceptor's body and trim colours the wrong way round, left over
+  from the slot names being reversed. Fixed.
+
 - **Landing gear and other jointed parts sit where they should.** Scene transforms are euler
   angles, and this read them in the wrong order -- Z then Y then X, where the game goes Y, X, Z.
   A joint turning about one axis comes out the same either way, which is why most of a ship

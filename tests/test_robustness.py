@@ -462,6 +462,61 @@ class SentinelOverlay(unittest.TestCase):
         self.assertNotEqual((single["palette"], single["alt"]), ("Paint", "Alternative1"))
 
 
+class EmptyingTheLastSlot(unittest.TestCase):
+    """A save with every ship slot full still has to be able to free one."""
+
+    @staticmethod
+    def _save(filled):
+        def inv(used):
+            return {"Slots": [{"a": 1}] if used else [], "ValidSlotIndices": [1] if used else [],
+                    "BaseStatValues": [2] if used else [], "SpecialSlots": [3] if used else [],
+                    "Class": {"InventoryClass": "C"}, "Width": 7 if used else 1, "Height": 5 if used else 1,
+                    "StackSizeGroup": {"InventoryStackSizeGroup": "Ship" if used else "Default"}}
+
+        def ship(used):
+            return {"Name": "Mine" if used else "",
+                    "Resource": {"Filename": "MODELS/X.SCENE.MBIN" if used else "", "AltId": "x" if used else "",
+                                 "Seed": [True, "0xABC"] if used else [False, "0x0"],
+                                 "ProceduralTexture": {"Samplers": [{"Options": []}] if used else []}},
+                    "Inventory": inv(used), "Inventory_Cargo": inv(used), "Inventory_TechOnly": inv(used),
+                    "InventoryLayout": {"Seed": [True, "0x7" if used else "0x1"], "Slots": 24 if used else 10},
+                    "Location": 0, "Position": [0, 0, 0]}
+
+        return {"BaseContext": {"PlayerStateData": {
+            "ShipOwnership": [ship(i < filled) for i in range(12)],
+            "CharacterCustomisationData": [{"CustomData": {}} for _ in range(26)],
+            "ShipUsesLegacyColours": [True] * 12}}}
+
+    def test_a_full_save_can_still_free_a_slot(self):
+        """It used to refuse with "every ship slot is full", which is when you need it most --
+        the only way left was to have the game destroy the ship from your freighter."""
+        from nms_save import ships
+        save = self._save(12)
+        ships.remove_ship(save, 4)
+        freed = save["BaseContext"]["PlayerStateData"]["ShipOwnership"][4]
+        self.assertEqual(freed["Resource"]["Filename"], "")
+        self.assertEqual(freed["Resource"]["Seed"], [False, "0x0"])
+        self.assertEqual(freed["Name"], "")
+        for key in ("Inventory", "Inventory_Cargo", "Inventory_TechOnly"):
+            self.assertEqual(freed[key]["Slots"], [], key)
+            self.assertEqual((freed[key]["Width"], freed[key]["Height"]), (1, 1), key)
+
+    def test_it_still_copies_a_real_empty_slot_when_there_is_one(self):
+        """The save's own shape beats anything built by hand, so a donor stays the first choice."""
+        from nms_save import ships
+        save = self._save(11)
+        donor = save["BaseContext"]["PlayerStateData"]["ShipOwnership"][11]
+        ships.remove_ship(save, 2)
+        self.assertEqual(save["BaseContext"]["PlayerStateData"]["ShipOwnership"][2], donor)
+
+    def test_what_it_builds_matches_what_the_game_writes(self):
+        """Checked against a real save holding both shapes: identical, field for field."""
+        from nms_save import ships
+        save = self._save(11)
+        entries = save["BaseContext"]["PlayerStateData"]["ShipOwnership"]
+        self.assertEqual(ships._blanked(entries[0]), entries[11])
+
+
 class RotationOrder(unittest.TestCase):
     """Scene transforms are euler angles, and the order they go in is not a free choice."""
 

@@ -47,10 +47,10 @@ function selectShip(slot) {
       <span class="muted" id="pPicking"></span><span style="flex:1"></span>
       <button class="btn primary" id="pApply">${ic('check')}Save these colours</button>
       <button class="btn danger" id="pClear">${ic('trash')}Remove my paint</button></div>
-    <div class="row" style="margin-top:10px"><label class="muted">Paint set</label><select id="pPal" title="Which set of paints"></select>
-      <input type="color" id="pAny" title="Any colour: it snaps to the nearest paint in this set" style="width:38px;height:30px;padding:0;border:0;background:none">
+    <div class="row" style="margin-top:10px"><label class="muted">Or any colour</label>
+      <input type="color" id="pAny" title="Any colour: it snaps to the nearest paint the game has" style="width:38px;height:30px;padding:0;border:0;background:none">
       <span class="muted" id="pNote"></span></div>
-    <div class="swatches" id="pSw"></div>
+    <div id="pSw"></div>
     <details class="more"><summary>More: rename, change ship type, remove</summary>
     <h3>Name</h3>
     <div class="row"><input id="sName" value="${esc(s.name)}" placeholder="(unnamed)" style="width:260px"><button class="btn" id="sRename">Rename</button></div>
@@ -126,8 +126,11 @@ function originHtml(s) {
   return row(best, true) + (rest.length && !best.visited ? `<p class="muted" style="margin:10px 0 0">Other possible systems:</p>` + rest.map(o => row(o)).join('') : '');
 }
 
-/* Only these paint sets apply to ships; the rest are for bikes, mechs, pets and so on. */
+/* Only these paint sets apply to ships; the rest are for bikes, mechs, pets and so on. A save
+   holds one set per ship, so these are not three palettes to choose between so much as one list
+   of colours with a note of which sets each belongs to -- see allPaints and paintSetFor. */
 const PAINT_SETS = {SHIP: 'Ship paints', SHIP_METALLIC: 'Metallic ship paints', FREIGHTER: 'Freighter paints (has true black)'};
+const METALLIC = 'SHIP_METALLIC';
 
 /* A plain-English name for a colour, so a swatch grid reads as words and not as 64 squares. */
 function colourName(c) {
@@ -158,10 +161,42 @@ function namedColours(cols) {
 const nearestColour = (cols, c) => cols.reduce((best, x) =>
   (x.rgb || x).reduce((s, v, k) => s + (v - c[k]) ** 2, 0) < (best.rgb || best).reduce((s, v, k) => s + (v - c[k]) ** 2, 0) ? x : best, cols[0]);
 
+/* Every colour a ship can take, once each, with the sets it belongs to and its slot in each.
+   Asking someone to pick a set first and a colour second meant guessing which set a colour was
+   in: 16 of the 20 metallics are in no other set, true black is only in the freighter paints,
+   and the other 24 mostly overlap. So the sets stop being a question and become an answer --
+   pick the colour, and whichever set can supply it is the one we store. */
+function allPaints(palettes) {
+  const out = [], seen = {}, at = {};
+  for (const set of Object.keys(PAINT_SETS)) {
+    (palettes[set] || []).forEach((rgb, i) => {
+      const key = rgb.map(v => Math.round(v * 255)).join(',');
+      if (at[key] === undefined) {
+        const base = colourName(rgb), n = seen[base] = (seen[base] || 0) + 1;
+        at[key] = out.length;
+        out.push({rgb, name: n > 1 ? `${base} ${n}` : base, sets: {}});
+      }
+      if (out[at[key]].sets[set] === undefined) out[at[key]].sets[set] = i;
+    });
+  }
+  return out;
+}
+
+/* One set has to cover every slot being painted, since a save keeps one per ship. Prefer the
+   set that holds all the chosen colours outright; failing that, the one that holds the most. */
+function paintSetFor(picked) {
+  const want = picked.filter(Boolean);
+  let best = 'FREIGHTER', score = -1;
+  for (const set of Object.keys(PAINT_SETS)) {
+    const n = want.filter(p => p.sets[set] !== undefined).length;
+    if (n > score) { score = n; best = set; }
+  }
+  return {set: best, whole: score === want.length};
+}
+
 /* The game gives a ship five paint slots and each ship draws a different handful of them --
    see textures.paint_channels. Ask which, and offer exactly those. */
 async function setupPaint(slot, ship, seed) {
-  const pal = $('#pPal');
   let channels = [{alt: 'Primary', name: 'Body'}], fixed = [];
   if (ship && seed) {
     try {
@@ -185,48 +220,66 @@ async function setupPaint(slot, ship, seed) {
                             : {rgb: S.paint.primary || [0, 0, 0], index: S.paint.primary_index ?? -1};
   }
   S.target = channels[0].alt;
-  if (!(S.paint.palette in PAINT_SETS)) S.paint.palette = 'FREIGHTER';
-  pal.innerHTML = Object.entries(PAINT_SETS).filter(([k]) => S.palettes[k])
-    .map(([k, label]) => `<option value="${k}" ${k === S.paint.palette ? 'selected' : ''}>${esc(label)}</option>`).join('');
-  pal.disabled = false;
-  const body = () => S.channels[ship === 'sentinel' && S.channels.Alternative1 ? 'Alternative1' : 'Primary'];
-  const trim = () => S.channels[ship === 'sentinel' ? 'Primary' : 'Alternative1'] || body();
+  const paints = allPaints(S.palettes);
+  /* What is stored is a colour, not a slot number: the set is worked out at the end from
+     whatever was picked, so nobody has to know which set holds the colour they want. */
+  for (const alt of Object.keys(S.channels)) S.channels[alt].pick = nearestColour(paints, S.channels[alt].rgb);
+  /* Primary is the base coat and Alternative1 the trim, on an interceptor as on anything else.
+     This had them the other way round for interceptors, which showed in the 3D preview. */
+  const body = () => S.channels.Primary || S.channels[channels[0].alt];
+  const trim = () => S.channels.Alternative1 || body();
   const livePreview = () => VIEWERS.sView && VIEWERS.sView.setColours({paint: body().rgb, secondary: trim().rgb});
   const label = alt => (channels.find(c => c.alt === alt) || {}).name || alt;
+  const pickOf = alt => S.channels[alt].pick || nearestColour(paints, S.channels[alt].rgb);
   const chips = () => {
-    const cols = namedColours(S.palettes[pal.value] || []);
     $('#pChips').innerHTML = channels.map(c =>
       `<button class="btn chip ${S.target === c.alt ? 'primary' : ''}" data-alt="${esc(c.alt)}"
          title="paints ${esc((c.layers || []).join(', '))}"><i style="background:${hex(S.channels[c.alt].rgb)}"></i>
-         <span>${esc(c.name)}: ${esc(nearestColour(cols, S.channels[c.alt].rgb).name)}</span></button>`).join('');
+         <span>${esc(c.name)}: ${esc(pickOf(c.alt).name)}</span></button>`).join('');
     $$('#pChips button').forEach(b => b.onclick = () => { S.target = b.dataset.alt; chips(); });
     $('#pPicking').textContent = `Click a colour to set the ${label(S.target).toLowerCase()}`;
     livePreview();
   };
+  const choose = p => { S.channels[S.target] = {rgb: p.rgb, index: -1, pick: p}; chips(); };
   const swatches = () => {
-    const cols = namedColours(S.palettes[pal.value] || []);
-    $('#pSw').innerHTML = cols.map(c => `<i title="${esc(c.name)}" data-i="${c.i}"><b style="background:${hex(c.rgb)}"></b>${esc(c.name)}</i>`).join('');
-    $$('#pSw i').forEach(el => el.onclick = () => {
-      S.channels[S.target] = {rgb: cols[+el.dataset.i].rgb, index: +el.dataset.i};
-      chips();
-    });
-    $('#pNote').textContent = `${cols.length} paints in this set. The game only uses these, so any other colour snaps to the closest one.`;
+    /* Two bands rather than a dropdown: the metallics look different enough to be worth
+       keeping apart, and everything is on screen at once either way. */
+    const band = (title, list) => !list.length ? '' : `<p class="muted tnote" style="margin:10px 0 4px">${title}</p>`
+      + `<div class="swatches">${list.map(p => `<i title="${esc(p.name)}" data-k="${paints.indexOf(p)}">`
+      + `<b style="background:${hex(p.rgb)}"></b>${esc(p.name)}</i>`).join('')}</div>`;
+    const metal = paints.filter(p => Object.keys(p.sets).length === 1 && p.sets[METALLIC] !== undefined);
+    const plain = paints.filter(p => !metal.includes(p));
+    $('#pSw').innerHTML = band(`Paints (${plain.length})`, plain) + band(`Metallic paints (${metal.length})`, metal);
+    $$('#pSw i').forEach(el => el.onclick = () => choose(paints[+el.dataset.k]));
+    $('#pNote').textContent = `${paints.length} paints in all. The game uses only these, so any other colour snaps to the nearest.`;
   };
-  pal.onchange = () => { S.paint.palette = pal.value; swatches(); chips(); };
   $('#pAny').oninput = e => {
     const v = e.target.value, want = [1, 3, 5].map(i => parseInt(v.substr(i, 2), 16) / 255);
-    const near = nearestColour(namedColours(S.palettes[pal.value] || []), want);  // show what the game will really use
-    S.channels[S.target] = {rgb: near.rgb, index: near.i}; chips();
-    $('#pNote').textContent = `Nearest paint in this set: ${near.name}.`;
+    const near = nearestColour(paints, want);  // show what the game will really use
+    choose(near);
+    $('#pNote').textContent = `Nearest paint: ${near.name}.`;
   };
   $('#pApply').onclick = () => guard(async () => {
-    const b = body();
-    await post('/api/ship/paint', {path: S.path, slot, palette: pal.value, channels: S.channels,
+    const picks = channels.map(c => pickOf(c.alt));
+    const {set, whole} = paintSetFor(picks);
+    /* A colour the chosen set does not hold is snapped into it, so what is stored is a real
+       slot of that set rather than a colour from another one the game may not honour. */
+    const inSet = (S.palettes[set] || []).map((rgb, i) => ({rgb, i}));
+    const out = {};
+    for (const c of channels) {
+      const p = pickOf(c.alt);
+      const slot = p.sets[set];
+      if (slot !== undefined) out[c.alt] = {rgb: p.rgb, index: slot};
+      else { const n = nearestColour(inSet, p.rgb); out[c.alt] = {rgb: n.rgb, index: n.i}; }
+    }
+    const b = out.Primary || out[channels[0].alt];
+    const t = out.Alternative1 || b;
+    await post('/api/ship/paint', {path: S.path, slot, palette: set, channels: out,
                                    primary: b.rgb, primary_index: b.index,
-                                   accent: trim().rgb, accent_index: trim().index});
-    const cols = namedColours(S.palettes[pal.value] || []);
-    const said = channels.map(c => `${c.name.toLowerCase()} ${nearestColour(cols, S.channels[c.alt].rgb).name}`).join(', ');
-    showBanner(`Painted slot ${slot}: ${said} (${PAINT_SETS[pal.value]}). Backup made. Load this save in the game to see it.`, false);
+                                   accent: t.rgb, accent_index: t.index});
+    const said = channels.map(c => `${c.name.toLowerCase()} ${nearestColour(paints, out[c.alt].rgb).name}`).join(', ');
+    showBanner(`Painted slot ${slot}: ${said}. Backup made. Load this save in the game to see it.`
+      + (whole ? '' : ' One of these is not in the same set as the others, so the closest match in that set was used.'), false);
     await loadShips();
   });
   $('#pClear').onclick = () => guard(async () => { await post('/api/ship/paint/clear', {path: S.path, slot}); toast('Paint removed, back to its own colours. Backup made.'); await loadShips(); });
