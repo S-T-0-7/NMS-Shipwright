@@ -39,6 +39,13 @@
   the Designer marks those seeds **SEED COLOUR ONLY** in its results, so you can take one of the
   other seeds that builds the same ship and paint the whole thing.
 
+- **Smaller download.** The build was shipping the static library and C headers from the
+  emulator package -- 50 MB of what you would link a C program against, sitting next to the
+  library the app actually loads and opened by nothing. The Windows installer drops from 27 MB
+  to 23 MB, and the Linux AppImage loses its own copy of the same thing. The Linux build is
+  also packed with xz rather than zstd: a little slower to unpack the first time it runs, and
+  smaller to download.
+
 - **Quests read as quests now**, not as mission ids. The game names a storyline rather than its
   steps -- all six steps of "Alone Amidst the Stars" share that one title -- so every row used to
   say `ACT1_STEP3`. Each step is now labelled with the line the game writes into your log when you

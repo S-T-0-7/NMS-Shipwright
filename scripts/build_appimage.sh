@@ -52,7 +52,9 @@ curl -sSL -o "$TOOL" \
   https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
 chmod +x "$TOOL"
 
-echo ">> packaging $OUT"
-# --appimage-extract-and-run avoids needing FUSE on CI runners
-ARCH=x86_64 VERSION="$VERSION" "$TOOL" --appimage-extract-and-run "$APPDIR" "$OUT"
-echo "built: $OUT"
+echo ">> packaging $OUT ($(du -sh "$APPDIR" | cut -f1) of files)"
+# --appimage-extract-and-run avoids needing FUSE on CI runners.
+# xz over the default zstd: this is a one-off download people wait on once and then run from
+# disk, so trading a slower first unpack for a smaller file is the right way round.
+ARCH=x86_64 VERSION="$VERSION" "$TOOL" --appimage-extract-and-run --comp xz "$APPDIR" "$OUT"
+echo "built: $OUT ($(du -h "$OUT" | cut -f1))"

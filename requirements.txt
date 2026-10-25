@@ -1,4 +1,3 @@
-pandas
 lz4
 flask
 numpy

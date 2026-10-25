@@ -95,9 +95,32 @@ def build(console=False):
     exe = ROOT / ("dist-debug" if console else "dist") / NAME / EXE
     if not exe.exists():
         sys.exit("build failed: exe not found")
+    drop_link_time_files(exe.parent)
     if WINDOWS:  # Linux uses the thread stack set in nms_editor.main(); PE/CFG don't apply
         fix_pe(exe)
     return exe
+
+
+# What a C programmer would link against, which we ship by accident and nobody opens.
+LINK_TIME = ("*.lib", "*.a", "*.h")
+
+
+def drop_link_time_files(app_dir):
+    """Throw away the build-time half of the libraries we collect whole.
+
+    `--collect-all unicorn` takes the package exactly as it ships, and that includes the
+    static library and headers you would build a C program against -- 47 MB of unicorn.lib
+    on Windows, libunicorn.a on Linux -- sitting next to the .dll or .so that is the one
+    actually loaded. unicorn opens its library by name through ctypes and never looks at
+    either, so they are pure download weight.
+    """
+    freed = 0
+    for pattern in LINK_TIME:
+        for path in (app_dir / "_internal" / "unicorn").rglob(pattern):
+            freed += path.stat().st_size
+            path.unlink()
+    if freed:
+        print(f"dropped {freed / 1e6:.0f} MB of link-time files")
 
 
 def fix_pe(exe, size=STACK):

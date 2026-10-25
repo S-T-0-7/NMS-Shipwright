@@ -38,6 +38,16 @@ ArchitecturesInstallIn64BitMode=x64compatible
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 
+[InstallDelete]
+; Setup overwrites what it brings and leaves everything else where it is, so a file that has
+; since been dropped from the build lives on in an upgraded install forever. These are worth
+; naming: 47 MB of static library shipped by mistake until 1.8.6, and the uninstaller from
+; before this app was packaged with Inno, which would try to unwind a layout that is gone.
+Type: filesandordirs; Name: "{app}\_internal\unicorn\lib"
+Type: files; Name: "{app}\_internal\unicorn\*.lib"
+Type: files; Name: "{app}\_internal\unicorn\*.h"
+Type: files; Name: "{app}\Uninstall.exe"
+
 [Files]
 Source: "{#AppSrc}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
