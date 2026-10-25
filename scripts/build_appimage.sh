@@ -53,8 +53,17 @@ curl -sSL -o "$TOOL" \
 chmod +x "$TOOL"
 
 echo ">> packaging $OUT ($(du -sh "$APPDIR" | cut -f1) of files)"
-# --appimage-extract-and-run avoids needing FUSE on CI runners.
 # xz over the default zstd: this is a one-off download people wait on once and then run from
-# disk, so trading a slower first unpack for a smaller file is the right way round.
-ARCH=x86_64 VERSION="$VERSION" "$TOOL" --appimage-extract-and-run --comp xz "$APPDIR" "$OUT"
+# disk, so a slower first unpack for a smaller file is the right way round. appimagetool is
+# pulled from a rolling build, so ask whether it still takes the flag rather than assume --
+# a release that cannot be packaged at all is a worse trade than one packaged larger.
+COMP=()
+if "$TOOL" --appimage-extract-and-run --help 2>&1 | grep -q -- "--comp"; then
+  COMP=(--comp xz)
+else
+  echo "   (this appimagetool has no --comp; packing with its default)"
+fi
+
+# --appimage-extract-and-run avoids needing FUSE on CI runners
+ARCH=x86_64 VERSION="$VERSION" "$TOOL" --appimage-extract-and-run "${COMP[@]}" "$APPDIR" "$OUT"
 echo "built: $OUT ($(du -h "$OUT" | cut -f1))"
