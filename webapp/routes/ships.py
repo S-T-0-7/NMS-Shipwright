@@ -196,8 +196,8 @@ def api_ship_refit():
 
 
 # What each paint slot is called on screen. The names come from the layers a ship draws with
-# that slot (see textures.paint_channels); an interceptor is named apart because its hull comes
-# from Alternative1 and only its pincers from Primary -- the reverse of every other ship.
+# that slot (see textures.paint_channels); an interceptor is named apart because its slots sit
+# on different layers, not because they mean anything different.
 # Nearly every slot paints some BASE layer, so BASE says nothing about which slot this is. Only
 # the telling layer names are here; a slot with none of them falls back to what that slot is
 # usually for.
@@ -216,20 +216,19 @@ def api_ship_channels():
     if not ship or not seed:
         raise ValueError("ship and seed are required")
     found = textures.paint_channels(int(seed, 16), ship)
-    # An interceptor wears its hull on the overlay layer and its pincers on the base one, so its
-    # slots are named apart. Which name Primary gets depends on the seed: with a hull that reads
-    # Alternative1 it is the pincers alone, with a hull that reads paint but has no slot of its
-    # own it is the whole ship, and with a hull the seed colours it is the pincers again -- and
-    # then `fixed` says the rest of the ship is out of reach.
+    # On an interceptor Primary is the base coat under everything, as on any other ship, and
+    # Alternative1 is the trim -- the overlay that reads it inks a few compact bands of the
+    # texture sheet and nothing between them. Where there is no trim slot and no seed layer in
+    # the way, Primary is simply the whole ship; where a seed layer covers it, `fixed` says so.
     hull_paints = textures.hull_takes_paint(int(seed, 16), ship)
     two_tone = ship == "sentinel" and any(c["alt"] == "Alternative1" for c in found)
     out = []
     for c in found:
         alt, layers = c["alt"], c["layers"]
         if ship == "sentinel" and alt == "Primary":
-            name = "Whole ship" if hull_paints and not two_tone else "Pincers"
+            name = "Whole ship" if hull_paints and not two_tone else "Body"
         elif two_tone and alt == "Alternative1":
-            name = "Hull"
+            name = "Trim"
         else:
             named = [_LAYER_NAMES[x] for x in layers if x in _LAYER_NAMES]
             name = named[0] if named else _SLOT_NAMES.get(alt, alt)
@@ -242,9 +241,10 @@ def api_ship_channels():
         if seen[c["name"]] > 1:
             count[c["name"]] = count.get(c["name"], 0) + 1
             c["name"] = f'{c["name"]} {count[c["name"]]}'
-    # Parts no paint can reach, so the UI can say so instead of letting someone pick black
-    # four times over and wonder why their interceptor is still grey.
-    fixed = [] if hull_paints else [{"name": "Hull", "palette": "Rock"}]
+    # The seed's own layer, where it has one, so the UI can warn instead of letting someone
+    # pick black four times over and wonder why their interceptor is still grey. It is not a
+    # separate part of the ship: it is a coat over the paint, and it covers most of the sheet.
+    fixed = [] if hull_paints else [{"name": "Most of the ship", "palette": "Rock"}]
     return jsonify({"ship": ship, "seed": seed, "channels": out, "fixed": fixed})
 
 

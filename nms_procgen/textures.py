@@ -383,12 +383,13 @@ def paint_channels(seed, ship):
 def hull_takes_paint(seed, ship):
     """Whether paint reaches this ship's body, which on an interceptor is not a given.
 
-    An interceptor wears its body on the OVERLAY layer and its pincers on BASE. The robot
-    texture list offers four options for that overlay and two of them -- near enough half of
-    all seeds -- draw it from the Rock palette, which is built out of the seed and cannot be
-    set from a save. Paint one of those and only the pincers change colour, which is why an
-    interceptor sent to black comes back grey. Every other ship type wears its body on BASE,
-    and BASE always reads Paint.
+    BASE is the coat under everything and always reads Paint/Primary. OVERLAY goes over it,
+    and the robot texture list offers four of those. Measuring the sheets each one draws
+    with says what they are: overlay 4 inks a few compact bands and nothing in between --
+    trim parts -- while 1 and 2 cover the sheet almost end to end and take their colour from
+    the Rock palette, which is built out of the seed and cannot be set from a save. On near
+    enough half of all seeds, then, the ship wears a coat of its own over the paint, which is
+    why an interceptor sent to black can come back grey. Every other ship type shows BASE.
     """
     if ship != "sentinel":
         return True

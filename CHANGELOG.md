@@ -15,8 +15,8 @@
   tertiary trim were forced to one colour. The game gives a ship **five** paint slots and draws a
   different handful of them per ship, so Recolour now asks which ones your ship actually draws
   and offers exactly those, each named for what it paints: body, markings, signage, small signs,
-  trim. A Sentinel interceptor is built the other way round and gets **hull** and **pincers**
-  instead, or just a body on the seeds that cannot take a second colour.
+  trim. A Sentinel interceptor puts its two on different layers from every other ship, so it
+  gets **body** and **trim**, or just the whole ship on seeds with no second colour.
 - **Recolour works on Sentinel interceptors, in any paint set.** 1.8.5 forced them to the
   metallic set, believing the game drew nothing else on an interceptor. It does: an interceptor
   painted from the Freighter set comes out that colour, **including true black**, which the
@@ -32,12 +32,13 @@
   are shown it, and the app says what is actually waiting: "Waiting at the space station as a
   hauler", "Waiting at the crash site as a sentinel interceptor". 45 of 400 random seeds used to
   be handed a system; of 3,000 put through the new check, none were.
-- **Says when a Sentinel's hull cannot be painted.** Roughly half of all interceptor seeds colour
-  their hull from the seed itself rather than from paint -- the game draws that part from its rock
-  palette -- so painting one of those changes its pincers and leaves the hull as it was. That is
-  why an interceptor sent to black comes back grey. Recolour now says so above the colours, and
-  the Designer marks those seeds **SEED COLOUR ONLY** in its results, so you can take one of the
-  other seeds that builds the same ship and paint the whole thing.
+- **Says when a Sentinel seed paints over your paint.** Roughly half of all interceptor seeds
+  draw a layer of their own on top of the base coat, coloured from the seed through the game's
+  rock palette and not settable from a save. Measured against the texture sheets, that layer
+  covers almost the whole ship, which is why an interceptor sent to black can come back grey.
+  How much of your colour survives varies by seed, so Recolour warns rather than forbids, and
+  the Designer marks those seeds **SEED COLOUR ONLY** in its results so you can pick one of the
+  others that builds the same ship.
 
 - **Smaller download.** The build was shipping the static library and C headers from the
   emulator package -- 50 MB of what you would link a C program against, sitting next to the
