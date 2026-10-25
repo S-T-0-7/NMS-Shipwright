@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.8.8
+## 1.8.7
 
 - **Landing gear and other jointed parts sit where they should.** Scene transforms are euler
   angles, and this read them in the wrong order -- Z then Y then X, where the game goes Y, X, Z.
@@ -8,8 +8,6 @@
   looked right and only the rigs turning about two or three axes did not: an Explorer's gear
   broke into pieces hanging below the ship when flying. The order is read off the game's own
   data now, and a test holds it there.
-
-## 1.8.7
 
 - **Sentinel interceptors: the paint warning in 1.8.6 was wrong twice over, and both are fixed.**
   It named the two paint slots the wrong way round -- an interceptor's **body** is its Primary
