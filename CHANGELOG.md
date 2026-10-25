@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.8.7
+
+- **Sentinel interceptors: the paint warning in 1.8.6 was wrong twice over, and both are fixed.**
+  It named the two paint slots the wrong way round -- an interceptor's **body** is its Primary
+  slot and its **trim** is the other, the same as every other ship, not reversed. And it warned
+  about roughly half of all seeds when the real figure is a quarter: of the game's four overlay
+  patterns only one is opaque enough to bury the paint, and the other three let it through.
+  Checked in game on four ships given the same colour, one difference at a time. If you were
+  told a seed could not be painted in 1.8.6, there is a fair chance it can.
+- **The Designer can insist on a seed you can paint.** Which overlay an interceptor wears comes
+  off a single draw from its seed, and so do its parts, so the two are tied together: a Stinger
+  top flap paints on 58% of seeds against 92% with no top flap. Tick **Only seeds I can paint**
+  and the search skips the rest -- it costs nothing, being four more numbers per seed.
+- **Smaller download.** The build was shipping the static library and C headers from the
+  emulator package -- 50 MB of what you would link a C program against, sitting next to the
+  library the app actually loads and opened by nothing. The Windows installer drops from 27 MB
+  to 23 MB and the install on disk from 118 MB to 70 MB; the Linux AppImage loses its own copy
+  of the same thing and is packed with xz rather than zstd on top of that.
+- Upgrading from an older build no longer leaves the files it dropped behind, so the saving
+  reaches installs that are updated in place and not only fresh ones.
+
 ## 1.8.6
 
 - **Fly button**: the ship viewer now shows a ship landed or flying -- landing legs tucking up
@@ -15,8 +36,8 @@
   tertiary trim were forced to one colour. The game gives a ship **five** paint slots and draws a
   different handful of them per ship, so Recolour now asks which ones your ship actually draws
   and offers exactly those, each named for what it paints: body, markings, signage, small signs,
-  trim. A Sentinel interceptor puts its two on different layers from every other ship, so it
-  gets **body** and **trim**, or just the whole ship on seeds with no second colour.
+  trim. A Sentinel interceptor is built the other way round and gets **hull** and **pincers**
+  instead, or just a body on the seeds that cannot take a second colour.
 - **Recolour works on Sentinel interceptors, in any paint set.** 1.8.5 forced them to the
   metallic set, believing the game drew nothing else on an interceptor. It does: an interceptor
   painted from the Freighter set comes out that colour, **including true black**, which the
@@ -32,24 +53,12 @@
   are shown it, and the app says what is actually waiting: "Waiting at the space station as a
   hauler", "Waiting at the crash site as a sentinel interceptor". 45 of 400 random seeds used to
   be handed a system; of 3,000 put through the new check, none were.
-- **Says when a Sentinel seed paints over your paint.** One interceptor seed in four draws an
-  opaque layer of its own on top of the base coat, coloured from the seed and not settable from
-  a save, so the ship keeps the colour it had however you paint it. That is the long-standing
-  "Sentinels won't repaint" complaint, and it is a quarter of seeds rather than all of them.
-  Recolour says so above the colours and the Designer marks those seeds **SEED COLOUR ONLY**,
-  so you can pick one of the three in four that builds the same ship and paints properly.
-
-- **Smaller download.** The build was shipping the static library and C headers from the
-  emulator package -- 50 MB of what you would link a C program against, sitting next to the
-  library the app actually loads and opened by nothing. The Windows installer drops from 27 MB
-  to 23 MB, and the Linux AppImage loses its own copy of the same thing. The Linux build is
-  also packed with xz rather than zstd: a little slower to unpack the first time it runs, and
-  smaller to download.
-
-- **The Designer can insist on a seed you can paint.** Which overlay an interceptor wears comes
-  off a single draw from its seed, and so do its parts, so the two are tied together: a Stinger
-  top flap paints on 58% of seeds against 92% with no top flap. Tick **Only seeds I can paint**
-  and the search skips the rest -- it costs nothing, being four more numbers per seed.
+- **Says when a Sentinel's hull cannot be painted.** Roughly half of all interceptor seeds colour
+  their hull from the seed itself rather than from paint -- the game draws that part from its rock
+  palette -- so painting one of those changes its pincers and leaves the hull as it was. That is
+  why an interceptor sent to black comes back grey. Recolour now says so above the colours, and
+  the Designer marks those seeds **SEED COLOUR ONLY** in its results, so you can take one of the
+  other seeds that builds the same ship and paint the whole thing.
 
 - **Quests read as quests now**, not as mission ids. The game names a storyline rather than its
   steps -- all six steps of "Alone Amidst the Stars" share that one title -- so every row used to
