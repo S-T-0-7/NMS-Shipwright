@@ -47,6 +47,12 @@
   also packed with xz rather than zstd: a little slower to unpack the first time it runs, and
   smaller to download.
 
+- **The Designer can insist on a seed you can paint.** Which overlay an interceptor wears comes
+  off a single draw from its seed, and so do its parts, so the two are tied together: a Stinger
+  top flap paints on 1 seed in 6 against 5 in 6 without one, and a Stinger on a Wide or Narrow
+  cockpit paints on about 1 seed in 17 million. Tick **Only seeds I can paint** and the search
+  skips the rest -- it costs nothing, being four more numbers per seed.
+
 - **Quests read as quests now**, not as mission ids. The game names a storyline rather than its
   steps -- all six steps of "Alone Amidst the Stars" share that one title -- so every row used to
   say `ACT1_STEP3`. Each step is now labelled with the line the game writes into your log when you

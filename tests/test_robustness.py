@@ -491,6 +491,37 @@ class HullTakesPaint(unittest.TestCase):
             self.assertTrue(self.textures.hull_takes_paint(0xFC6F557EE9CCD022, ship), ship)
 
 
+class PaintableFilter(unittest.TestCase):
+    """The search can insist on an interceptor seed that takes paint."""
+
+    @classmethod
+    def setUpClass(cls):
+        from nms_procgen import textures
+        cls.textures = textures
+        try:
+            textures.palettes()
+        except Exception as e:
+            raise unittest.SkipTest(f"game files not available: {e}")
+
+    def test_the_quick_mask_agrees_with_reading_the_textures(self):
+        """The mask takes the overlay option off the fourth draw rather than walking the
+        texture lists. It has to give the same answer, or a search quietly filters on noise."""
+        import numpy
+        from nms_procgen import fastsearch
+        seeds = numpy.random.default_rng(5).integers(0, 2 ** 63, size=250, dtype=numpy.uint64)
+        with numpy.errstate(over="ignore"):
+            quick = self.textures.paintable_mask(*fastsearch._state(seeds))
+        slow = [self.textures.hull_takes_paint(int(s), "sentinel") for s in seeds]
+        self.assertEqual(list(map(bool, quick)), slow)
+
+    def test_a_filtered_search_only_returns_seeds_that_paint(self):
+        from nms_procgen.fastsearch import fast_search
+        found = [s for s, _ in fast_search("sentinel", ["_PIT_C"], (), 6, time_limit=40, paintable=True)]
+        self.assertTrue(found, "no paintable seed found at all")
+        for s in found:
+            self.assertTrue(self.textures.hull_takes_paint(s, "sentinel"), f"0x{s:016X}")
+
+
 class OriginsAreChecked(unittest.TestCase):
     """A seed reversed to a star system is a lead until the generator agrees."""
 

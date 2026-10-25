@@ -124,11 +124,13 @@ def matches(seed, ship, want, avoid, gamedata=None):
 
 
 def fast_search(ship="fighter", want=(), avoid=(), limit=5, max_seeds=10 ** 11, batch=1 << 20,
-                time_limit=None, rng=None, stats=None, should_stop=None, gamedata=None, look=None):
+                time_limit=None, rng=None, stats=None, should_stop=None, gamedata=None, look=None,
+                paintable=False):
     """Yields (seed, [(group_type, part_id), ...]) for seeds meeting want/avoid and `look`
     ({"primary"/"secondary"/"undercoat": colour indices, "mode": hull texture modes}).
-    If given, stats (a dict) receives 'tested' and 'seconds'; should_stop() is
-    polled between batches to cancel."""
+    paintable keeps only interceptor seeds whose overlay reads the paint rather than
+    colouring itself. If given, stats (a dict) receives 'tested' and 'seconds';
+    should_stop() is polled between batches to cancel."""
     known = {pid for ids in all_parts(ship, gamedata).values() for pid in ids}
     unknown = (set(want) | set(avoid)) - known
     if unknown:
@@ -136,6 +138,7 @@ def fast_search(ship="fighter", want=(), avoid=(), limit=5, max_seeds=10 ** 11, 
     root = load_descriptor(resolve_root(ship, gamedata), gamedata)
     want, avoid = _closure(root, set(want), gamedata), set(avoid)
     plan = _compile(root, want, avoid, gamedata)
+    want_paint = bool(paintable) and ship == "sentinel"  # only interceptors have the choice
     rng = rng or np.random.default_rng()
     stats = {} if stats is None else stats
     stats.update(tested=0, seconds=0.0)
@@ -148,11 +151,15 @@ def fast_search(ship="fighter", want=(), avoid=(), limit=5, max_seeds=10 ** 11, 
             mask = _eval(plan, *st) if plan else np.ones(len(seeds), bool)
             if look:
                 mask &= textures.look_mask(*st, look)
-            hits = seeds[mask] if (plan or look) else seeds[:1]
+            if want_paint:
+                mask &= textures.paintable_mask(*st)
+            hits = seeds[mask] if (plan or look or want_paint) else seeds[:1]
             stats["tested"] += batch
             stats["seconds"] = time.time() - t0
             for s in map(int, hits):
-                if matches(s, ship, want, avoid, gamedata) and (not look or textures.look_matches(s, look)):
+                if (matches(s, ship, want, avoid, gamedata)
+                        and (not look or textures.look_matches(s, look))
+                        and (not want_paint or textures.hull_takes_paint(s, ship))):
                     found += 1
                     yield s, generate(s, ship, gamedata)
                     if found >= limit:

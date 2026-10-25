@@ -112,10 +112,10 @@ def api_look_options():
                     "undercoat": [HEX(c) for c in pals[textures.UNDERCOAT][0]]})
 
 
-def run_job(job, ship, want, n, seconds, look=None):
+def run_job(job, ship, want, n, seconds, look=None, paintable=False):
     try:
         for seed, parts in fast_search(ship, want, (), n, time_limit=seconds, stats=job["stats"],
-                                       should_stop=lambda: job["cancel"], look=look):
+                                       should_stop=lambda: job["cancel"], look=look, paintable=paintable):
             # Which of these seeds can be painted is worth knowing before picking one: an
             # interceptor whose hull comes from its seed is a fine ship and a dead end for anyone
             # who wanted it in their own colours.
@@ -345,7 +345,8 @@ def api_design_search():
     JOBS[job_id] = job = {"status": "running", "results": [], "stats": {}, "cancel": False, "error": None,
                           "ship": ship}
     threading.Thread(target=run_job, args=(job, ship, want, max(1, min(int(b.get("n", 5)), 50)),
-                                           limit_seconds(b), look), daemon=True).start()
+                                           limit_seconds(b), look, bool(b.get("paintable"))),
+                     daemon=True).start()
     return jsonify({"ok": True, "job": job_id})
 
 

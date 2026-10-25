@@ -616,6 +616,31 @@ def clear_ship_paint(readable_json: dict, slot: int, texture: bool = True, custo
         data["PaletteID"], data["Colours"] = "^", []
 
 
+def set_texture_options(readable_json: dict, slot: int, options) -> list:
+    """Pin texture layers for a ship slot, as CharacterCustomisationData.TextureOptions.
+
+    UNPROVEN -- nothing has been seen to read this back in game yet. The field is
+    cGcCharacterCustomisationTextureOptionData, a group name and an option name, and it sits
+    in the same CustomData as the paint, which is why it is worth trying: an interceptor's
+    overlay option decides whether paint reaches it at all, and the seed alone decides the
+    overlay. If the game honours this, any seed can be made to take paint. `options` is
+    [(group, name)] -- for the robot list the layer name is OVERLAY and the names are 1 to 4.
+    """
+    _populated_entry(readable_json, slot)
+    data = _dig(readable_json, CUSTOMISATION_PATH)[customisation_index(slot)].setdefault("CustomData", {})
+    data["TextureOptions"] = [{"TextureOptionGroupName": str(g), "TextureOptionName": str(n)}
+                              for g, n in options]
+    return data["TextureOptions"]
+
+
+def get_texture_options(readable_json: dict, slot: int) -> list:
+    """Whatever is pinned for this slot, so a test can see if the game rewrote it."""
+    if not 0 <= slot < 12:
+        return []
+    data = _dig(readable_json, CUSTOMISATION_PATH)[customisation_index(slot)].get("CustomData", {})
+    return list(data.get("TextureOptions") or [])
+
+
 # Paint layers of TEXTURES/COMMON/ROBOTS/SENTINELPROC.TEXTURE.MBIN, which the
 # sentinel hull material uses. OVERLAY names are nms.center's scheme labels.
 SENTINEL_OVERLAYS = {"1": "Orange + White", "2": "Painted + White", "3": "Purple + Painted", "4": "Painted + Painted"}

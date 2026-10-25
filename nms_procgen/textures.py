@@ -380,6 +380,24 @@ def paint_channels(seed, ship):
     return [{"alt": a, "layers": sorted(set(used[a]))} for a in PAINT_ALTS if a in used]
 
 
+# Which overlay an interceptor wears is one draw: FIXED takes the first two steps of the
+# stream, then OVERLAY's own two, and its four options carry equal weight, so the fourth
+# output lands in one of four equal buckets. Options 3 and 4 read the paint, 1 and 2 the
+# seed's own Rock colour -- which makes "can this be painted" the top half of one number.
+# Checked against pick() over 300 seeds, 300 agreeing.
+OVERLAY_STEPS = 4
+PAINTED_FROM = 2  # buckets 2 and 3 of 4, i.e. options "3" and "4"
+
+
+def paintable_mask(s0, s1):
+    """Vectorised: True where an interceptor seed's overlay reads the paint."""
+    a0, a1 = s0, s1
+    for _ in range(OVERLAY_STEPS):
+        a0, a1 = _np_steps(a0, a1, 1)
+    x = (a0.astype(np.float64) * INV).astype(np.float32)
+    return (x * np.float32(4.0)).astype(np.float32) >= np.float32(PAINTED_FROM)
+
+
 def hull_takes_paint(seed, ship):
     """Whether paint reaches this ship's body, which on an interceptor is not a given.
 

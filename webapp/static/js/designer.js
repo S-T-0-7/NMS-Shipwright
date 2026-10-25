@@ -169,7 +169,10 @@ async function initDesigner() {
   $('#dShip').innerHTML = types.map(t => `<option value="${t.ship}">${esc(t.label)}</option>`).join('');
   $('#dShip').value = 'sentinel';
   S.lookOpts = await api('/api/look/options');
-  $('#dShip').onchange = () => guard(loadTree); $('#dReset').onclick = () => guard(loadTree);
+  /* Only interceptors can colour themselves, so only they get the option. */
+  const paintRow = () => { $('#dPaintRow').hidden = $('#dShip').value !== 'sentinel'; };
+  paintRow();
+  $('#dShip').onchange = () => { paintRow(); guard(loadTree); }; $('#dReset').onclick = () => guard(loadTree);
   await loadDesigns();
   $('#dSaved').onchange = designNote;
   fillTargets();
@@ -284,7 +287,8 @@ function preview() {
 }
 $('#dGo').onclick = () => guard(async () => {
   const want = wanted(); if (!want.length && !lookSet()) throw new Error('Pick at least one part or colour first.');
-  const r = await post('/api/design/search', {ship: $('#dShip').value, want, n: +$('#dN').value, seconds: searchSeconds(), look: S.look});
+  const r = await post('/api/design/search', {ship: $('#dShip').value, want, n: +$('#dN').value,
+    seconds: searchSeconds(), look: S.look, paintable: $('#dPaintable').checked});
   S.job = {id: r.job, ship: $('#dShip').value, want: +$('#dN').value, oneIn: oddsOneIn()}; $('#dResults').innerHTML = '';
   $('#dGo').disabled = $('#dFind').disabled = true; $('#dStop').disabled = false; pollJob();
 });
