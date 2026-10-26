@@ -6,7 +6,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from nms_procgen import locate, systemgen
+from nms_procgen import fastsearch, locate, systemgen
 from nms_save import ships
 
 from webapp.common import JOBS, NO_SEED_LOOK, SHIP_LABELS, body, open_save, parse_look, write
@@ -58,8 +58,10 @@ def run_find(job, center, radius, ship, want, limit, closest, look):
 
 @bp.route("/api/find/warm", methods=["POST"])
 def api_find_warm():
-    """Start the scan workers while the user is still designing (they take a few seconds to load)."""
+    """Start the scan and seed-search workers while the user is still designing. Both take a
+    few seconds to load, and whichever they press first would otherwise wait for them."""
     threading.Thread(target=systemgen.warm_up, daemon=True).start()
+    threading.Thread(target=fastsearch.warm_up, daemon=True).start()
     return jsonify({"ok": True})
 
 

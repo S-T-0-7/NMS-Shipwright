@@ -8,10 +8,14 @@ async function openDesignerFor(s) {
   showEdit(); fillTargets();
 }
 
+/* Seeds a second this machine really manages, kept from the last search so the estimates and
+   "Make it searchable" stop guessing. The first guess is deliberately low. */
+const searchRate = () => +localStorage.getItem('searchRate') || 2e7;
+
 /* Pinning every part of an existing ship makes the search hopeless (one ship in billions), so
    this lets go of the pins that cost the most, cheapest first, until the wait is bearable. */
 function loosen(minutes) {
-  const rate = 5e6, budget = minutes * 60 * rate;      // seeds we can afford to test
+  const rate = searchRate(), budget = minutes * 60 * rate;   // seeds we can afford to test
   const dropped = [];
   for (let guard = 0; guard < 50 && oddsOneIn() > budget; guard++) {
     let worst = null, worstCost = 1;
@@ -68,7 +72,7 @@ const humanTime = secs => !isFinite(secs) ? 'a very long time'
   : secs < 5400 ? `${Math.round(secs / 60)} min`
   : secs < 172800 ? `${(secs / 3600).toFixed(1)} h` : `${Math.round(secs / 86400)} days`;
 function updateOdds() {
-  const n = oddsOneIn(), secs = n / 5e6;  // 5 M seeds/s until a search measures the real rate
+  const n = oddsOneIn(), secs = n / searchRate();
   $('#dOdds').textContent = n > 1 ? `About 1 in ${Math.round(n).toLocaleString()} seeds has these parts: `
     + `roughly ${humanTime(secs)} per result.${secs > 1800 ? ' Set some details back to "Any" to speed it up.' : ''}` : '';
 }
@@ -300,6 +304,7 @@ const searchSeconds = () => $('#dLimit').checked ? Math.max(60, (+$('#dSecs').va
 /* How long the rest of the search should take, from the odds and the speed it is really running at. */
 function etaText(j, job) {
   const tested = Number(j.tested) || 0, secs = Number(j.seconds) || 0;
+  if (secs > 2 && tested) localStorage.setItem('searchRate', Math.round(tested / secs));
   if (!job.oneIn || job.oneIn <= 1 || secs < 2 || !tested) return '';
   const rate = tested / secs, left = Math.max(0, (job.want || 1) - j.results.length);
   if (!left) return '';
@@ -307,11 +312,31 @@ function etaText(j, job) {
   return `${(rate / 1e6).toFixed(1)} M seeds/s, about ${humanTime(job.oneIn / rate)} per result`
     + (left > 1 ? `, ${humanTime(left * job.oneIn / rate)} for all ${left} left` : '');
 }
+/* An empty search means one of three things -- too rare, not left running long enough, or
+   parts that all but rule the colour out -- and all three look the same in the status line.
+   Say which from what the search actually watched go past. */
+function verdict(j, job) {
+  const tested = Number(j.tested) || 0;
+  if (j.results.length || j.status === 'running' || !tested) return '';
+  const near = Number(j.wrong_colour) || 0, secs = Number(j.seconds) || 0;
+  const n = job.oneIn, rate = secs > 1 ? tested / secs : searchRate();
+  // Parts can push a colour to the edge of impossible without quite forbidding it: a Stinger
+  // top flap over the narrow cockpit is black about one seed in twenty million, measured over
+  // 250 million of them. So give the count and the bound it puts on the odds, and let the
+  // reader decide -- calling it impossible on a sample this size is how we got it wrong before.
+  if (near > 50000 && $('#dColour').value)
+    return ` -- ${near.toLocaleString()} seeds had these parts and none in the colour you asked for, `
+      + `so with these parts that colour is rarer than 1 in ${near.toLocaleString()}. `
+      + 'Change the part that drives the colour, or set the colour back to Any.';
+  return n > 1 ? ` -- nothing yet. These parts are about 1 in ${Math.round(n).toLocaleString()} seeds, `
+    + `so one takes about ${humanTime(n / rate)}. Press Search again to keep looking, or `
+    + 'use "Make it searchable" to let go of the details that cost the most.' : '';
+}
 async function pollJob() {
   const job = S.job, j = await api('/api/jobs/' + job.id);
   const eta = j.status === 'running' ? etaText(j, job) : '';
   $('#dStatus').textContent = `${j.status}: tested ${Number(j.tested).toLocaleString()} seeds in ${Number(j.seconds).toFixed(0)}s, `
-    + `found ${j.results.length}${eta ? ' -- ' + eta : ''}${j.error ? ' -- ' + j.error : ''}`;
+    + `found ${j.results.length}${eta ? ' -- ' + eta : ''}${verdict(j, job)}${j.error ? ' -- ' + j.error : ''}`;
   const box = $('#dResults');
   for (let i = box.children.length; i < j.results.length; i++) {
     const res = j.results[i], d = document.createElement('div'); d.className = 'card res';

@@ -648,6 +648,69 @@ class PaintableFilter(unittest.TestCase):
             self.assertEqual(self.textures.overlay_of(seed), "1", seed)
 
 
+class SearchingManySeedsAtOnce(unittest.TestCase):
+    """The search draws RNG states rather than seeds and spreads over worker processes."""
+
+    def test_a_drawn_state_turns_back_into_its_own_seed(self):
+        """Testing states instead of seeds is only sound if every state names one seed --
+        otherwise the search reports hits that do not generate the ship it found."""
+        import numpy
+        from nms_procgen import fastsearch
+        rng = numpy.random.default_rng(11)
+        s0 = rng.integers(1, 1 << 32, size=5000, dtype=numpy.uint64)
+        s1 = rng.integers(0, 1 << 32, size=5000, dtype=numpy.uint64)
+        with numpy.errstate(over="ignore"):
+            back = fastsearch._state(fastsearch._seed_of(s0, s1))
+        self.assertTrue((back[0] == s0).all() and (back[1] == s1).all())
+
+    def test_the_lookup_tables_pick_what_the_weights_say(self):
+        """Groups compile to a gather instead of a searchsorted for speed. Same answer, or
+        every search since is filtering on something other than what was asked for."""
+        import numpy
+        from nms_procgen import fastsearch
+        from nms_procgen.generator import generate, option_weight, resolve_root
+        from nms_procgen.mbin import load_descriptor
+        root = load_descriptor(resolve_root("sentinel", None), None)
+        for group in root:
+            w = [option_weight(o) for o in group["opts"]]
+            if not sum(w):
+                continue
+            cum = numpy.cumsum(w)
+            lut = numpy.searchsorted(cum, numpy.arange(sum(w)), side="right")
+            self.assertEqual(list(lut), [int(numpy.searchsorted(cum, v, side="right")) for v in range(sum(w))])
+        want = [p for _, p in generate("0x16D9A653A77D1710", "sentinel")][:4]
+        hits = [s for s, _ in fastsearch.fast_search("sentinel", want, (), 3, time_limit=30)]
+        self.assertTrue(hits, "a four-part design should turn up inside half a minute")
+        for s in hits:
+            self.assertTrue(fastsearch.matches(s, "sentinel", set(want), set()), hex(s))
+
+    def test_the_workers_find_the_same_ships_the_one_process_search_does(self):
+        """A pool is only worth having if its hits stand up to the exact generator."""
+        from nms_procgen import fastsearch
+        from nms_procgen.generator import generate
+        want = [p for _, p in generate("0x16D9A653A77D1710", "sentinel")][:4]
+        stats = {}
+        hits = [s for s, _ in fastsearch.fast_search("sentinel", want, (), 3, time_limit=45,
+                                                     stats=stats, workers=2)]
+        self.assertTrue(hits, f"nothing in {stats.get('tested', 0)} seeds across two workers")
+        for s in hits:
+            self.assertTrue(fastsearch.matches(s, "sentinel", set(want), set()), hex(s))
+
+    def test_ships_passed_over_in_the_wrong_colour_are_counted(self):
+        """A Stinger top flap over the narrow cockpit is black about one seed in twenty
+        million -- 12 of 250 million watched. "Found 0" cannot tell that from a combination
+        the game refuses outright, so the search counts what it passed over and the page
+        quotes the count rather than calling anything impossible."""
+        from nms_procgen import fastsearch, textures
+        stats = {}
+        hits = [s for s, _ in fastsearch.fast_search("sentinel", ["_TOPFLAP_A", "_PIT_C"], (), 1,
+                                                     time_limit=20, stats=stats, overlay=["3"])]
+        self.assertGreater(stats["wrong_colour"], 2000,
+                           "these parts are common: plenty should go past in other colours")
+        for s in hits:  # rare, but if one does turn up it has to be the colour asked for
+            self.assertEqual(textures.overlay_of(s), "3", hex(s))
+
+
 class OriginsAreChecked(unittest.TestCase):
     """A seed reversed to a star system is a lead until the generator agrees."""
 

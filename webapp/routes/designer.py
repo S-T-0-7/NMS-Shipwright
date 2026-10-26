@@ -121,7 +121,7 @@ COLOUR_CHOICES = {"": {}, "paintable": {"paintable": True}, "black": {"overlay":
 def run_job(job, ship, want, n, seconds, look=None, colour=""):
     try:
         for seed, parts in fast_search(ship, want, (), n, time_limit=seconds, stats=job["stats"],
-                                       should_stop=lambda: job["cancel"], look=look,
+                                       should_stop=lambda: job["cancel"], look=look, workers=0,
                                        **COLOUR_CHOICES.get(colour, {})):
             # Which of these seeds can be painted is worth knowing before picking one: an
             # interceptor whose hull comes from its seed is a fine ship and a dead end for anyone
@@ -281,7 +281,7 @@ def run_install(job, path, design, slot, seconds):
         if not seed:
             job["phase"] = "searching"
             for s, _parts in fast_search(ship, want, design.get("avoid", ()), 1, time_limit=seconds,
-                                         stats=job["stats"], should_stop=lambda: job["cancel"]):
+                                         stats=job["stats"], should_stop=lambda: job["cancel"], workers=0):
                 seed = f"0x{s:016X}"
                 break
         if job["cancel"]:
@@ -365,6 +365,7 @@ def api_job(job_id):
     return jsonify({"status": job["status"], "results": job["results"], "error": job["error"],
                     "tested": job["stats"].get("tested", 0), "seconds": job["stats"].get("seconds", 0),
                     "regions": job["stats"].get("regions", 0), "total_regions": job["stats"].get("total_regions", 0),
+                    "wrong_colour": job["stats"].get("wrong_colour", 0),
                     "phase": job.get("phase"), "result": job.get("result")})
 
 
