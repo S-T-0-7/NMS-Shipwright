@@ -664,16 +664,26 @@ def _tkid(v):
 def set_texture_options(readable_json: dict, slot: int, options) -> list:
     """Pin texture layers for a ship slot, as CharacterCustomisationData.TextureOptions.
 
-    The game keeps its own here: a player's character carries ARMOUR_FOURTH/1, TORSO_ASTRO/
-    TORSO_4 and the rest, ^-prefixed, so the shape below is the game's own. What is not known
-    is whether a ship's layers can be addressed this way at all -- the group is what names a
-    layer, and a normal ship's decal layers have one (DECALLOGO, DECALLET) while the robot
-    list an interceptor draws from has none. The field is
-    cGcCharacterCustomisationTextureOptionData, a group name and an option name, and it sits
-    in the same CustomData as the paint, which is why it is worth trying: an interceptor's
-    overlay option decides whether paint reaches it at all, and the seed alone decides the
-    overlay. If the game honours this, any seed can be made to take paint. `options` is
-    [(group, name)] -- for the robot list the layer name is OVERLAY and the names are 1 to 4.
+    Tested in game 2026-10-27 and it does NOT choose a layer, so do not ship a feature on it.
+    What it does: the game reads the block, keeps it verbatim across a save, and renders
+    something other than what the seed asks for -- but the same something whatever is written.
+    Three interceptors on one overlay-2 seed pinned OVERLAY/1, /3, /4 and /POLICE all came out
+    orange where the unpinned control stayed white; three fighters on one seed pinned
+    DECALLOGO/A, DECALLOGO/L and DECALNUMBER/C9 came out identical to each other and unlike
+    their control, having gained two decals the seed never picked. So the contents are ignored
+    and some default is applied to every layer.
+
+    The group is probably why. It is what names a layer, a fighter's decal layers have one
+    (DECALLOGO, DECALLET, DECALNUMBER) and the robot list an interceptor draws from has none --
+    but the fighter test says a real group does not help either, so the ^-prefixed TkID form
+    here is likely wrong at the format level. There is nothing in a save to copy it from: every
+    TextureOptions block in a real save was written by this function, the game authors none of
+    its own, and the earlier note here claiming the player's character carries them was wrong.
+    Settling it needs the lookup read out of NMS.exe.
+
+    Worth the trouble if anyone does: an interceptor's overlay decides its body colour and
+    whether paint reaches it, and the seed alone decides the overlay, so pinning it would make
+    any seed black on demand. `options` is [(group, name)].
     """
     _populated_entry(readable_json, slot)
     data = _dig(readable_json, CUSTOMISATION_PATH)[customisation_index(slot)].setdefault("CustomData", {})
