@@ -30,11 +30,13 @@ STOPS = {
     "stop": ("gen", 0x1658, "8b442474"),                             # after SystemShips is copied out
     "stop_planet": ("planet_sentinels", 0x825, "4c8ba42498000000"),  # after per-preset sentinel levels
 }
-# (function, offset, opcode bytes) of instructions whose 32-bit displacement we read
+# (func, offset, opcode, longer sig, opcode pos in sig) for instrs whose disp32 we read.
+# opcode alone is 3 bytes, too common to search. sig is the fallback when a patch moves it.
 DISPS = {
-    "owner_slot": ("gen", 0x797, "488b88"),            # mov rcx, [rax + slot]: current solar system in the app
-    "pg_off": ("planet_sentinels", 0x897, "488b88"),   # mov rcx, [rax + planet generator offset]
+    "owner_slot": ("gen", 0x797, "488b88", "0f1082????????488b88????????", 7),   # mov rcx,[rax+slot]
+    "pg_off": ("planet_sentinels", 0x897, "488b88", "498b80????????488b88????????", 7),  # mov rcx,[rax+pg]
 }
+DISP_WINDOW = 0x2000  # how far it may have moved. 2+ matches raises rather than guess
 APP_PTR_LOAD = ("gen", 0x779, "488b05")  # mov rax, [rip + app_ptr]
 PLANET_FLAG_FROM_APP_PTR = 0x40
 LEA_RCX, LEA_RDX, CALL = bytes.fromhex("488d0d"), bytes.fromhex("488d15"), bytes.fromhex("e8")
@@ -46,6 +48,11 @@ CACHE_FILE = os.path.join(CACHE, "exeaddr.json")
 
 class AddressError(RuntimeError):
     pass
+
+
+def _build(img):
+    """exe stamp + size, for error messages."""
+    return "exe %d/%d" % img.build
 
 
 class _Image:
@@ -117,7 +124,7 @@ class _Image:
 def _unique(img, name):
     hits = img.find(SIGS[name])
     if len(hits) != 1:
-        raise AddressError(f"{name}: {len(hits)} signature matches (game code changed)")
+        raise AddressError(f"{name}: {len(hits)} signature matches (game code changed) [{_build(img)}]")
     return hits[0]
 
 
@@ -131,6 +138,19 @@ def _stop(img, addrs, name):
     if not hits:
         raise AddressError(f"{name}: stop instruction not found")
     return base + min(hits, key=lambda h: abs(h - off))
+
+
+def _disp(img, addrs, name):
+    """disp32 of one instr: by offset if still there, else by sig."""
+    fn, off, op, sig, at = DISPS[name]
+    va, opcode = addrs[fn] + off, bytes.fromhex(op)
+    if img.code(va, len(opcode)) != opcode:
+        hits = [h + at for h in img.find(sig) if abs(h + at - va) <= DISP_WINDOW]
+        if len(hits) != 1:
+            raise AddressError(f"{name}: instruction not found, {len(hits)} nearby sig matches "
+                               f"(game code changed) [{_build(img)}]")
+        va = hits[0]
+    return struct.unpack_from("<i", img.code(va + len(opcode), 4))[0]
 
 
 def _find_all(path):
@@ -147,8 +167,8 @@ def _find_all(path):
     img.disp(a[fn] + off, bytes.fromhex(op), "app pointer load")
     a["app_ptr"] = img.rip_target(a[fn] + off, 3, 7)
     a["planet_flag"] = a["app_ptr"] + PLANET_FLAG_FROM_APP_PTR
-    for k, (fn, off, op) in DISPS.items():
-        a[k] = img.disp(a[fn] + off, bytes.fromhex(op), k)
+    for k in DISPS:
+        a[k] = _disp(img, a, k)
     for m in GEN_CALL.finditer(img.text):
         call = img.base + img.tva + m.end() - 1
         if img.rip_target(call, 1, 5) == a["gen"]:

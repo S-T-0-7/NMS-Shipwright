@@ -3,23 +3,15 @@
 ## 1.8.7
 
 - **Searches run about ten times faster.** Pinning a lot of parts puts a design at one seed in
-  billions, and at ten million a second that was an afternoon's wait -- which is why designs
-  were being reported as impossible when the search had only given up on them. Four things
-  changed. Each group of parts now turns a draw straight into its answer through a lookup table
-  instead of searching a list for it. The search draws the generator's state directly rather
-  than unpacking a seed for every test. Batches are small enough to stay inside the processor's
-  own cache, which barely matters on one core and decides everything across twelve. And the work
-  spreads over most of your cores instead of one, in workers that are started when you open the
-  Designer so the first search does not wait for them. Measured on a laptop: 10.6 million seeds a
-  second became 104 million. A design that wanted fourteen hours now wants seventy minutes.
-- **It stops guessing how long that will take.** The estimate used to assume five million seeds a
-  second whatever machine it was on. It now remembers the speed your own computer really managed,
-  so both the estimate and "Make it searchable" are about your hardware rather than a guess. A
-  search that comes back with nothing also says which of three things happened -- the design is
-  very rare, it was not left running long enough, or the parts themselves all but rule out the
-  colour you asked for -- where before all three looked identical. If you asked for a colour, it
-  counts the ships it went past wearing the wrong one, and tells you how rare that makes your
-  colour with those parts instead of calling it impossible.
+  billions, and at ten million a second that was an afternoon's wait -- which is why designs got
+  called impossible when the search had only given up. Part groups now use a lookup table rather
+  than searching a list, the search draws RNG states directly instead of unpacking a seed per
+  test, batches are small enough to stay in cache, and the work spreads over most of your cores.
+  10.6 million seeds a second became 104 million: fourteen hours of searching is now seventy.
+- **Honest estimates.** The wait is worked out from the speed your own machine managed last time
+  rather than a fixed guess, so "Make it searchable" gives up far fewer parts. A search that finds
+  nothing says which of three things happened -- too rare, stopped too early, or parts that all
+  but rule out the colour -- instead of leaving all three looking the same.
 
 - **Pick a colour, not a paint set.** Recolour asked which of three sets you wanted before it
   would show you any colours, which meant guessing where a colour lived: 16 of the 20 metallics
