@@ -35,7 +35,8 @@ running, because the game would overwrite it.
 1. Go to the [releases page](../../releases) and download `NMS Shipwright Setup.exe` from the
    latest release (under **Assets**).
 2. Run it. Windows will warn that it is from an unknown publisher (the app is not code-signed):
-   choose **More info → Run anyway**.
+   choose **More info → Run anyway**. If the download is blocked instead, with "contains a virus
+   or potentially unwanted software" (error 225), see [below](#is-this-safe-to-use).
 3. The setup window opens: press **Install**. It installs for your user only, into
    `%LOCALAPPDATA%\Programs\NMS Shipwright`, and adds Desktop and Start menu shortcuts. No admin
    rights, no Python, nothing else to install. Running the setup again later updates in place and
@@ -78,6 +79,12 @@ so new parts and items appear without a new version of this app.
 - It backs up your save before every change.
 - It does not modify any game file, so your save is not marked as modded.
 - Your save is yours: nothing is uploaded anywhere. The app has no network access at all.
+- Antivirus sometimes blocks it. It is an unsigned PyInstaller build and looks like every other
+  unsigned PyInstaller build, so a scanner with no signature to go on falls back to reputation,
+  and a file published an hour ago has none. If Defender blocks the download (error 225), open
+  Windows Security → Protection history and allow it. Every release lists the installer's
+  SHA-256, so you can check the file you got is the file the build produced, and upload it to
+  VirusTotal yourself if you would rather not take my word for it.
 
 ## If an edit does not show up in game
 
