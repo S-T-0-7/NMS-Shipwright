@@ -59,6 +59,13 @@ jobs:
           }
           ($out -join "`n").Trim() | Set-Content -Encoding utf8 build/release-notes.md
 
+      - name: Note the installer's checksum
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash 'dist/NMS Shipwright Setup.exe' -Algorithm SHA256).Hash.ToLower()
+          Add-Content build/release-notes.md ''
+          Add-Content build/release-notes.md ('SHA-256 of the installer: `' + $h + '`')
+
       - name: Upload the build
         uses: actions/upload-artifact@v4
         with:
