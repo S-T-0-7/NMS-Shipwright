@@ -265,6 +265,19 @@ def _nodes(path):
 _parsed = functools.lru_cache(maxsize=512)(_nodes)
 
 
+@functools.lru_cache(maxsize=512)
+def _skinned(geometry: str) -> bool:
+    """Does this geometry have a skin? If not, its nodes are what place it."""
+    try:
+        geo = (_extract([geometry]).get(geometry) or {}).get("geo")
+        if not geo:
+            return False
+        G, _, _, _ = _layouts()
+        return bool(array(geo, 0x20 + G.off("SkinMatrixLayout"))[1])
+    except Exception:
+        return False
+
+
 _TRUNC_LEN = 15
 
 
@@ -366,7 +379,7 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None, joints=frozenset()
         if not keep(name) or depth > 12:
             return
         gun = typ == "JOINT" and name.upper() in GUN_JOINTS
-        rig = rig or (typ == "JOINT" and not gun and name.upper() not in joints)
+        rig = rig or (typ == "JOINT" and not gun and name.upper() not in joints and _skinned(geometry))
         if collect is not None:
             collect.setdefault(name.upper(), []).append(_matrix(t))
         world = world @ _matrix(t)
@@ -430,7 +443,7 @@ def _picked_meshes(ship, chosen, pose=None, joints=frozenset(), collect=None):
         if depth > 12:
             return
         gun = typ == "JOINT" and name.upper() in GUN_JOINTS
-        rig = rig or (typ == "JOINT" and not gun and name.upper() not in joints)
+        rig = rig or (typ == "JOINT" and not gun and name.upper() not in joints and _skinned(geometry))
         if collect is not None:
             collect.setdefault(name.upper(), []).append(_matrix(t))
         up = _canon(name.upper(), options, trunc)

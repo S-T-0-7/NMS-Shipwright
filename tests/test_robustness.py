@@ -211,6 +211,11 @@ class ShipModels(unittest.TestCase):
         self.assertGreater(full, 20)
         self.assertNotEqual([m[1] for m in one], [m[1] for m in other], "the pick changed nothing")
 
+    def test_a_part_on_an_unskinned_skeleton_still_draws(self):
+        """The Iron Vulture's wings hang off joints but carry no skin, so their nodes place them."""
+        lo, hi = self.m.ship_model(0, "hauler", ["_WINGS_S13XNEVER"], False)["bounds"]
+        self.assertGreater(hi[0] - lo[0], 10, "only the centre drew: the wings were taken for a rig")
+
     def test_lower_detail_copies_are_left_out(self):
         for name in ("BodyLOD1", "WingsALOD2", "SUB3_Wings_GLOD3"):
             self.assertNotEqual(self.m.LOD_SUFFIX.search(name).group(1), "0")

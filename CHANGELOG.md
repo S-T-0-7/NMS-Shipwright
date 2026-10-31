@@ -12,6 +12,9 @@
   rather than a fixed guess, so "Make it searchable" gives up far fewer parts. A search that finds
   nothing says which of three things happened -- too rare, stopped too early, or parts that all
   but rule out the colour -- instead of leaving all three looking the same.
+- **The Iron Vulture's wings show up again.** A part whose pieces hang off a skeleton was taken
+  for something the game animates and left out, so the Adrift hauler drew its centre section and
+  nothing else. Only parts that actually carry a skin are skipped now.
 
 - **Pick a colour, not a paint set.** Recolour asked which of three sets you wanted before it
   would show you any colours, which meant guessing where a colour lived: 16 of the 20 metallics
