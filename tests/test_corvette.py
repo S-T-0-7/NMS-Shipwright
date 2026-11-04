@@ -76,3 +76,44 @@ class Halves(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def has_game():
+    try:
+        from nms_save import gamepath
+        return bool(gamepath.require())
+    except Exception:
+        return False
+
+
+HAB = "MODELS/COMMON/SPACECRAFT/BIGGS/MODULES/PARTS/HAB_D_1X2_CORE.SCENE.MBIN"
+
+
+@unittest.skipUnless(has_game(), "needs No Man's Sky installed")
+class Modelling(unittest.TestCase):
+    def setUp(self):
+        from nms_procgen import model3d
+        self.m = model3d
+
+    def test_a_module_is_drawn_where_its_transform_puts_it(self):
+        here = self.m.corvette_model([(HAB, [0, 0, 0], [0, 1, 0], [0, 0, 1])])
+        there = self.m.corvette_model([(HAB, [10, 12, -4], [0, 1, 0], [0, 0, 1])])
+        for axis, shift in enumerate((10, 12, -4)):
+            self.assertAlmostEqual(there["bounds"][0][axis] - here["bounds"][0][axis], shift, places=3)
+
+    def test_turning_a_module_turns_its_geometry(self):
+        flat = self.m.corvette_model([(HAB, [0, 0, 0], [0, 1, 0], [0, 0, 1])])["bounds"]
+        yawed = self.m.corvette_model([(HAB, [0, 0, 0], [0, 1, 0], [1, 0, 0])])["bounds"]
+        self.assertAlmostEqual(yawed[1][0], flat[1][2], places=3, msg="a quarter turn swaps x and z")
+        self.assertAlmostEqual(yawed[1][2], flat[1][0], places=3)
+        self.assertAlmostEqual(yawed[1][1], flat[1][1], places=3, msg="height is untouched")
+
+    def test_a_module_we_have_no_scene_for_is_left_out(self):
+        got = self.m.corvette_model([(HAB, [0, 0, 0], [0, 1, 0], [0, 0, 1]),
+                                     ("MODELS/COMMON/SPACECRAFT/BIGGS/NOPE.SCENE.MBIN",
+                                      [0, 0, 0], [0, 1, 0], [0, 0, 1])])
+        self.assertTrue(got["groups"], "the hab still drew")
+
+    def test_a_scene_with_no_procedural_parts_still_walks(self):
+        """_scene_meshes used to trip over an undefined name before it drew anything."""
+        self.assertTrue(self.m._scene_meshes(HAB), "the hab's meshes came out")

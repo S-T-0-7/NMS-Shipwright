@@ -303,6 +303,7 @@ def _scene_meshes(root, pose=None):
         typ, name, t, attrs, children = n
         if depth > 12:
             return
+        gun = typ == "JOINT" and name.upper() in GUN_JOINTS
         world = world @ _matrix(t)
         posed = posed @ _local(name, t, pose)
         if gun:  # see GUN_AIM
@@ -546,6 +547,53 @@ def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
     return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()),
             "posable": bool(flown)}  # offers a landed/flying toggle
+
+
+def _placement(position, up, at) -> np.ndarray:
+    """A module's own frame, from the Up and At the save stores for it."""
+    up, at = np.asarray(up, np.float64), np.asarray(at, np.float64)
+    m = np.eye(4)
+    m[:3, 0], m[:3, 1], m[:3, 2] = np.cross(up, at), up, at
+    m[:3, 3] = position
+    return m
+
+
+def corvette_model(modules) -> dict:
+    """{"groups", "bounds"} for a built corvette, shaped like ship_model's.
+
+    `modules` is (scene, position, up, at) per module, as the save stores them. A module goes
+    exactly where its transform puts it: nothing is snapped, and a module whose scene is
+    missing is left out rather than taking the rest of the ship down with it.
+    """
+    placed = [(scene, _placement(pos, up, at)) for scene, pos, up, at in modules]
+    scenes = {}
+    for scene, _ in placed:
+        if scene not in scenes:
+            try:
+                scenes[scene] = _scene_meshes(scene)
+            except FileNotFoundError:
+                scenes[scene] = []
+    geos = _geometry(sorted({g for ms in scenes.values() for g, *_ in ms if g}))
+    acc: dict = {}
+    for scene, place in placed:
+        for g, h, world, cls, _, _ in scenes[scene]:
+            m = geos.get(g, {}).get(h)
+            if m is None:
+                continue
+            w = place @ world
+            p = (m[0].astype(np.float32) @ w[:3, :3].T + w[:3, 3]).astype(np.float32)
+            if np.linalg.det(w[:3, :3]) < 0:
+                idx = m[1].reshape(-1, 3)[:, ::-1].ravel()
+            else:
+                idx = m[1]
+            lst = acc.setdefault(cls, [[], [], 0])
+            lst[0].append(p)
+            lst[1].append(idx + lst[2])
+            lst[2] += len(p)
+    groups = {cls: (np.concatenate(v[0]).astype(np.float32), np.concatenate(v[1]).astype(np.uint32))
+              for cls, v in acc.items() if v[0]}
+    allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
+    return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()), "posable": False}
 
 
 def pack(model: dict, colours: dict | None = None) -> bytes:
