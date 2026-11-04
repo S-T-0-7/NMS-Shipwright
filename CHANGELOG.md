@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.9.0
+
+- **Corvettes.** A new page shows the corvette in your save -- the whole ship drawn from the
+  modules bolted to it, with every module listed by its in-game name and the position it stands
+  at. Modules sitting at an angle the build menu has no rotation for are marked, since those are
+  the ones you could not have placed from inside the game.
+- **A builder, in a window of its own.** Pick parts from a palette of 172, drag them into place,
+  and save the result back. Drag a module to slide it flat, hold Shift to raise and lower it, or
+  take hold of the red, green and blue arrows to run along one axis at a time; the rings turn it
+  about any axis, and three sliders do the same by the degree. Undo and redo go back eighty
+  steps. Snap can be set to the build grid, to a finer step, or off altogether.
+- **Parts snap together the way the game does.** Every module carries named sockets, and the game
+  joins two modules by laying one part's socket exactly onto another's. The builder now reads
+  those same sockets, so a part dropped near the ship seats itself and says which socket caught
+  it. Measured against a ship built in game, fifteen of sixteen modules snap back to the exact
+  position the game had them in; the sixteenth was placed through a glitch and has nothing to
+  snap to.
+- **Place anything anywhere.** The build menu's restrictions -- what may sit where, how many,
+  which way round -- are checked while building and never re-checked when a save is loaded. A
+  module written through the builder can therefore stand anywhere, at any angle, bolted to
+  nothing, which is what people have been using clipping tricks to achieve. Confirmed in game: a
+  turret rolled onto its side, a hab tumbled on all three axes and a thruster at 37 degrees all
+  load and draw, and the game writes them back unchanged when it next saves.
+- **The ship no longer has a ghost inside it.** The scene named after the corvette hull turned
+  out to hold nothing but the build station's holographic preview, seventeen meshes of it, which
+  was being drawn inside every corvette as a blue ship-shaped shell. The hull draws nothing now,
+  because a corvette's body really is only the modules.
+- **Every module in the build menu draws.** Module geometry comes from a second game table keyed
+  by each module's style, rather than from guessing at names -- a thruster's model is called
+  ZENGINEJ and a decoration's DECORATION_19, which no rule would have found. 171 of the 194
+  modules in the build menu now draw, up from 128. The rest are interior walls, whose model
+  depends on the room they sit in.
+- **Shield generators are solid again.** The filter that drops a ship's shield bubble was matching
+  on the word alone, so the corvette's five shield-generator parts -- thirty meshes each of real
+  geometry -- were being thrown away with it.
+
 ## 1.8.7
 
 - **Searches run about ten times faster.** Pinning a lot of parts puts a design at one seed in
