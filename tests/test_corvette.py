@@ -117,3 +117,33 @@ class Modelling(unittest.TestCase):
     def test_a_scene_with_no_procedural_parts_still_walks(self):
         """_scene_meshes used to trip over an undefined name before it drew anything."""
         self.assertTrue(self.m._scene_meshes(HAB), "the hab's meshes came out")
+
+
+@unittest.skipUnless(has_game(), "needs No Man's Sky installed")
+class ModuleScenes(unittest.TestCase):
+    def setUp(self):
+        from nms_procgen import corvette_parts
+        self.cp = corvette_parts
+
+    def test_the_hull_is_not_looked_up_as_a_module(self):
+        self.assertEqual(self.cp.scenes_for("^U_PARAGON"), [self.cp.HULL])
+
+    def test_a_wing_draws_as_a_mirrored_pair(self):
+        got = self.cp.scenes_for("^B_WNG_A")
+        self.assertEqual(len(got), 2, "left and right: %s" % got)
+        self.assertTrue(any(s.endswith("_L.SCENE.MBIN") for s in got))
+        self.assertTrue(any(s.endswith("_R.SCENE.MBIN") for s in got))
+
+    def test_a_family_whose_model_is_named_differently_still_resolves(self):
+        """The turret is drawn by a gun and the gear by a leg, which no rule would guess."""
+        self.assertTrue(any("GUN_A" in s for s in self.cp.scenes_for("^B_TUR_A")))
+        self.assertTrue(any("LANDINGGEAR_LEG_A" in s for s in self.cp.scenes_for("^B_LND_A")))
+
+    def test_an_id_we_do_not_know_draws_nothing(self):
+        self.assertEqual(self.cp.scenes_for("^B_NOPE_Z"), [])
+        self.assertEqual(self.cp.scenes_for("^NONSENSE"), [])
+
+    def test_the_catalogue_carries_the_build_menu_gates(self):
+        hab = self.cp.catalogue()["B_HAB_D"]
+        self.assertFalse(hab["rotatable"], "the menu refuses to turn a hab")
+        self.assertTrue(hab["placement"].endswith(".SCENE.MBIN"))
