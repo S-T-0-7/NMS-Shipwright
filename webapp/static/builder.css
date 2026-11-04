@@ -1,0 +1,53 @@
+/* The builder takes a window of its own: palette down one side, inspector down the other, and
+   as much room as is left for the ship, because the ship is what you are working on. */
+body.builder{margin:0;height:100vh;overflow:hidden;background:var(--bg);color:var(--text)}
+.bapp{display:grid;grid-template-columns:260px 1fr 280px;grid-template-rows:48px 1fr;height:100vh}
+.btop{grid-column:1/4;display:flex;align-items:center;gap:10px;padding:0 14px;
+  background:var(--panel);border-bottom:1px solid var(--line)}
+.btop b{font-size:14px;letter-spacing:.2px}
+.btop .btn{padding:5px 10px;font-size:13px}
+.bsep{width:1px;height:22px;background:var(--line)}
+.spacer{margin-left:auto}
+.bsnap select{padding:4px 8px}
+.btop .pill{margin-left:0}
+
+.bpal{border-right:1px solid var(--line);background:var(--panel);overflow:auto;padding:10px}
+.bpal input{width:100%;margin-bottom:10px}
+.bgroup{margin-bottom:4px}
+.bgroup>summary{cursor:pointer;padding:6px 4px;font-size:12.5px;color:var(--muted);list-style:none;
+  display:flex;justify-content:space-between;border-radius:6px}
+.bgroup>summary:hover{background:var(--panel2);color:var(--text)}
+.bgroup>summary::-webkit-details-marker{display:none}
+.bpart{display:block;width:100%;text-align:left;background:none;border:1px solid transparent;
+  border-radius:7px;padding:5px 8px;font-size:12.5px;cursor:pointer;color:var(--text)}
+.bpart:hover{background:var(--panel2);border-color:var(--line)}
+.bpart code{display:block;font-size:10.5px;color:var(--muted)}
+
+.bstage{position:relative;min-width:0}
+#bView{position:absolute;inset:0}
+.bhint{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:11.5px;
+  color:var(--muted);pointer-events:none;opacity:.8}
+.bhint.on{color:var(--ok);opacity:1;font-weight:600}
+
+.binsp{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px}
+.binsp h3{margin:0 0 2px;font-size:14px}
+.binsp .xyz{display:grid;grid-template-columns:18px 1fr;gap:6px 8px;align-items:center;margin:10px 0}
+.binsp .xyz label{color:var(--muted);font-size:12px}
+.binsp input[type=number]{width:100%;padding:5px 7px;font-family:Consolas,"Cascadia Mono",monospace}
+.binsp .row{margin-top:10px}
+.bslider{width:100%;margin:0}
+.bturn{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:center;margin:10px 0 0}
+.bturn label{font-size:12px;font-weight:600;display:flex;gap:5px;align-items:baseline}
+.bturn label b{font-weight:400;font-size:11px;color:var(--muted);font-family:Consolas,"Cascadia Mono",monospace}
+.aX{color:#eb5444}.aY{color:#5ac772}.aZ{color:#549aef}
+.bslider.aX{accent-color:#eb5444}.bslider.aY{accent-color:#5ac772}.bslider.aZ{accent-color:#549aef}
+.bfacing{margin:6px 0 0;font-size:11px;color:var(--muted);font-family:Consolas,"Cascadia Mono",monospace}
+.bfacing.free{color:var(--accent2)}
+.bempty{color:var(--muted);font-size:12.5px;line-height:1.6}
+.bkeys{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);line-height:1.8}
+.bkeys kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:10.5px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel2);
+  border:1px solid var(--line);border-radius:8px;padding:9px 14px;font-size:13px;opacity:0;
+  transition:opacity .2s;pointer-events:none;max-width:70vw}
+#toast.on{opacity:1}
+#toast.bad{border-color:var(--err);color:#ffb4b4}

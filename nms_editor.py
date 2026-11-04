@@ -50,6 +50,14 @@ class FileBridge:
         import webview
         return webview.windows[0]
 
+    def open_window(self, url, title="", width=1600, height=1000):
+        """Open a second app window, which the corvette builder wants all to itself."""
+        import webview
+        webview.create_window(f"{APP_NAME} - {title}" if title else APP_NAME, url,
+                              width=int(width), height=int(height), min_size=(1024, 640),
+                              background_color="#0E1014", js_api=FileBridge())
+        return True
+
     def pick_folder(self, start=""):
         """Ask for a folder (used to point the tool at the No Man's Sky install)."""
         import webview

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Corvette Builder</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/builder.css">
+</head>
+<body class="builder">
+<div class="bapp">
+  <header class="btop">
+    <b>Corvette Builder</b>
+    <select id="bCorv" hidden></select>
+    <span class="bsep"></span>
+    <button class="btn" id="bUndo" title="Undo (Ctrl+Z)">Undo</button>
+    <button class="btn" id="bRedo" title="Redo (Ctrl+Y)">Redo</button>
+    <span class="bsep"></span>
+    <label class="muted bsnap">Snap
+      <select id="bSnap">
+        <option value="0">Off (free)</option>
+        <option value="0.5">0.5</option>
+        <option value="1.5">1.5</option>
+        <option value="3" selected>3</option>
+        <option value="6">6</option>
+      </select></label>
+    <label class="muted"><input type="checkbox" id="bGrid" checked> Floor grid</label>
+    <label class="muted"><input type="checkbox" id="bArrows" checked> Arrows</label>
+    <label class="muted"><input type="checkbox" id="bRings" checked> Rings</label>
+    <label class="muted"><input type="checkbox" id="bSnapParts" checked> Snap to parts</label>
+    <span class="spacer"></span>
+    <span class="muted" id="bCount"></span>
+    <span class="pill" id="bGame">checking...</span>
+    <button class="btn primary" id="bSave">Save to game</button>
+  </header>
+
+  <aside class="bpal">
+    <input id="bSearch" placeholder="Search parts...">
+    <div id="bGroups"></div>
+  </aside>
+
+  <main class="bstage"><div id="bView"></div>
+    <div class="bhint" id="bHint">Click a part on the left to add it &middot; drag an arrow to slide
+      along one axis &middot; drag a ring to turn &middot; drag the module itself to move it freely</div>
+  </main>
+
+  <aside class="binsp" id="bInsp"></aside>
+</div>
+<div id="toast"></div>
+<script src="/static/js/scene3d.js"></script>
+<script src="/static/js/builder.js"></script>
+</body>
+</html>
