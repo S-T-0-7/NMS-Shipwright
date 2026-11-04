@@ -100,8 +100,8 @@ def _clear_memory():
     except Exception:  # extras is optional for the core save features
         pass
     try:
-        from nms_procgen import model3d, textures
-        for mod in (model3d, textures):
+        from nms_procgen import corvette_parts, model3d, textures
+        for mod in (corvette_parts, model3d, textures):
             for n in dir(mod):
                 fn = getattr(mod, n)
                 if hasattr(fn, "cache_clear"):

@@ -56,7 +56,8 @@ MAT_CLASSES = (("glass", re.compile(r"GLASS|CANOPY|WINDOW|SCREEN|COCKPITTRANS|TR
                ("dark", re.compile(r"RUBBER|DARK|BLACK|GRILL|VENT|UNDERCOAT")))
 LOD_SUFFIX = re.compile(r"LOD(\d)$", re.I)
 DECAL_NAMES = re.compile(r"DECAL|SHADOW|MASKMAT|DEPTHMASK")  # skipped when judging by name only
-EFFECTS = re.compile(r"SHIELD|WARPBUBBLE|FORCEFIELD")  # invisible or effect-only shells around ships
+EFFECTS = re.compile(r"[\\/]SHIELDS[\\/]|ENERGYSHIELD|SHIELDSPHERE|SHIELDIMPACT|PLAYERSHIELD"
+                     r"|WARPBUBBLE|FORCEFIELD")  # effect-only shells; not the corvette shield generator
 
 
 @functools.lru_cache(maxsize=4096)
@@ -291,6 +292,45 @@ def _canon(up, options, trunc):
 
 
 SPECIAL_SCENES = {"starborn_phoenix": "MODELS/COMMON/SPACECRAFT/FIGHTERS/WRACERSE.SCENE.MBIN"}
+
+
+SNAP_NAME = re.compile(r"^(.*?)_(In|Out)_?$")
+
+
+def snap_points(root) -> list:
+    """[(kind, "in"/"out", 4x4 matrix)] for the sockets a placement scene offers.
+
+    The game's own joins are these: a part's `X_In_` locator is laid exactly onto another part's
+    `X_Out_` locator of the same kind, frame for frame. Measured against a ship built in game,
+    all 43 joined pairs sat within a ten-thousandth of a unit of each other, and 42 of them had
+    the two frames in the same orientation, so there is no flip to apply -- the one that differed
+    is a part turned half round on a symmetric socket.
+
+    The locators hang under nodes named SnapPoint*, often reached through a REFERENCE to a shared
+    snappoints scene rather than sitting in the placement scene itself.
+    """
+    scene = _parsed(root)
+    if not scene:
+        return []
+    out = []
+
+    def walk(n, world, under, depth):
+        typ, name, t, attrs, children = n
+        world = world @ _matrix(t)
+        if typ == "LOCATOR" and name.upper().startswith("SNAPPOINT"):
+            under = True
+        if typ == "REFERENCE" and attrs.get("SCENEGRAPH") and depth < 5:
+            sub = _parsed(_scene_path(attrs["SCENEGRAPH"]))
+            if sub:
+                walk(sub[1], world, under, depth + 1)
+            return
+        hit = SNAP_NAME.match(name)
+        if typ == "LOCATOR" and under and hit:
+            out.append((hit.group(1), hit.group(2).lower(), world.copy()))
+        for c in children:
+            walk(c, world, under, depth + 1)
+    walk(scene[1], np.eye(4), False, 0)
+    return out
 
 
 def _scene_meshes(root, pose=None):
