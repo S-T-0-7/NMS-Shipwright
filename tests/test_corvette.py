@@ -42,6 +42,37 @@ class Layouts(unittest.TestCase):
         self.assertAlmostEqual(obj["At"][0], 1.0, places=6)
         self.assertAlmostEqual(obj["At"][2], 0.0, places=6)
 
+    def test_a_whole_build_can_replace_the_modules(self):
+        """What the builder posts back: the list is written as given, the hull carried over."""
+        corvette.place(self.entry, "B_HAB_D", (0, 3, 9))
+        corvette.replace(self.entry, [("B_TUR_A", (1.0, 2.0, 3.0), (0, 1, 0), (1, 0, 0)),
+                                      ("^B_LND_A", (0.0, 0.0, 6.0), (0, 1, 0), (0, 0, 1))])
+        got = corvette.modules(self.entry)
+        self.assertEqual([o["ObjectID"] for o in got], ["^U_PARAGON", "^B_TUR_A", "^B_LND_A"])
+        self.assertEqual(got[0]["UserData"], 4294967296000000, "the hull keeps its own user data")
+        self.assertEqual(got[1]["Position"], [1.0, 2.0, 3.0])
+        self.assertEqual(got[1]["At"], [1.0, 0.0, 0.0], "no snapping, no squaring up")
+
+    def test_a_module_keeps_the_build_time_it_came_with(self):
+        """The game maintains these, so a part that was already on the ship keeps its own."""
+        corvette.replace(self.entry, [("B_TUR_A", (0, 0, 0), (0, 1, 0), (0, 0, 1), 1793464163),
+                                      ("B_LND_A", (0, 0, 6), (0, 1, 0), (0, 0, 1))])
+        got = corvette.modules(self.entry)
+        self.assertEqual(got[1]["Timestamp"], 1793464163, "carried through untouched")
+        self.assertGreater(got[2]["Timestamp"], 10, "a part with none gets a fresh one")
+
+    def test_a_build_cannot_smuggle_in_a_second_hull(self):
+        corvette.replace(self.entry, [("^U_PARAGON", (5, 5, 5), (0, 1, 0), (0, 0, 1)),
+                                      ("B_TUR_A", (0, 0, 0), (0, 1, 0), (0, 0, 1))])
+        ids = [o["ObjectID"] for o in corvette.modules(self.entry)]
+        self.assertEqual(ids.count("^U_PARAGON"), 1)
+        self.assertEqual(corvette.modules(self.entry)[0]["Position"], [0.0, 0.0, 0.0])
+
+    def test_replacing_with_nothing_leaves_a_bare_hull(self):
+        corvette.place(self.entry, "B_HAB_D", (0, 3, 9))
+        corvette.replace(self.entry, [])
+        self.assertEqual([o["ObjectID"] for o in corvette.modules(self.entry)], ["^U_PARAGON"])
+
     def test_the_hull_stays_put(self):
         with self.assertRaises(ValueError):
             corvette.remove(self.entry, corvette.modules(self.entry)[0])
@@ -125,8 +156,10 @@ class ModuleScenes(unittest.TestCase):
         from nms_procgen import corvette_parts
         self.cp = corvette_parts
 
-    def test_the_hull_is_not_looked_up_as_a_module(self):
-        self.assertEqual(self.cp.scenes_for("^U_PARAGON"), [self.cp.HULL])
+    def test_the_hull_draws_nothing(self):
+        """It anchors the base rather than being built into it, and the scene named after it is
+        the build station's hologram, which would show as a blue ship inside the real one."""
+        self.assertEqual(self.cp.scenes_for("^U_PARAGON"), [])
 
     def test_a_wing_draws_as_a_mirrored_pair(self):
         got = self.cp.scenes_for("^B_WNG_A")
@@ -142,6 +175,54 @@ class ModuleScenes(unittest.TestCase):
     def test_an_id_we_do_not_know_draws_nothing(self):
         self.assertEqual(self.cp.scenes_for("^B_NOPE_Z"), [])
         self.assertEqual(self.cp.scenes_for("^NONSENSE"), [])
+
+    def test_the_style_field_picks_the_model_within_a_part(self):
+        """One part holds every thruster; the module's style says which one, J being ZENGINEJ."""
+        self.assertTrue(any("ZENGINEJ" in s for s in self.cp.scenes_for("^B_TRU_J")))
+        self.assertTrue(any("ZENGINEA" in s for s in self.cp.scenes_for("^B_TRU_A")))
+
+    def test_the_shield_generator_is_solid_geometry(self):
+        """Its path says SHIELD, which the effect-shell filter used to throw away."""
+        from nms_procgen import model3d
+        scenes = self.cp.scenes_for("^B_SHL_A")
+        self.assertTrue(scenes)
+        self.assertTrue([m for m in model3d._scene_meshes(scenes[0]) if m[0]])
+
+    def test_interior_walls_are_left_out(self):
+        """Which wall is drawn depends on the hab and the direction, neither of which is recorded."""
+        self.assertEqual(self.cp.scenes_for("^B_WALL_CARG0"), [])
+
+    def test_every_other_module_in_the_build_menu_draws(self):
+        from nms_procgen import model3d
+        missing = []
+        for part, row in self.cp.catalogue().items():
+            if not row["in_menu"] or part.startswith(("B_WALL_", "B_STAIRS")) or part == "B_LND_D":
+                continue
+            drawn = [m for s in self.cp.scenes_for(part) for m in model3d._scene_meshes(s) if m[0]]
+            if not drawn:
+                missing.append(part)
+        self.assertEqual(missing, [])
+
+    def test_a_module_offers_the_sockets_the_game_joins_it_by(self):
+        """A thruster bolts on by its BlockS socket, and a hab offers the other half of it."""
+        thruster = {(k, io) for k, io, _ in self.cp.snaps_for("B_TRU_A")}
+        self.assertIn(("BlockS", "in"), thruster)
+        self.assertIn(("RoomN", "out"), thruster)
+        self.assertIn(("BlockS", "out"), {(k, io) for k, io, _ in self.cp.snaps_for("B_HAB_D")})
+
+    def test_socket_frames_are_rigid(self):
+        """Laying one socket onto another only works if they carry no scale or shear."""
+        import numpy as np
+        for part in ("B_HAB_D", "B_TUR_A", "B_LND_A"):
+            got = self.cp.snaps_for(part)
+            self.assertTrue(got, part)
+            for kind, io, flat in got:
+                r = np.array(flat, float).reshape(4, 4).T[:3, :3]
+                self.assertTrue(np.allclose(r @ r.T, np.eye(3), atol=1e-4), f"{part} {kind} {io}")
+                self.assertAlmostEqual(float(np.linalg.det(r)), 1.0, places=4)
+
+    def test_the_hull_has_no_sockets(self):
+        self.assertEqual(self.cp.snaps_for("U_PARAGON"), ())
 
     def test_the_catalogue_carries_the_build_menu_gates(self):
         hab = self.cp.catalogue()["B_HAB_D"]
