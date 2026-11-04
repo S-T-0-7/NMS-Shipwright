@@ -22,10 +22,10 @@ from werkzeug.exceptions import HTTPException  # noqa: E402
 
 from nms_save import ships  # noqa: E402
 from webapp.common import GAME_DATA_ERRORS, GameRunning, UPDATE_HINT  # noqa: E402
-from webapp.routes import designer, find, health, inventory, pages, player, ships as ship_routes  # noqa: E402
+from webapp.routes import corvette, designer, find, health, inventory, pages, player, ships as ship_routes  # noqa: E402
 
 app = Flask(__name__, static_folder=None)
-for module in (pages, health, ship_routes, designer, find, inventory, player):
+for module in (pages, health, ship_routes, corvette, designer, find, inventory, player):
     app.register_blueprint(module.bp)
 
 

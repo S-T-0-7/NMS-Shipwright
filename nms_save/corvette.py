@@ -20,7 +20,8 @@ from . import save
 
 SHIP_BASE = "PlayerShipBase"
 HULL = "^U_PARAGON"
-GRID = (6.0, 3.0, 6.0)   # what the build menu snaps to, along x, y and z
+GRID = (6.0, 3.0, 6.0)   # one build cell along x, y and z; a module is stored by its centre,
+                         # so a part spanning two cells sits on a half step, not a whole one
 MODULE_USER_DATA = 99    # every module carries this; only the hull differs
 
 
@@ -43,14 +44,18 @@ def _axes(yaw: float | None, up, at):
 
 
 def place(entry: dict, part_id: str, position, *, yaw: float | None = None,
-          up=(0.0, 1.0, 0.0), at=(0.0, 0.0, 1.0), user_data: int = MODULE_USER_DATA) -> dict:
+          up=(0.0, 1.0, 0.0), at=(0.0, 0.0, 1.0), user_data: int = MODULE_USER_DATA,
+          timestamp: int | None = None) -> dict:
     """Add a module at `position`, turned `yaw` degrees about the vertical if given.
 
-    Nothing here is checked against the build menu's rules: that is the point.
+    Nothing here is checked against the build menu's rules: that is the point. `timestamp` is
+    the module's build time; a module that was already on the ship should keep the one the game
+    gave it rather than be stamped as new.
     """
     objs = entry.setdefault("Objects", [])
     u, a = _axes(yaw, up, at)
-    obj = {"Timestamp": max((o.get("Timestamp", 0) for o in objs), default=0) + 1,
+    obj = {"Timestamp": timestamp if timestamp is not None
+           else max((o.get("Timestamp", 0) for o in objs), default=0) + 1,
            "ObjectID": part_id if part_id.startswith("^") else "^" + part_id,
            "UserData": user_data, "Position": [float(x) for x in position], "Up": u, "At": a}
     objs.append(obj)
@@ -68,6 +73,27 @@ def move(obj: dict, position=None, *, yaw: float | None = None, up=None, at=None
     if yaw is not None:
         obj["Up"], obj["At"] = _axes(yaw, obj.get("Up", (0.0, 1.0, 0.0)), obj.get("At", (0.0, 0.0, 1.0)))
     return obj
+
+
+def replace(entry: dict, wanted) -> list[dict]:
+    """Rewrite a corvette's modules from `wanted`: (part id, position, up, at[, timestamp]).
+
+    The hull is carried over from the layout rather than taken from the list: it anchors the base
+    and is not something a build can put back. Everything else is written exactly as given.
+
+    A module that came off this ship should be handed back with the timestamp the game gave it.
+    The game keeps those (it refreshed the hull's on its own save while leaving the modules'
+    alone), so minting new ones for parts that were never touched would throw away real data.
+    """
+    entry["Objects"] = [o for o in modules(entry) if o.get("ObjectID") == HULL][:1]
+    for item in wanted:
+        part_id, position, up, at = item[:4]
+        if not part_id.startswith("^"):
+            part_id = "^" + part_id
+        if part_id != HULL:
+            place(entry, part_id, position, up=up, at=at,
+                  timestamp=item[4] if len(item) > 4 else None)
+    return entry["Objects"]
 
 
 def remove(entry: dict, obj: dict) -> None:

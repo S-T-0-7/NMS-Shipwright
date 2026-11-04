@@ -151,7 +151,8 @@ $$('nav button').forEach(b => b.onclick = () => {
   $$('nav button').forEach(x => x.classList.toggle('active', x === b));
   $$('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + b.dataset.page));
   const load = {player: async () => { await loadPlayer(); await loadBackups(); setupExport(); await loadHealth(false); }, quests: loadQuests,
-                inventory: loadInventories, unlocks: loadUnlocks, designer: () => post('/api/find/warm', {}).catch(() => {})}[b.dataset.page];
+                inventory: loadInventories, unlocks: loadUnlocks, corvette: loadCorvette,
+                designer: () => post('/api/find/warm', {}).catch(() => {})}[b.dataset.page];
   if (load) guard(load);
 });
 

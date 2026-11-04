@@ -16,6 +16,7 @@
 </header>
 <nav>
   <button data-page="ships" data-icon="ship" class="active">My Ships</button>
+  <button data-page="corvette" data-icon="layers" class="wip" title="Under construction: the corvette tools are still being built">Corvette</button>
   <button data-page="designer" data-icon="sliders">Design &amp; Find</button>
   <button data-page="inventory" data-icon="grid">Inventory</button>
   <button data-page="unlocks" data-icon="key">Unlocks &amp; Fleet</button>
@@ -30,6 +31,18 @@
       <div><div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Ships</h2>
         <button class="btn primary" id="newShip" data-icon="plus">New ship</button></div><div class="shiplist" id="shipList"></div></div>
       <div class="card detail" id="shipDetail"><p class="muted">Select a ship.</p></div>
+    </div>
+  </section>
+
+  <section class="page" id="page-corvette">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Corvette</h2>
+      <div class="row"><select id="cvPick" hidden></select>
+        <span class="badge" id="cvCount"></span><span class="badge hot" id="cvTurned" hidden></span>
+        <button class="btn primary" id="cvBuild" data-icon="sliders">Open builder</button></div></div>
+    <div class="cvwrap">
+      <div class="card" id="cvPanel"><div class="cvlist" id="cvList"></div>
+        <div class="cvfoot" id="cvFoot" hidden></div></div>
+      <div class="hero" id="cvView"><span class="muted">Reading the save...</span></div>
     </div>
   </section>
 
@@ -203,6 +216,7 @@
 <script src="/static/viewer.js"></script>
 <script src="/static/js/core.js"></script>
 <script src="/static/js/ships.js"></script>
+<script src="/static/js/corvette.js"></script>
 <script src="/static/js/designer.js"></script>
 <script src="/static/js/find.js"></script>
 <script src="/static/js/inventory.js"></script>
