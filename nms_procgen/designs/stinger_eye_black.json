@@ -1,0 +1,17 @@
+{
+  "name": "Stinger, eye and pure black",
+  "ship": "sentinel",
+  "want": [
+    "_TOPFLAP_A",
+    "_PIT_C",
+    "_LIGHTS_D"
+  ],
+  "avoid": [],
+  "found_seeds": [
+    "0x51CCC10EE6AFE4FF",
+    "0x9BC2064A46907F18",
+    "0xD38F41ACDD7C3765",
+    "0x652B262C9D3F0C17"
+  ],
+  "notes": "Stinger top flap, Narrow pit, Upsilon eye, and a body that is born pure black. The eye forces the pit: the Cylon pit carries no lights group at all, so an eye means Narrow (_LIGHTS_D) or Wide (_LIGHTS_D1). Black means overlay option 3 -- paint cannot do it, FREIGHTER #000000 is matte and reads dark grey. Measured 2026-11-05 at about one in 2.3 billion (43 hits in 100 billion seeds), which an earlier note had called effectively unobtainable. 0x51CCC10EE6AFE4FF also carries 11 of the Dark Unicorn's 21 other parts, the most of any hit: _WINGS_V, _SKIRT_A, _JETTOP_A, _UNDERWING_A, _ASIDES_A4, _AALTSKIRT_A, _VAR_A7, _AENDWINGS_ANT, _WINGSO_OTOP, _TYPE_BLACK1. The whole Dark Unicorn body alongside the eye and the black is rarer than 1 in 1e11 -- none in 100 billion, and none in 82 billion with the four fiddliest parts dropped. _GRILL_SNOUT3 and _TYPE_BLACK2 never once appeared in 43 hits, so they are the likeliest blockers."
+}
