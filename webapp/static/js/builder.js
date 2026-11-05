@@ -12,7 +12,8 @@ const qs = new URLSearchParams(location.search);
 
 const B = {path: qs.get('path') || '', index: +(qs.get('index') || 0), scene: null, palette: [],
            names: {}, modules: [], undo: [], redo: [], snap: 3, dirty: false,
-           snaps: new Map(), snapParts: true, snapped: null};
+           snaps: new Map(), snapParts: true, snapped: null, mirror: false};
+let nextUid = 1;
 
 function toast(msg, bad) {
   const t = $('#toast');
@@ -129,6 +130,7 @@ function dropAt(m, want, index) {
     B.snapped = null;
   }
   setMatrix(m);
+  syncTwin(m);
   showSnapHint();
 }
 function showSnapHint() {
@@ -138,14 +140,57 @@ function showSnapHint() {
   el.textContent = B.snapped ? 'Snapped: ' + B.snapped : el.dataset.idle;
 }
 
+/* ---- mirroring ---------------------------------------------------------------------------
+
+   A corvette is built either side of its own centreline, which is x = 0 -- game X runs across
+   the ship. Reflecting a module there is just a sign: its x, and the x of the Up and At it is
+   facing along. A part sitting on the centreline is its own reflection, so it gets no twin.
+
+   Paired modules stay paired: move or turn one and the other follows, delete one and both go. */
+const CENTRELINE = 0.2;   // nearer than this to x = 0 and a part mirrors onto itself
+const reflect = m => ({position: [-m.position[0], m.position[1], m.position[2]],
+                       up: [-m.up[0], m.up[1], m.up[2]],
+                       at: [-m.at[0], m.at[1], m.at[2]]});
+const twinOf = m => (m && m.twin ? B.modules.find(x => x.uid === m.twin) : null);
+
+/* Lay a module's reflection onto its twin. Called after anything that moves or turns one. */
+function syncTwin(m) {
+  const t = twinOf(m);
+  if (!t) return;
+  Object.assign(t, reflect(m));
+  setMatrix(t);
+}
+/* Give a module a mirrored partner on the other side of the ship. */
+function pairUp(m) {
+  if (twinOf(m)) return null;
+  if (Math.abs(m.position[0]) < CENTRELINE) {
+    toast('That one sits on the centreline, so its mirror is itself.', true);
+    return null;
+  }
+  const t = setMatrix({id: m.id, uid: nextUid++, twin: m.uid, ...reflect(m)});
+  m.twin = t.uid;
+  B.modules.push(t);
+  B.scene.items = B.modules;
+  return t;
+}
+function unpair(m) {
+  const t = twinOf(m);
+  if (t) delete t.twin;
+  delete m.twin;
+}
+
 /* ---- the model under the picture ------------------------------------------------------- */
 
 function setMatrix(m) {
   m.matrix = B.scene.place(m.position, m.up, m.at);
   return m;
 }
+const snapshot = () => JSON.stringify(B.modules.map(
+  m => ({id: m.id, ts: m.ts, uid: m.uid, twin: m.twin, hidden: m.hidden,
+         position: m.position, up: m.up, at: m.at})));
+
 function mark() {
-  B.undo.push(JSON.stringify(B.modules.map(m => ({id: m.id, ts: m.ts, position: m.position, up: m.up, at: m.at}))));
+  B.undo.push(snapshot());
   if (B.undo.length > 80) B.undo.shift();
   B.redo.length = 0;
   B.dirty = true;
@@ -160,12 +205,12 @@ function restore(json) {
 }
 function undo() {
   if (!B.undo.length) return;
-  B.redo.push(JSON.stringify(B.modules.map(m => ({id: m.id, ts: m.ts, position: m.position, up: m.up, at: m.at}))));
+  B.redo.push(snapshot());
   restore(B.undo.pop());
 }
 function redo() {
   if (!B.redo.length) return;
-  B.undo.push(JSON.stringify(B.modules.map(m => ({id: m.id, ts: m.ts, position: m.position, up: m.up, at: m.at}))));
+  B.undo.push(snapshot());
   restore(B.redo.pop());
 }
 function refreshChrome() {
@@ -223,14 +268,15 @@ async function addModule(id) {
   if (!(await needPart(id))) { toast('Nothing in the game files draws ' + id, true); return; }
   const d = B.scene.viewDir(), t = B.scene.target, k = B.scene.dist * .4;
   mark();
-  const fresh = {id, position: [0, 0, 0], up: [0, 1, 0], at: [0, 0, 1]};
+  const fresh = {id, uid: nextUid++, position: [0, 0, 0], up: [0, 1, 0], at: [0, 0, 1]};
   dropAt(setMatrix(fresh), [t[0] - d[0] * k, t[1] - d[1] * k, t[2] - d[2] * k], -1);
   B.modules.push(fresh);
   B.scene.items = B.modules;
-  B.scene.selected = B.modules.length - 1;
+  B.scene.selected = B.modules.indexOf(fresh);
+  const pair = B.mirror ? pairUp(fresh) : null;
   drawInspector();
   refreshChrome();
-  toast('Added ' + (B.names[id] || id));
+  toast('Added ' + (B.names[id] || id) + (pair ? ' and its mirror' : ''));
 }
 
 /* ---- inspector ------------------------------------------------------------------------- */
@@ -242,7 +288,9 @@ function turn(m, axis, ang, base) {
   const src = base || {up: m.up, at: m.at};
   m.up = spin(src.up, axis, ang);
   m.at = spin(src.at, axis, ang);
-  return setMatrix(m);
+  setMatrix(m);
+  syncTwin(m);
+  return m;
 }
 /* Snap a part back onto the axes, for when a free turn has left it at an awkward angle. */
 function squareUp(m) {
@@ -256,7 +304,9 @@ function squareUp(m) {
   // Two vectors that square up onto the same axis would flatten the part, so fall back.
   m.up = up;
   m.at = up.findIndex(Boolean) === at.findIndex(Boolean) ? (up[1] ? [0, 0, 1] : [0, 1, 0]) : at;
-  return setMatrix(m);
+  setMatrix(m);
+  syncTwin(m);
+  return m;
 }
 /* The sliders' three angles, read off the orientation the save holds.
 
@@ -278,7 +328,9 @@ function setAngles(m, deg) {
   const put = v => spin(spin(spin(v, 2, z), 0, x), 1, y);
   m.up = put([0, 1, 0]);
   m.at = put([0, 0, 1]);
-  return setMatrix(m);
+  setMatrix(m);
+  syncTwin(m);
+  return m;
 }
 
 const AXIS_SLIDERS = [['bRotX', 'X'], ['bRotY', 'Y'], ['bRotZ', 'Z']];
@@ -319,6 +371,7 @@ function drawInspector() {
       <button class="btn" id="bTurn">Turn 90&deg;</button>
       <button class="btn" id="bFlat">Square up</button>
       <button class="btn" id="bDup">Duplicate</button>
+      <button class="btn" id="bPair">${twinOf(m) ? 'Unlink mirror' : 'Mirror across centre'}</button>
     </div>
     <div class="row"><button class="btn" id="bDel">Remove module</button></div>` + keysHtml();
 
@@ -327,6 +380,7 @@ function drawInspector() {
       mark();
       m.position[axis] = parseFloat(e.target.value) || 0;
       setMatrix(m);
+      syncTwin(m);
       refreshChrome();
     };
   });
@@ -351,9 +405,18 @@ function drawInspector() {
   syncFacing(m);
   $('#bDup').onclick = () => {
     mark();
-    B.modules.push(setMatrix({id: m.id, position: m.position.slice(), up: m.up.slice(), at: m.at.slice()}));  // a copy is new, so it gets a new build time
+    // a copy is new, so it gets a new build time and no twin of its own
+    B.modules.push(setMatrix({id: m.id, uid: nextUid++, position: m.position.slice(),
+                              up: m.up.slice(), at: m.at.slice()}));
     B.scene.items = B.modules;
     B.scene.selected = B.modules.length - 1;
+    drawInspector();
+    refreshChrome();
+  };
+  $('#bPair').onclick = () => {
+    mark();
+    if (twinOf(m)) { unpair(m); toast('Mirror unlinked; both stay where they are.'); }
+    else if (pairUp(m)) toast('Mirrored. Move or turn either and the other follows.');
     drawInspector();
     refreshChrome();
   };
@@ -366,13 +429,15 @@ function keysHtml() {
     <span style="color:#549aef">blue</span> arrow to slide along X, Y or Z<br>
     drag a ring to turn about that axis &middot; drag the module itself to slide it flat<br>
     hold <kbd>Shift</kbd> to raise and lower<br>
-    <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo &middot; <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo</div>`;
+    <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo &middot; <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo<br>
+    a mirrored pair moves, turns and goes together</div>`;
 }
 function removeSelected() {
   const i = B.scene.selected;
   if (i < 0) return;
   mark();
-  B.modules.splice(i, 1);
+  const gone = B.modules[i], pair = twinOf(gone);
+  B.modules = B.modules.filter(m => m !== gone && m !== pair);
   B.scene.items = B.modules;
   B.scene.selected = -1;
   drawInspector();
@@ -569,6 +634,7 @@ async function start() {
   $('#bArrows').onchange = e => { B.scene.arrows = e.target.checked; };
   $('#bRings').onchange = e => { B.scene.rings = e.target.checked; };
   $('#bSnapParts').onchange = e => { B.snapParts = e.target.checked; };
+  $('#bMirror').onchange = e => { B.mirror = e.target.checked; };
   $('#bHint').dataset.idle = $('#bHint').textContent;
   $('#bSnap').onchange = e => { B.snap = parseFloat(e.target.value) || 0; drawInspector(); };
   $('#bUndo').onclick = undo;
@@ -591,7 +657,8 @@ async function start() {
   await Promise.all([loadSnaps(kinds), ...kinds.map(needPart)]);
   // Modules nothing draws -- interior walls and the like -- are carried along unseen rather than
   // dropped, so saving a build never quietly throws away part of the ship.
-  B.modules = wanted.map(m => setMatrix({id: m.id, ts: m.ts, position: m.position.slice(),
+  B.modules = wanted.map(m => setMatrix({id: m.id, ts: m.ts, uid: nextUid++,
+                                         position: m.position.slice(),
                                          up: m.up.slice(), at: m.at.slice(),
                                          hidden: !B.scene.parts.has(m.id)}));
   B.scene.items = B.modules;
