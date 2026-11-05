@@ -116,8 +116,10 @@ def _part_model(part):
 def api_corvette_part():
     """3D model of a single module, in its own space, so the builder can move it about freely."""
     data = _part_model(request.args.get("id", "").lstrip("^"))
+    # Revalidate rather than hold it: what a part looks like changes when the game updates or
+    # when the mesh converter does, and a day-old copy in the browser would hide both.
     return Response(data, mimetype="application/octet-stream",
-                    headers={"Cache-Control": "private, max-age=86400"})
+                    headers={"Cache-Control": "no-cache"})
 
 
 @bp.route("/api/corvette/snaps")

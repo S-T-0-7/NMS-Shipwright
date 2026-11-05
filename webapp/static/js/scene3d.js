@@ -253,15 +253,21 @@
       return part;
     };
 
-    const eye = () => [S.target[0] + S.dist * Math.cos(S.pitch) * Math.sin(S.yaw),
-                       S.target[1] + S.dist * Math.sin(S.pitch),
-                       S.target[2] + S.dist * Math.cos(S.pitch) * Math.cos(S.yaw)];
     /* Game X runs to the ship's left, so the world is mirrored for display and every
-       screen-to-world answer comes back in game axes already. */
+       screen-to-world answer comes back in game axes already. The camera watches the mirrored
+       world, so what it is pointed at is mirrored too -- `S.target` is set by callers in game
+       axes, like everything else they hand over, and turned round here. */
     const FLIP = new Float32Array([-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    const aimedAt = () => [-S.target[0], S.target[1], S.target[2]];
+    const eye = () => {
+      const t = aimedAt();
+      return [t[0] + S.dist * Math.cos(S.pitch) * Math.sin(S.yaw),
+              t[1] + S.dist * Math.sin(S.pitch),
+              t[2] + S.dist * Math.cos(S.pitch) * Math.cos(S.yaw)];
+    };
     const camera = (w, h) => {
       const e = eye();
-      return {e, vp: mul(mul(persp(.7, w / Math.max(h, 1), .5, 4000), lookAt(e, S.target, [0, 1, 0])), FLIP)};
+      return {e, vp: mul(mul(persp(.7, w / Math.max(h, 1), .5, 4000), lookAt(e, aimedAt(), [0, 1, 0])), FLIP)};
     };
 
     let gridBuf = null, gridCount = 0;
@@ -469,8 +475,8 @@
 
     /* The way the camera looks, in game axes, so a drag can run across the view. */
     S.viewDir = () => {
-      const e = eye();
-      return norm([-(S.target[0] - e[0]), S.target[1] - e[1], S.target[2] - e[2]]);
+      const e = eye(), t = aimedAt();
+      return norm([-(t[0] - e[0]), t[1] - e[1], t[2] - e[2]]);
     };
 
     S.place = placement;
