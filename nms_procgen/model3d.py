@@ -22,7 +22,7 @@ from .generator import ROOTS, all_parts, generate
 
 MESH_PAK = "NMSARC.MeshCommon.pak"
 MODEL_DIR = os.path.join(gamefiles.CACHE, "models")
-FORMAT = 2  # bump when the cached mesh format changes
+FORMAT = 3  # bump when the cached mesh format changes
 _LOCK = threading.Lock()
 
 # material file name -> how the viewer shades it
@@ -159,16 +159,24 @@ def _convert(geo: bytes, data: bytes) -> dict:
 
     def indices(start, size, verts):
         """Index buffer of one mesh. The file's "16 bit" flag is not always right (the sentinel
-        ship claims 32 bit and stores 16), so the width that actually fits the mesh wins."""
+        ship claims 32 bit and stores 16), so the width that actually fits the mesh wins.
+
+        Fitting is not just a question of range. A mesh with more than 65,536 vertices cannot be
+        indexed 16 bits at a time at all, yet reading it that way leaves every index looking in
+        range, twice as many triangles as there are, and each one spanning the model: the
+        corvette's gun, 68,416 vertices, came out as 188,496 shards instead of 94,248 faces.
+        """
         first = np.uint32 if wide else np.uint16
-        for dtype in (first, np.uint16 if wide else np.uint32):
+        widths = (np.uint32,) if verts > 65536 else (first, np.uint16 if wide else np.uint32)
+        for dtype in widths:
             step = np.dtype(dtype).itemsize
             if size % step or (size // step) % 3:
                 continue
             idx = np.frombuffer(data, dtype, size // step, start)
             if not len(idx) or int(idx.max()) < verts:
                 return idx.astype(np.uint32)
-        return np.frombuffer(data, first, size // np.dtype(first).itemsize, start).astype(np.uint32)
+        step = np.dtype(widths[0]).itemsize
+        return np.frombuffer(data, widths[0], size // step, start).astype(np.uint32)
     base, n = array(data, 0x20)
     for k in range(n):
         q = base + k * MD.size

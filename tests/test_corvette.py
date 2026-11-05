@@ -224,6 +224,23 @@ class ModuleScenes(unittest.TestCase):
     def test_the_hull_has_no_sockets(self):
         self.assertEqual(self.cp.snaps_for("U_PARAGON"), ())
 
+    def test_a_mesh_too_big_for_16_bit_indices_is_read_as_32(self):
+        """The turret's gun has 68,416 vertices. Read 16 bits at a time it came out as twice as
+        many triangles, each spanning the model, and the gun looked crumpled."""
+        import numpy as np
+        from nms_procgen import model3d
+        scene = self.cp.scenes_for("^B_TUR_A")[0]
+        meshes = model3d._scene_meshes(scene)
+        geos = model3d._geometry(sorted({g for g, *_ in meshes if g}))
+        big = [geos[g][h] for g, h, *_ in meshes if len(geos.get(g, {}).get(h, ([],))[0]) > 65536]
+        self.assertTrue(big, "the gun's large mesh is there to check")
+        for pos, idx in big:
+            tri = idx.reshape(-1, 3)
+            span = np.linalg.norm(pos.max(0) - pos.min(0))
+            edge = np.linalg.norm(pos[tri[:, 0]] - pos[tri[:, 1]], axis=1)
+            self.assertLess(float(np.median(edge)), span * 0.02,
+                            "triangles span the model, so the indices do not fit the vertices")
+
     def test_the_catalogue_carries_the_build_menu_gates(self):
         hab = self.cp.catalogue()["B_HAB_D"]
         self.assertFalse(hab["rotatable"], "the menu refuses to turn a hab")
