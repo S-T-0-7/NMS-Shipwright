@@ -47,10 +47,24 @@ def api_model():
                        "dark": cols["undercoat"]["rgb"]}
         except Exception:  # colours are a bonus; the shape still shows
             pass
+        try:  # an interceptor's body is its overlay sheet, not its palette
+            born = textures.overlay_colour(seed, ship)
+            if born:
+                colours["paint"] = born
+        except Exception:
+            pass
     for k in ("paint", "secondary", "dark"):
         if a.get(k):
             h = a[k].lstrip("#")
             colours[k] = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    # Painting an overlay-1 interceptor does nothing to its body in game, so it does nothing here.
+    # Option 1 is the one every test agrees on; whether 3 takes paint is still in dispute, so the
+    # preview lets it through rather than acting on the unsettled half.
+    try:
+        if colours.get("paint") and ship == "sentinel" and textures.overlay_of(seed) == "1":
+            colours["paint"] = textures.overlay_colour(seed, ship) or colours["paint"]
+    except Exception:
+        pass
     data = model3d.pack(model3d.ship_model(seed, ship, parts, a.get("fill") == "1",
                                            a.get("pose") == "flight"), colours)
     return Response(data, mimetype="application/octet-stream", headers={"Cache-Control": "no-store"})

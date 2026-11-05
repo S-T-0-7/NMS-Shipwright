@@ -441,6 +441,27 @@ def overlay_of(seed):
     return overlay["option"] if overlay else ""
 
 
+# The mean colour of each OVERLAY option's sheet, measured off the DDS and lined up against
+# every interceptor watched in game: 1 reads orange, 3 reads black, and those two are what the
+# ship wears unpainted. 2 and 4 are thin or patchy enough that the coat underneath shows, so
+# their colour comes from the palette like any other ship's.
+OVERLAY_RGB = {"1": (85, 70, 58), "3": (48, 45, 43)}
+
+
+def overlay_colour(seed, ship):
+    """The body colour an interceptor is born with, or None when the coat under it shows.
+
+    The long-standing seed -> sentinel colour question turned out to be the wrong question: the
+    unpainted body is the overlay option's own sheet, not anything derived from the seed's
+    palette. Our palette model answers for interceptors and answers wrongly -- it called a ship
+    white that renders pure black -- so where the overlay decides, it decides here too.
+    """
+    if ship != "sentinel":
+        return None
+    rgb = OVERLAY_RGB.get(overlay_of(seed))
+    return [c / 255 for c in rgb] if rgb else None
+
+
 def hull_takes_paint(seed, ship):
     """Whether paint reaches this ship's body, which on an interceptor is not a given.
 
