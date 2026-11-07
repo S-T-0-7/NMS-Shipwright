@@ -18,6 +18,17 @@ exactly the ship the game builds.
 - Recolour any ship, with the game's real paint sets and a live preview.
 - Save designs as files and share them.
 
+**Corvettes**
+- See the corvette in your save drawn from the modules bolted to it, every module listed by its
+  in-game name and the position it stands at.
+- Build one in a window of its own: a palette of 172 modules, drag to place, coloured arrows to
+  slide along one axis, rings and sliders to turn about any axis, eighty steps of undo.
+- Parts snap together the way the game snaps them, using the game's own sockets -- or turn
+  snapping off and put a module anywhere, at any angle, bolted to nothing. The build menu's
+  restrictions are checked while building and never re-checked when a save is loaded, so this is
+  what people have been using clipping tricks to achieve.
+- Mirror a module across the ship's centreline and the pair moves, turns and goes together.
+
 **Save editing**
 - Inventories: add, remove and fill any item, technology or substance, repair and recharge, unlock
   slots.

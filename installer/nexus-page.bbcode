@@ -1,0 +1,75 @@
+[size=4]NMS Shipwright[/size]
+
+A Windows app for designing, finding and editing No Man's Sky starships and corvettes, plus a
+general save editor. It reads the ship generator out of your own copy of the game, so a seed in
+the app builds exactly the ship the game builds.
+
+[line]
+
+[size=3]Ships[/size]
+[list]
+[*]Design a ship part by part, with a 3D preview that builds up as you choose. Cockpit, wings,
+chin, skirt, thrusters and the rest, named the way the community names them.
+[*]Find a seed that builds your design. The search runs on all cores and tests around 70 million
+seeds a second, with a live estimate of how long it will take.
+[*]Find that ship in a real star system near you, if you would rather fly to it than edit it in.
+[*]Put a design straight into your save, as a new ship or over one you already own.
+[*]Recolour any ship with the game's real paint sets and a live preview.
+[*]Save designs as files and share them.
+[/list]
+
+[size=3]Corvettes[/size]
+[list]
+[*]See the corvette in your save drawn from the modules bolted to it, each one listed by its
+in-game name and the position it stands at.
+[*]Build one in a window of its own: a palette of 172 modules, drag to place, coloured arrows to
+slide along one axis, rings and sliders to turn about any axis, eighty steps of undo.
+[*]Parts snap together the way the game snaps them, using the game's own sockets.
+[*]Or turn snapping off and put a module anywhere, at any angle, bolted to nothing. The build
+menu's restrictions are checked while you build and never re-checked when a save is loaded, which
+is what people have been using clipping tricks to achieve.
+[*]Mirror a module across the centreline and the pair moves, turns and goes together.
+[/list]
+
+[size=3]Save editing[/size]
+[list]
+[*]Inventories: add, remove and fill any item, technology or substance, repair and recharge,
+unlock slots.
+[*]Unlock recipes, blueprints, words, milestones, expedition and Twitch rewards.
+[*]Multi-tools, freighters, frigates, companions.
+[*]Export and import the save as JSON, plus a raw editor for anything not covered by a screen.
+[/list]
+
+[line]
+
+[size=3]Before you use it[/size]
+[list]
+[*][b]Turn Steam Cloud off for No Man's Sky[/b] while you edit, or the cloud copy is put back over
+your edit and nothing you did shows up. This is the single most common reason an edit "does not
+work".
+[*]Quit the game before writing. The app refuses to write while it is running, because the game
+would overwrite the file on exit.
+[*]Every write makes a timestamped backup next to your save first.
+[/list]
+
+[size=3]Requirements[/size]
+[list]
+[*]Windows 10 or 11, 64-bit.
+[*]No Man's Sky installed. Steam, GOG and the Microsoft Store are all found automatically; you can
+also point the app at the folder yourself.
+[*]Nothing else. No Python, no runtime to install -- it uses the Edge WebView2 that Windows
+already ships.
+[/list]
+
+[size=3]What is not included[/size]
+
+No game files are shipped with this app and none are redistributed. Ship part data, item tables,
+3D models and language text are all read from your own installed copy of the game at runtime.
+
+[line]
+
+Open source, MIT licensed. Source, issues and the full changelog:
+[url=https://github.com/S-T-0-7/NMS-Shipwright]github.com/S-T-0-7/NMS-Shipwright[/url]
+
+Built with [url=https://pypi.org/project/hgpaktool/]hgpaktool[/url] to read the game's archives and
+[url=https://www.unicorn-engine.org/]Unicorn[/url] to run the game's own generator code offline.

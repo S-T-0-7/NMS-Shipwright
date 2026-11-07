@@ -1,0 +1,44 @@
+[size=3]1.9.0[/size]
+
+[b]Corvettes.[/b] A new page shows the corvette in your save, the whole ship drawn from the
+modules bolted to it, with every module listed by its in-game name and the position it stands at.
+Modules sitting at an angle the build menu has no rotation for are marked, since those are the
+ones you could not have placed from inside the game.
+
+[b]A builder, in a window of its own.[/b] Pick from a palette of 172 modules, drag them into
+place, and save the result back. Drag a module to slide it flat, hold Shift to raise and lower
+it, or take hold of the red, green and blue arrows to run along one axis at a time. Rings turn it
+about any axis and three sliders do the same by the degree. Undo and redo go back eighty steps.
+Snap can be set to the build grid, to a finer step, or off altogether. Mirror a module across the
+centreline and the pair moves, turns and goes together.
+
+[b]Parts snap together the way the game does.[/b] Every module carries named sockets and the game
+joins two modules by laying one part's socket exactly onto another's. The builder reads those same
+sockets, so a part dropped near the ship seats itself and says which socket caught it. Measured
+against a ship built in game, fifteen of sixteen modules snap back to the exact position the game
+had them in.
+
+[b]Place anything anywhere.[/b] The build menu's restrictions are checked while building and never
+re-checked when a save is loaded, so a module written through the builder can stand anywhere, at
+any angle, bolted to nothing. Confirmed in game: a turret rolled onto its side, a hab tumbled on
+all three axes and a thruster at 37 degrees all load and draw, and the game writes them back
+unchanged when it next saves.
+
+[b]Ships render properly where they did not.[/b] Any mesh with more than 65,536 vertices was being
+read with the wrong index width, which turned it into twice as many triangles with every one
+spanning the model -- corvette turrets and landing gear looked crumpled, and 74 spacecraft meshes
+across the game had the same fault. Shield generators are solid again too; the filter that drops a
+ship's shield bubble was matching on the word alone and throwing away the corvette's
+shield-generator parts with it.
+
+[b]Interceptors show the colour they are actually born in.[/b] The body colour comes from the
+overlay the seed draws, not from its palette, so the app could find you a black interceptor and
+then draw it orange.
+
+[b]The corvette hull no longer has a ghost inside it.[/b] The scene named after the hull holds
+nothing but the build station's holographic preview, which was being drawn inside every corvette
+as a blue ship-shaped shell.
+
+[b]Every module in the build menu draws.[/b] Module geometry now comes from the game's parts table
+keyed by each module's style rather than from guessing at names, taking coverage from 128 of 194
+to 171. The rest are interior walls, whose model depends on the room they sit in.
