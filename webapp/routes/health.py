@@ -65,7 +65,7 @@ def health(deep=False):
 
         def triangles():
             groups = model3d.ship_model("0x1", "fighter")["groups"].values()
-            return "%d triangles" % (sum(len(g[2]) for g in groups) // 3)
+            return "%d triangles" % (sum(len(g[3]) for g in groups) // 3)
 
         checks += [_check("Ship generator", "Find in game, system lookup", one_system),
                    _check("Ship colours", "colours and finish", colours),

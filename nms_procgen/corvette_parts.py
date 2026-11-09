@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import functools
 import os
+import re
 
 from nms_save import gamefiles, gamemeta
 from nms_save.gamefiles import array, cstr, i32, read, vstr
@@ -29,7 +30,6 @@ PARTS = {
     "ALK": ["_BIGGS_EXTHATCHALK1X1{v}"],
     "COK": ["_BIGGS_COK_{v}"],
     "CON": ["_BIGGS_CON1X1_{v}"],
-    "CON_L": ["_BIGGS_CON1X1_L_{v}", "_BIGGS_CON1X1_R_{v}"],
     "CON2": ["_BIGGS_CON1X2_"],
     "DECO": ["_BIGGS_EXTDECORATION"],
     "GEN": ["_BIGGS_GEN1X1_{v}"],
@@ -41,10 +41,29 @@ PARTS = {
     "SHL": ["_BIGGS_EXTSHL1X1{v}"],
     "TRU": ["_BIGGS_EXTTRU1X1"],
     "TUR": ["_BIGGS_EXTTUR1X1"],
-    # a wing is several pieces, one per side the letter happens to come in
-    "WNG": ["_BIGGS_EXTWNGL1X2{v}", "_BIGGS_EXTWNGR1X2{v}",
-            "_BIGGS_EXTWNGT1X2{v}", "_BIGGS_EXTWNGB1X2{v}"],
 }
+
+# Wings and the lettered connectors are handed, and the game keeps a separate module for each
+# side: B_WNG_A is the left wing and B_WNG_A_R the right, B_WNG_P_T and B_WNG_P_B the top and
+# bottom, B_CON_L_0 and B_CON_R_0 the two connectors. Sixty-four wing modules, sixty-four wing
+# parts, one apiece.
+#
+# Taking the side from the family instead drew every part the family had: a left-hand module
+# came out with its mirrored twin standing beside it, and a right-hand one drew nothing at all.
+WING = re.compile(r"^B_WNG_([A-Z])(?:_(\d+))?(?:_([RTB]))?$")
+CONNECTOR = re.compile(r"^B_CON_([LR])_(\d+)$")
+
+
+def _sided(module_id: str):
+    """The one part a handed module draws, or None if it is not one of them."""
+    m = WING.match(module_id)
+    if m:
+        letter, piece, side = m.group(1), m.group(2), m.group(3) or "L"
+        return "_BIGGS_EXTWNG%s1X2%s%s" % (side, letter, "_" + piece if piece else "")
+    m = CONNECTOR.match(module_id)
+    if m:
+        return "_BIGGS_CON1X1_%s_%s" % m.groups()
+    return None
 
 
 @functools.lru_cache(maxsize=1)
@@ -106,16 +125,38 @@ def _split(module_id: str):
 def _part_ids(family: str, variant: str) -> list[str]:
     """The parts one module is built from.
 
-    Most families name their part outright. The three lettered series carry the letter in the
-    family code and the piece in the variant instead, so they are worked out rather than listed.
+    Most families name their part outright. The lettered series carry the letter in the family
+    code and the piece in the variant instead, so they are worked out rather than listed.
+    Handed parts do not come through here at all; see _sided.
     """
     if family.startswith("STR_"):
         return ["_BIGGS_EXTSTR_1X1_" + variant]
-    if family == "WNG_O":
-        return ["_BIGGS_EXTWNGL1X2O_" + variant, "_BIGGS_EXTWNGR1X2O_" + variant]
     if family.startswith("DECO_"):
         return ["_BIGGS_EXTDECORATION" + ("" if variant == "0" else variant)]
     return [t.format(v=variant) for t in PARTS.get(family, [])]
+
+
+@functools.lru_cache(maxsize=1)
+def handed() -> dict:
+    """{module id: the module that is its mirror image}, both ways round.
+
+    A wing or a lettered connector is not mirrored by turning it: the game keeps a part for each
+    side, authored as the other one reflected, and swaps the module for its opposite. So this is
+    what mirroring one across the ship has to do too.
+    """
+    cat, out = catalogue(), {}
+    for mid in cat:
+        m = WING.match(mid)
+        if m and m.group(3) in (None, "R"):           # top and bottom are not a left-right pair
+            other = mid + "_R" if m.group(3) is None else mid[:-2]
+        else:
+            m = CONNECTOR.match(mid)
+            if not m:
+                continue
+            other = mid.replace("_L_", "_R_") if m.group(1) == "L" else mid.replace("_R_", "_L_")
+        if other in cat:
+            out[mid] = other
+    return out
 
 
 @functools.lru_cache(maxsize=256)
@@ -146,8 +187,9 @@ def scenes_for(module_id: str) -> list[str]:
     family, variant = _split(bare)
     if entry is None or family is None:
         return []
+    one = _sided(bare)
     table, out = parts(), []
-    for pid in _part_ids(family, variant):
+    for pid in ([one] if one else _part_ids(family, variant)):
         models = table.get(pid)
         if not models:
             continue

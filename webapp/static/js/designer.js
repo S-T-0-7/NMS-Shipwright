@@ -165,6 +165,44 @@ async function loadDesign() {
 }
 function wireApply(box, ship) {
   box.querySelectorAll('[data-seed]').forEach(b => b.onclick = () => applySeed(b.dataset.seed, b.dataset.ship || ship));
+  paintThumbs(box);
+}
+
+/* ---- looking at a seed --------------------------------------------------------------------
+   The Designer could preview what you were building but not what you had found, and nothing at
+   all unless you already owned the ship. Both are the same thing: draw the seed. */
+function showSeed(ship, seed) {
+  const box = $('#dPreview');
+  box.classList.add('v3d');
+  show3d('dPreview', modelUrl(ship, 'seed=' + encodeURIComponent(seed)));
+  S.previewSeed = {ship, seed};
+  $('#dSeedFrom').disabled = false;
+  box.scrollIntoView({behavior: 'smooth', block: 'center'});
+}
+
+/* Fill the part tree from a seed, so a found ship becomes something you can change. */
+async function designFromSeed(ship, seed) {
+  $('#dShip').value = ship;
+  await loadTree();
+  const r = await api(`/api/parts?ship=${encodeURIComponent(ship)}&seed=${encodeURIComponent(seed)}`);
+  preselect(r.parts.map(p => p.id));
+  toast(`Filled in the ${r.parts.length} parts of ${seed}. Change what you like, then search for a seed.`);
+}
+
+function initSeedBox() {
+  const look = () => guard(async () => {
+    const seed = $('#dSeed').value.trim();
+    if (!seed) throw new Error('Type a seed first.');
+    showSeed($('#dShip').value, seed);
+  });
+  $('#dSeedShow').onclick = look;
+  $('#dSeed').onkeydown = e => { if (e.key === 'Enter') look(); };
+  $('#dSeedRandom').onclick = () => { $('#dSeed').value = randomSeed(); look(); };
+  $('#dSeedFrom').onclick = () => guard(async () => {
+    const s = S.previewSeed || {ship: $('#dShip').value, seed: $('#dSeed').value.trim()};
+    if (!s.seed) throw new Error('Type a seed first.');
+    await designFromSeed(s.ship, s.seed);
+  });
 }
 
 async function initDesigner() {
@@ -216,6 +254,7 @@ async function initDesigner() {
     const r = await api('/api/designs/' + encodeURIComponent(d.id), {method: 'DELETE'});
     S.designs = r.designs; await loadDesigns(); toast('Deleted.');
   });
+  initSeedBox();
   await loadTree();
 }
 async function loadTree() {
@@ -343,9 +382,14 @@ async function pollJob() {
     // An interceptor seed that colours its own hull builds the ship you asked for and then
     // refuses to be painted, so it is worth seeing before you pick one rather than after.
     const stuck = res.paints === false ? '<span class="badge hot" title="This seed colours itself and ignores paint -- which is how the black ones happen">SEED COLOUR ONLY</span>' : '';
-    d.innerHTML = `${lookBadge(res.look)}${stuck}
-      <div class="row" style="margin-top:6px;justify-content:space-between"><code>${res.seed}</code><button class="btn">${ic('box')}Put in my save...</button></div>`;
-    d.querySelector('button').onclick = () => applySeed(res.seed, job.ship); box.append(d);
+    d.innerHTML = `<img class="thumb" alt="">${lookBadge(res.look)}${stuck}
+      <div class="row" style="margin-top:6px;justify-content:space-between"><code>${res.seed}</code>
+        <span class="row" style="gap:6px"><button class="btn ghost" data-see title="Show this one in the preview above">${ic('search')}See it</button>
+        <button class="btn">${ic('box')}Put in my save...</button></span></div>`;
+    d.querySelector('button:not([data-see])').onclick = () => applySeed(res.seed, job.ship);
+    d.querySelector('[data-see]').onclick = () => showSeed(job.ship, res.seed);
+    thumbInto(d.querySelector('img'), job.ship, res.seed);
+    box.append(d);
   }
   if (j.status === 'running') setTimeout(() => guard(pollJob), 800);
   else { $('#dGo').disabled = $('#dFind').disabled = false; $('#dStop').disabled = true; }

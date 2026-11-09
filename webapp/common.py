@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from flask import request
@@ -86,13 +87,60 @@ class GameRunning(RuntimeError):
     pass
 
 
-def game_running():
+def _running_by_snapshot(exe):
+    """Is `exe` running, asked of Windows directly rather than by starting a program to ask.
+
+    Walking the process list costs about a millisecond. Shelling out to tasklist costs two
+    hundred, and the page asks every few seconds, so that was a fifth of a second of the
+    machine's attention spent, over and over, on a question with a one-word answer.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    class ENTRY(ctypes.Structure):
+        _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
+                    ("th32ProcessID", wintypes.DWORD), ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+                    ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+                    ("th32ParentProcessID", wintypes.DWORD), ("pcPriClassBase", ctypes.c_long),
+                    ("dwFlags", wintypes.DWORD), ("szExeFile", ctypes.c_char * 260)]
+
+    k32 = ctypes.windll.kernel32
+    snap = k32.CreateToolhelp32Snapshot(0x2, 0)       # TH32CS_SNAPPROCESS
+    if snap == -1:
+        raise OSError("no process snapshot")
     try:
-        out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq NMS.exe"], capture_output=True, text=True,
-                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
-    except OSError:
+        e = ENTRY()
+        e.dwSize = ctypes.sizeof(ENTRY)
+        found = k32.Process32First(snap, ctypes.byref(e))
+        want = exe.lower().encode()
+        while found:
+            if e.szExeFile.lower() == want:
+                return True
+            found = k32.Process32Next(snap, ctypes.byref(e))
         return False
-    return "NMS.exe" in out
+    finally:
+        k32.CloseHandle(snap)
+
+
+_RUNNING = [0.0, False]   # when it was last asked, and what the answer was
+
+
+def game_running(fresh: bool = False):
+    """Whether No Man's Sky is up. `fresh` skips the moment's grace before a write."""
+    now = time.monotonic()
+    if not fresh and now - _RUNNING[0] < 1.5:
+        return _RUNNING[1]
+    try:
+        answer = _running_by_snapshot("NMS.exe")
+    except Exception:   # not Windows, or the call was refused: fall back to asking the shell
+        try:
+            out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq NMS.exe"], capture_output=True,
+                                 text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+            answer = "NMS.exe" in out
+        except OSError:
+            answer = False
+    _RUNNING[0], _RUNNING[1] = now, answer
+    return answer
 
 
 def open_save(path):
@@ -102,7 +150,9 @@ def open_save(path):
 
 
 def write(opened):
-    if game_running():
+    # Asked afresh: the answer the page is showing may be a second or two old, and a second or
+    # two is long enough to start the game in.
+    if game_running(fresh=True):
         raise GameRunning("No Man's Sky is running -- quit the game first, or it will overwrite this change.")
     return opened.write()
 

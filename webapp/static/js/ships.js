@@ -1,7 +1,9 @@
 /* My Ships: the ship list, seeds, stats, paint. */
-async function loadShips() {
+/* `have` is a list an endpoint already handed back, so a write does not send the page off to
+   read the save a second time for something it was just told. */
+async function loadShips(have) {
   if (!S.path) { $('#shipList').innerHTML = '<p class="muted">No save files found.</p>'; return; }
-  const res = await api('/api/ships?path=' + encodeURIComponent(S.path));
+  const res = have || await api('/api/ships?path=' + encodeURIComponent(S.path));
   S.ships = res.ships; S.empty = res.empty;
   $('#newShip').disabled = !S.ships.length; $('#newShip').title = S.empty.length ? `Empty slots: ${S.empty.join(', ')}` : 'No empty slots -- you can replace a ship instead';
   $('#shipList').innerHTML = S.ships.map(s => `
@@ -346,7 +348,7 @@ async function applySeed(seed, ship) {
   await guard(async () => {
     const r = await post('/api/ship/put', {path: S.path, slot, ship, seed});
     showBanner(`Saved: ${r.what} is now a ${ship} (${r.seed}) in ${r.file}. Backup made. Load this save in the game to see it.`, false);
-    await loadShips(); if (typeof fillTargets === 'function') fillTargets();
+    await loadShips(r.fleet); if (typeof fillTargets === 'function') fillTargets();
   });
 }
 

@@ -42,12 +42,36 @@ def _lock_for(dest):
         return _LOCKS.setdefault(os.path.abspath(dest), threading.Lock())
 
 
+_EXTRACTED: dict = {}
+
+
+def forget():
+    """Drop what this run has worked out about the archives, as a restart would."""
+    _EXTRACTED.clear()
+    _VERIFIED.clear()
+
+
+
+
 def extract(dest, patterns, first_pak, keep_dirs=False):
     """Copy files matching `patterns` out of the game archives into `dest`, once per game build.
 
     Each pattern set keeps its own stamp and list of files, so several callers can share a folder
     and a game update re-extracts only what that caller asked for.
+
+    Checking that means listing every archive and taking the newest date among them -- a hundred
+    files touched -- and the answer cannot change while the app runs, so the first answer stands
+    for the rest of the run. One ship was asking the same question sixty-three times over, once
+    per animation it tried.
     """
+    memo = (os.path.abspath(dest), tuple(patterns), first_pak, keep_dirs)
+    if memo not in _EXTRACTED:
+        _EXTRACTED[memo] = _extract_checked(dest, list(patterns), first_pak, keep_dirs)
+    return _EXTRACTED[memo]
+
+
+def _extract_checked(dest, patterns, first_pak, keep_dirs=False):
+    """extract, without the memo: see whether this folder is up to date and fill it if not."""
     patterns = list(patterns)
     stamp_file = os.path.join(dest, "_stamp_%s.json" % hashlib.sha1("|".join(patterns).encode()).hexdigest()[:12])
     pcbanks = banks()

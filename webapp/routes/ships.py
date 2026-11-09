@@ -47,25 +47,34 @@ def api_saves():
                     for s in locator.find_saves()])
 
 
-@bp.route("/api/ships")
-def api_ships():
-    opened = open_save(request.args.get("path"))
-    primary = player.primary_ship(opened.readable)
-    known, galaxy = locate.save_known_systems(opened.readable), locate.save_galaxy(opened.readable)
+def ship_list(readable):
+    """The My Ships payload, from a save already open.
+
+    Written to a save and then read straight back off disk, this list cost another two tenths
+    of a second for an answer the writing code was holding all along. An endpoint that changes
+    a ship returns it instead, so the page has nothing to go and fetch.
+    """
+    primary = player.primary_ship(readable)
+    known, galaxy = locate.save_known_systems(readable), locate.save_galaxy(readable)
     out = []
-    for s in ships.list_ships(opened.readable):
+    for s in ships.list_ships(readable):
         alias = ship_alias(s.filename) if s.is_procedural else None
         origin = (systemgen.confirm(s.seed, locate.locate(s.seed, known_systems=known, galaxy=galaxy))
                   if alias and s.seed else [])
         out.append({"index": s.index, "name": s.name, "filename": s.filename, "seed": s.seed, "ship": alias,
                     "category": SHIP_LABELS.get(alias, s.category_guess), "is_procedural": s.is_procedural,
                     "is_golden_vector": s.is_golden_vector, "primary": s.index == primary,
-                    "paint": ships.get_ship_paint(opened.readable, s.index),
+                    "paint": ships.get_ship_paint(readable, s.index),
                     "wrong_tech": ships.wrong_core_tech(s.raw),
                     "origin": origin[:3]})
-    entries = opened.readable["BaseContext"]["PlayerStateData"]["ShipOwnership"]
+    entries = readable["BaseContext"]["PlayerStateData"]["ShipOwnership"]
     empty = [i for i, e in enumerate(entries) if not e.get("Resource", {}).get("Filename")]
-    return jsonify({"ships": out, "empty": empty})
+    return {"ships": out, "empty": empty}
+
+
+@bp.route("/api/ships")
+def api_ships():
+    return jsonify(ship_list(open_save(request.args.get("path")).readable))
 
 
 @bp.route("/api/models")

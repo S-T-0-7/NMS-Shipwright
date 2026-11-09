@@ -52,6 +52,25 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:8px
 .tree .kids:not(:empty){margin-left:24px;border-left:1px dashed var(--line);padding-left:10px}.tree select{width:100%}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
 .results{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.res{padding:8px}.res img{width:100%;height:140px;object-fit:contain;background:#0a0c10;border-radius:6px}
+/* A card's picture is drawn after the card, so it fades in rather than popping. Until it
+   arrives the empty frame holds the card's shape, which stops the grid jumping about. */
+.thumb{opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 40%,#161c28,#0a0c10 70%)}
+.thumb.ready{opacity:1}
+.seedbox{padding:12px;display:grid;gap:8px}.seedbox .tnote{margin:0}
+/* The app is working: one thin bar across the top, never a dialog in the way. It only shows
+   after a fifth of a second, so a quick answer never makes the page flicker. */
+body::before{content:"";position:fixed;inset:0 auto auto 0;height:2px;width:100%;z-index:200;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);background-size:40% 100%;
+  background-repeat:no-repeat;opacity:0;transition:opacity .2s;pointer-events:none}
+body.working::before{opacity:1;animation:sweep 1.1s linear infinite}
+@keyframes sweep{from{background-position:-40% 0}to{background-position:140% 0}}
+/* A viewer that has not drawn yet: the panel reads as busy rather than broken. */
+.hero.drawing::after{content:"Drawing the ship...";position:absolute;inset:0;display:grid;
+  place-items:center;color:var(--muted);font-size:13px;background:inherit;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.45}50%{opacity:.85}}
+/* The viewer, filling the window: the same canvas, just given the room to be looked at. */
+.hero.v3d.vfull{position:fixed;inset:0;z-index:60;height:auto;border-radius:0}
+body.noscroll{overflow:hidden}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600;font-size:12px}
 .form{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:center}
 .form2{display:grid;grid-template-columns:190px minmax(0,1fr);gap:10px;align-items:center}

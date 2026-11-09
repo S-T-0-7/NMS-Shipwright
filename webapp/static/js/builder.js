@@ -12,7 +12,7 @@ const qs = new URLSearchParams(location.search);
 
 const B = {path: qs.get('path') || '', index: +(qs.get('index') || 0), scene: null, palette: [],
            names: {}, modules: [], undo: [], redo: [], snap: 3, dirty: false,
-           snaps: new Map(), snapParts: true, snapped: null, mirror: false};
+           snaps: new Map(), snapParts: true, snapped: null, mirror: false, handed: {}};
 let nextUid = 1;
 
 function toast(msg, bad) {
@@ -148,17 +148,24 @@ function showSnapHint() {
 
    Paired modules stay paired: move or turn one and the other follows, delete one and both go. */
 const CENTRELINE = 0.2;   // nearer than this to x = 0 and a part mirrors onto itself
-const reflect = m => ({position: [-m.position[0], m.position[1], m.position[2]],
-                       up: [-m.up[0], m.up[1], m.up[2]],
-                       at: [-m.at[0], m.at[1], m.at[2]]});
+/* Wings and the lettered connectors have a part per side, each authored as the other reflected,
+   and the game swaps the module rather than turning it round. So a mirrored one takes its
+   opposite's id and keeps its own bearing; everything else is reflected outright. */
+const handed = id => B.handed[id] || id;
+const reflect = m => ({id: handed(m.id),
+                       position: [-m.position[0], m.position[1], m.position[2]],
+                       up: m.id === handed(m.id) ? [-m.up[0], m.up[1], m.up[2]] : m.up.slice(),
+                       at: m.id === handed(m.id) ? [-m.at[0], m.at[1], m.at[2]] : m.at.slice()});
 const twinOf = m => (m && m.twin ? B.modules.find(x => x.uid === m.twin) : null);
 
 /* Lay a module's reflection onto its twin. Called after anything that moves or turns one. */
 function syncTwin(m) {
   const t = twinOf(m);
   if (!t) return;
+  const was = t.id;
   Object.assign(t, reflect(m));
   setMatrix(t);
+  if (t.id !== was) needPart(t.id).then(ok => { t.hidden = !ok; });
 }
 /* Give a module a mirrored partner on the other side of the ship. */
 function pairUp(m) {
@@ -167,7 +174,8 @@ function pairUp(m) {
     toast('That one sits on the centreline, so its mirror is itself.', true);
     return null;
   }
-  const t = setMatrix({id: m.id, uid: nextUid++, twin: m.uid, ...reflect(m)});
+  const t = setMatrix({uid: nextUid++, twin: m.uid, ...reflect(m)});
+  if (t.id !== m.id) needPart(t.id).then(ok => { t.hidden = !ok; });
   m.twin = t.uid;
   B.modules.push(t);
   B.scene.items = B.modules;
@@ -642,6 +650,7 @@ async function start() {
   $('#bSave').onclick = saveBuild;
   addEventListener('beforeunload', e => { if (B.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
+  B.handed = await api('/api/corvette/mirror');
   B.palette = await api('/api/corvette/palette');
   for (const g of B.palette) for (const p of g.parts) B.names[p.id] = p.name;
   renderPalette();

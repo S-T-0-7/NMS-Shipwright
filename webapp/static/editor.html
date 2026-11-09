@@ -74,6 +74,15 @@
       <div class="card" style="padding:12px"><div class="tree" id="dTree"></div></div>
       <div>
         <div class="card hero" id="dPreview"><span class="muted">Pick parts to preview</span></div>
+        <div class="card seedbox" style="margin-top:12px">
+          <div class="row"><span class="tlabel">View any seed</span></div>
+          <div class="row"><input id="dSeed" class="mono" placeholder="0x1234ABCD..." style="flex:1;min-width:180px">
+            <button class="btn" id="dSeedShow" data-icon="search">Show it</button>
+            <button class="btn ghost" id="dSeedRandom" data-icon="dice" title="A seed at random">Random</button>
+            <button class="btn ghost" id="dSeedFrom" data-icon="sliders" disabled>Start a design from it</button></div>
+          <p class="muted tnote">Draws any seed of the ship type above, whether or not you own it. "Start a design from it"
+            fills the part tree in, so you can change one wing and search for a seed that keeps the rest.</p>
+        </div>
         <div class="card" style="padding:12px;margin-top:12px" id="dLook"></div>
         <div class="card" style="padding:0;margin-top:12px">
           <div class="seek"><span class="tlabel">Search seeds</span>

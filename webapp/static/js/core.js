@@ -45,15 +45,62 @@ const paintIcons = (root = document) => root.querySelectorAll('[data-icon]').for
 });
 const VIEWS = [['three', '3/4'], ['front', 'Front'], ['side', 'Side'], ['top', 'Top'], ['back', 'Back']];
 
+/* ---- pictures for the cards ---------------------------------------------------------------
+   A search turns up seeds, and a seed on its own tells you nothing about the ship it builds.
+   Every result gets a picture, drawn here rather than fetched: one hidden renderer takes each
+   ship in turn, snapshots it and moves on, so twenty results cost one WebGL context instead of
+   twenty. Pictures are kept for the life of the page, because the same seed shows up again in
+   saved designs, in system searches and after a re-run of the same search. */
+const THUMBS = new Map();
+let thumbChain = Promise.resolve(), thumbView = null;
+
+function thumbViewer() {
+  if (thumbView) return thumbView;
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:-10000px;top:0;width:420px;height:280px;pointer-events:none';
+  document.body.appendChild(box);
+  thumbView = window.ShipViewer && ShipViewer.mount(box);
+  if (thumbView) { thumbView.spin(false); thumbView.view('three'); }
+  return thumbView;
+}
+
+/* Fill one <img> once its ship has been drawn. Returns nothing: the picture arrives when it
+   arrives, and a card that never gets one simply keeps its placeholder. */
+function thumbInto(img, ship, seed) {
+  const key = ship + '|' + seed;
+  if (THUMBS.has(key)) { img.src = THUMBS.get(key); img.classList.add('ready'); return; }
+  thumbChain = thumbChain.then(async () => {
+    if (!img.isConnected || THUMBS.has(key)) {
+      if (THUMBS.has(key)) { img.src = THUMBS.get(key); img.classList.add('ready'); }
+      return;
+    }
+    const v = thumbViewer();
+    if (!v) return;
+    try {
+      await quiet(() => v.load(modelUrl(ship, 'seed=' + encodeURIComponent(seed))));
+      v.view('three');
+      // the textures arrive on their own schedule; give them a moment before the still
+      await new Promise(r => setTimeout(r, 260));
+      const url = v.snapshot('image/webp');
+      THUMBS.set(key, url);
+      img.src = url;
+      img.classList.add('ready');
+    } catch (e) { /* a seed that will not draw keeps its placeholder */ }
+  });
+}
+
 function show3d(id, url, fallback) {
   const el = $('#' + id); if (!el) return;
-  VIEWERS[id]?.destroy(); el.classList.add('v3d');
+  VIEWERS[id]?.destroy(); el.classList.add('v3d', 'drawing');
   const v = VIEWERS[id] = window.ShipViewer && ShipViewer.mount(el);
-  const fail = msg => { v?.destroy(); el.classList.remove('v3d'); el.innerHTML = fallback || `<span class="muted">${esc(msg)}</span>`; };
+  const done = () => el.classList.remove('drawing');
+  const fail = msg => { done(); v?.destroy(); el.classList.remove('v3d'); el.innerHTML = fallback || `<span class="muted">${esc(msg)}</span>`; };
   if (!v) return fail('3D view needs WebGL2');
   v.elId = id;  // lets the viewer find its own Fly/Land button in the HUD
   hud(el, id);
-  v.load(url).catch(e => fail(e.message));
+  // A ship is a few megabytes and its textures a few more, so this is the wait people feel.
+  busy(true);
+  v.load(url).then(done, e => fail(e.message)).finally(() => busy(false));
 }
 
 /* The viewer's controls, laid over the canvas in its corners rather than stacked underneath:
@@ -63,11 +110,24 @@ function hud(el, id) {
   d.className = 'vhud';
   d.innerHTML = `<div class="hudrow end"><div class="glass pad">
       <button class="iconbtn on" title="Keep it turning">${svg(ICON.spin)}</button>
-      <button class="iconbtn" id="pose-${id}" style="display:none" title="Show it flying">${svg(ICON.fly)}</button></div></div>
+      <button class="iconbtn" id="pose-${id}" style="display:none" title="Show it flying">${svg(ICON.fly)}</button>
+      <button class="iconbtn" data-full title="Fill the window (Esc to come back)">${svg(ICON.expand)}</button></div></div>
     <div class="hudrow"><div class="glass seg">${VIEWS.map(([k, l]) => `<button data-v="${k}">${l}</button>`).join('')}</div>
       <span class="vhint">Drag to turn &middot; scroll to zoom &middot; double-click to reset</span></div>`;
   el.appendChild(d);
   const [spin, pose] = d.querySelectorAll('.iconbtn'), seg = d.querySelector('.seg');
+
+  /* Filling the window is the difference between "that looks about right" and seeing the thing
+     you are about to write into your save. */
+  const full = d.querySelector('[data-full]');
+  const setFull = on => {
+    el.classList.toggle('vfull', on);
+    full.classList.toggle('on', on);
+    full.title = on ? 'Back to the page (Esc)' : 'Fill the window (Esc to come back)';
+    document.body.classList.toggle('noscroll', on);
+  };
+  full.onclick = () => setFull(!el.classList.contains('vfull'));
+  addEventListener('keydown', e => { if (e.key === 'Escape' && el.classList.contains('vfull')) setFull(false); });
   spin.onclick = () => v.spin();
   // A drag or an angle button stops the spin too, so the button follows the viewer, not the click.
   v.onauto = on => { spin.classList.toggle('on', on); if (on) seg.querySelectorAll('.on').forEach(b => b.classList.remove('on')); };
@@ -86,7 +146,34 @@ function hud(el, id) {
   };
 }
 
+/* ---- showing that the app is working ------------------------------------------------------
+   Every request the page makes goes through api() or show3d(), so both ends of "something is
+   happening" are known in one place rather than left to each screen to remember. The bar waits
+   a fifth of a second before it appears: most calls are done by then, and a bar that flickers
+   on every click is worse than no bar. */
+let busyCount = 0, busyTimer = null;
+function busy(on) {
+  busyCount = Math.max(0, busyCount + (on ? 1 : -1));
+  if (busyCount && !busyTimer) {
+    busyTimer = setTimeout(() => document.body.classList.add('working'), 200);
+  } else if (!busyCount) {
+    clearTimeout(busyTimer); busyTimer = null;
+    document.body.classList.remove('working');
+  }
+}
+/* Work that is nobody's business -- thumbnails drawing in the background -- goes around this. */
+async function quiet(fn) { return fn(); }
+
 async function api(url, opts) {
+  busy(true);
+  try {
+    return await request(url, opts);
+  } finally {
+    busy(false);
+  }
+}
+
+async function request(url, opts) {
   const r = await fetch(url, opts);
   const data = (r.headers.get('content-type') || '').includes('json') ? await r.json() : null;
   if (!r.ok || (data && data.ok === false)) {

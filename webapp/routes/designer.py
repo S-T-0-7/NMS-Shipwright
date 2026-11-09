@@ -8,12 +8,13 @@ import os
 import re
 import threading
 import uuid
+import zlib
 
 from flask import Blueprint, Response, jsonify, request
 
 from nms_procgen import model3d, ROOTS, explain, load_descriptor, ref_to_descriptor, textures
 from nms_procgen.fastsearch import fast_search
-from nms_save import gamefiles, player, ships
+from nms_save import gamefiles, player, save, ships
 
 from webapp.common import (GameRunning, JOBS, NO_SEED_LOOK, ROOT, SHIP_LABELS, body, game_running,
                            limit_seconds, model_filename, open_save, parse_look, part_label, part_names,
@@ -28,6 +29,28 @@ def api_parts():
     names = part_names(ship if ship in ROOTS else ship_alias(ship) or "")
     return jsonify({"parts": [{"depth": d, "group": g, "id": pid, "name": part_label(names, pid), "label": label,
                                "choices": len(alts) + 1} for d, g, pid, alts, label in explain(seed, ship)]})
+
+
+@bp.route("/api/texture")
+def api_texture():
+    """One of the game's texture files, still block-compressed, for the viewer to upload as is.
+
+    The browser holds on to these: a ship wants a couple of dozen of them and they run to most
+    of a megabyte each. They are only ever re-read when the game itself is updated, which the
+    build stamp in the tag takes care of.
+    """
+    from nms_procgen import shiptex
+    path = (request.args.get("path") or "").upper().replace("\\", "/")
+    if not path.startswith("TEXTURES/") or ".." in path:
+        return {"ok": False, "error": "not a texture path"}, 400
+    data = shiptex.blob(path)
+    if data is None:
+        return {"ok": False, "error": "no such texture"}, 404
+    tag = '"%x-%d"' % (zlib.crc32(path.encode()), len(data))   # stable across restarts
+    if request.headers.get("If-None-Match") == tag:
+        return Response(status=304, headers={"ETag": tag, "Cache-Control": "no-cache"})
+    return Response(data, mimetype="image/vnd-ms.dds",
+                    headers={"ETag": tag, "Cache-Control": "no-cache"})
 
 
 @bp.route("/api/model")
@@ -280,12 +303,18 @@ def put_design(path, ship, want, seed, slot, name):
             ships.set_ship_model(r, slot, filename, seed)
         what = f"slot {slot}"
     backup = write(opened)
-    # Read the file back: the change must really be in the save the game will load.
-    check = next((x for x in ships.list_ships(open_save(path).readable) if x.index == slot), None)
+    # Read the file back: the change must really be in the save the game will load. Only the
+    # ship list is converted -- the rest of the save is no part of the question, and renaming
+    # all of it doubled what an edit cost.
+    owned_now = save.read_branch(path, *ships.SHIP_PATH) or []
+    fresh = {"BaseContext": {"PlayerStateData": {"ShipOwnership": owned_now}}}
+    check = next((x for x in ships.list_ships(fresh) if x.index == slot), None)
     if not check or ship_alias(check.filename) != ship or int(str(check.seed), 16) != int(seed, 16):
         raise RuntimeError(f"the save was written but slot {slot} does not read back as this ship -- "
                            f"restore the backup {os.path.basename(backup or '')} and report this")
-    return {"slot": slot, "seed": seed, "what": what, "backup": backup, "file": os.path.basename(path)}
+    from webapp.routes.ships import ship_list
+    return {"slot": slot, "seed": seed, "what": what, "backup": backup,
+            "file": os.path.basename(path), "fleet": ship_list(r)}
 
 
 def run_install(job, path, design, slot, seconds):
@@ -318,7 +347,7 @@ def api_ship_put():
     ship = b.get("ship")
     if ship not in ROOTS:
         raise ValueError(f"unknown ship type {ship!r}")
-    if game_running():
+    if game_running(fresh=True):   # about to write: do not trust a cached answer
         raise GameRunning("No Man's Sky is running -- quit the game first, or it will overwrite this change.")
     seed = f"0x{int(str(b['seed']), 16) & (1 << 64) - 1:016X}"
     return jsonify({"ok": True, **put_design(b.get("path"), ship, None, seed, b.get("slot", "new"),
@@ -329,7 +358,7 @@ def api_ship_put():
 def api_design_install():
     """Put a design into the save: a saved seed if one still matches, otherwise a quick search first."""
     b = body()
-    if game_running():
+    if game_running(fresh=True):   # about to write: do not trust a cached answer
         raise GameRunning("No Man's Sky is running -- quit the game first, or it will overwrite this change.")
     design = find_design(b["id"]) if b.get("id") else dict(clean_design(b.get("design") or {}))
     if "seeds" not in design:

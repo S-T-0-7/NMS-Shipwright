@@ -112,6 +112,12 @@ def _part_model(part):
     return model3d.pack(model3d.corvette_model([(s, (0, 0, 0), (0, 1, 0), (0, 0, 1)) for s in scenes]))
 
 
+@bp.route("/api/corvette/mirror")
+def api_corvette_mirror():
+    """{module id: the module that is its mirror image}, for the builder's Mirror."""
+    return jsonify(corvette_parts.handed())
+
+
 @bp.route("/api/corvette/part")
 def api_corvette_part():
     """3D model of a single module, in its own space, so the builder can move it about freely."""
@@ -134,7 +140,7 @@ def api_corvette_snaps():
 def api_corvette_save():
     """Write a built layout back, into both halves of the slot."""
     b = body()
-    if game_running():
+    if game_running(fresh=True):   # about to write: do not trust a cached answer
         raise GameRunning("No Man's Sky is running -- quit the game first, or it will overwrite this build.")
     index, path = int(b.get("index") or 0), b.get("path")
     wanted = [(m["id"], m["position"], m.get("up") or (0, 1, 0), m.get("at") or (0, 0, 1),

@@ -63,7 +63,7 @@ def api_backups_restore():
     open_save(path)
     if not src or not os.path.exists(src) or not src.startswith(path + "."):
         raise ValueError("Unknown backup file")
-    if game_running():
+    if game_running(fresh=True):   # about to write: do not trust a cached answer
         raise GameRunning("No Man's Sky is running -- quit the game first.")
     safety = save.backup_path_for(path)
     shutil.copy2(path, safety)

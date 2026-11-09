@@ -233,7 +233,9 @@
       const groups = head.groups.map(g => {
         const pos = new Float32Array(buf, base + g.offset, g.vertices * 3);
         const nrm = new Float32Array(buf, base + g.offset + g.vertices * 12, g.vertices * 3);
-        const idx = new Uint32Array(buf, base + g.offset + g.vertices * 24, g.indices);
+        // texture coordinates sit between the normals and the indices; the builder draws its
+        // parts in flat colour, so they are stepped over rather than uploaded
+        const idx = new Uint32Array(buf, base + g.offset + g.vertices * 32, g.indices);
         const vao = gl.createVertexArray();
         gl.bindVertexArray(vao);
         for (const [loc, data] of [[0, pos], [1, nrm]]) {

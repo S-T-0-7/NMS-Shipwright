@@ -77,3 +77,29 @@ def open_save(path: str) -> OpenSave:
         _chunked=chunked,
         _trailing_nul=trailing_nul,
     )
+
+
+def read_branch(path: str, *names: str):
+    """One branch of a save, read without converting the rest of it.
+
+    Renaming every key of a save costs a tenth of a second and there are 650,000 of them. A
+    caller that wants one list -- checking a write landed, say -- can walk down to it by the
+    obfuscated names and rename only what it finds there.
+
+    Returns None if the branch is not in this save.
+    """
+    with open(path, "rb") as f:
+        raw = f.read()
+    text, _chunked, _nul = codec.decode(raw)
+    node = json.loads(text)
+    for name in names:
+        if not isinstance(node, dict):
+            return None
+        key = mapping.key_for(name)
+        if key in node:
+            node = node[key]
+        elif name in node:      # a name short enough never to have been obfuscated
+            node = node[name]
+        else:
+            return None
+    return mapping.deobfuscate(node)

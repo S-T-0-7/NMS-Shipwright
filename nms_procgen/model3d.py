@@ -18,11 +18,12 @@ from nms_save import gamefiles, gamemeta, gameversion
 from nms_save.gamefiles import array, cstr, i32, read, vstr
 
 from . import textures
+from . import shiptex
 from .generator import ROOTS, all_parts, generate
 
 MESH_PAK = "NMSARC.MeshCommon.pak"
 MODEL_DIR = os.path.join(gamefiles.CACHE, "models")
-FORMAT = 4  # bump when the cached mesh format changes
+FORMAT = 5  # bump when the cached mesh format changes
 _LOCK = threading.Lock()
 
 # material file name -> how the viewer shades it
@@ -150,6 +151,7 @@ def _extract(geometries):
 
 
 NORMAL_SEM = 11  # cTkVertexElement semantic of the packed normal, the data stream's one uint32
+UV_SEM = 1       # and of the texture coordinates, which ride in the position stream
 
 
 def _octa_normals(u) -> np.ndarray:
@@ -188,13 +190,19 @@ def _mesh_normals(data, start, vsize, stride, offset, verts) -> np.ndarray:
 
 
 def _convert(geo: bytes, data: bytes) -> dict:
-    """{hash: (positions float16 [n, 3], normals float16 [n, 3], indices uint32 [m])} per mesh."""
+    """{hash: (positions, normals, texture coordinates, indices)} for every mesh of one geometry.
+
+    The position stream is sixteen bytes a vertex: four halves of position and, at offset eight,
+    four more that are the texture coordinates. Only the first three were ever read.
+    """
     G, MD, VL, VE = _layouts()
     lay = 0x20 + G.off("PositionVertexLayout")
     stride = i32(geo, lay + VL.off("Stride"))
     base, n = array(geo, lay + VL.off("VertexElements"))
     pos_off = next((geo[base + k * VE.size + VE.off("Offset")] for k in range(n)
                     if geo[base + k * VE.size + VE.off("SemanticID")] == 0), 0)
+    uv_off = next((geo[base + k * VE.size + VE.off("Offset")] for k in range(n)
+                   if geo[base + k * VE.size + VE.off("SemanticID")] == UV_SEM), None)
     wide = not i32(geo, 0x20 + G.off("Indices16Bit"))
     dlay = 0x20 + G.off("VertexLayout")        # the data stream, parallel to the position one
     dstride = i32(geo, dlay + VL.off("Stride"))
@@ -230,32 +238,60 @@ def _convert(geo: bytes, data: bytes) -> dict:
         vsize, isize = i32(data, q + MD.off("VertexDataSize")), i32(data, q + MD.off("IndexDataSize"))
         ms, _ = array(data, q + MD.off("MeshDataStream"))
         ps, pn = array(data, q + MD.off("MeshPositionDataStream"))
-        verts = np.frombuffer(data, np.float16, pn // 2, ps).reshape(-1, stride // 2)[:, pos_off // 2:pos_off // 2 + 3]
+        rows = np.frombuffer(data, np.float16, pn // 2, ps).reshape(-1, stride // 2)
+        verts = rows[:, pos_off // 2:pos_off // 2 + 3]
+        uv = (rows[:, uv_off // 2:uv_off // 2 + 2] if uv_off is not None
+              and uv_off // 2 + 2 <= rows.shape[1] else np.zeros((len(rows), 2), np.float16))
         idx = indices(ms + vsize, isize, len(verts))
         out[h] = (np.ascontiguousarray(verts),
-                  _mesh_normals(data, ms, vsize, dstride, nrm_off, len(verts)), idx)
+                  _mesh_normals(data, ms, vsize, dstride, nrm_off, len(verts)),
+                  np.ascontiguousarray(uv), idx)
     return out
 
 
+# Decoded meshes, held between requests. Reading them back off disk is most of the cost of
+# drawing a ship -- a Fighter's 25 geometries are 1,300-odd arrays, each its own zip entry to
+# inflate, and it was happening again for every view. The file's size and date are checked on
+# each use, so a re-extract after a game update is picked up without anything to invalidate.
+_MESHES: dict = {}
+
+
+def _cached_meshes(path):
+    """The meshes of one geometry file, from memory when the file has not moved under us."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    stamp = (st.st_mtime_ns, st.st_size)
+    held = _MESHES.get(path)
+    if held and held[0] == stamp:
+        return held[1]
+    try:
+        with np.load(path) as z:
+            if int(z["format"]) != FORMAT:
+                return None
+            meshes = {int(h): (z[f"p{i}"], z[f"n{i}"], z[f"t{i}"], z[f"i{i}"])
+                      for i, h in enumerate(z["hashes"])}
+    except Exception:   # see _geometry: a file that will not open is read again from the pak
+        return None
+    if len(_MESHES) > 400:        # a few hundred geometries covers every ship type at once
+        _MESHES.clear()
+    _MESHES[path] = (stamp, meshes)
+    return meshes
+
+
 def _geometry(geometries) -> dict:
-    """{geometry path: {hash: (positions, indices)}}, extracting and converting what is missing."""
+    """{geometry path: {hash: (positions, normals, uv, indices)}}, converting what is missing."""
     gameversion.check()  # a game update throws the converted meshes away
     result, missing = {}, []
     for g in geometries:
-        path = _cache_file(g)
         # A cache file that will not open -- cut short by a full disk, a crash while it was being
         # written, or the game being updated underneath us -- is no reason to fail the whole ship.
         # It goes back on the list and is read from the pak again, over the top of the bad copy.
-        try:
-            if os.path.exists(path):
-                with np.load(path) as z:
-                    if int(z["format"]) == FORMAT:
-                        hashes = z["hashes"]
-                        result[g] = {int(h): (z[f"p{i}"], z[f"n{i}"], z[f"i{i}"])
-                                     for i, h in enumerate(hashes)}
-                        continue
-        except Exception:
-            pass
+        meshes = _cached_meshes(_cache_file(g))
+        if meshes is not None:
+            result[g] = meshes
+            continue
         missing.append(g)
     if missing:
         with _LOCK:
@@ -267,9 +303,11 @@ def _geometry(geometries) -> dict:
                 path = _cache_file(g)
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 arrays = {"format": np.int32(FORMAT), "hashes": np.array(list(meshes), np.uint64)}
-                for i, (p, nr, ix) in enumerate(meshes.values()):
-                    arrays[f"p{i}"], arrays[f"n{i}"], arrays[f"i{i}"] = p, nr, ix
+                for i, (p, nr, uv, ix) in enumerate(meshes.values()):
+                    arrays[f"p{i}"], arrays[f"n{i}"] = p, nr
+                    arrays[f"t{i}"], arrays[f"i{i}"] = uv, ix
                 np.savez_compressed(path, **arrays)
+                _MESHES.pop(path, None)
                 result[g] = meshes
     return result
 
@@ -412,8 +450,9 @@ def _scene_meshes(root, pose=None):
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
                 return
             if attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
-                out.append((geometry, int(attrs["HASH"]), world, mat_class(attrs.get("MATERIAL", "")), posed,
-                            int(attrs.get("FIRSTSKINMAT") or 0)))
+                out.append((geometry, int(attrs["HASH"]), world, mat_class(attrs.get("MATERIAL", "")),
+                            posed, int(attrs.get("FIRSTSKINMAT") or 0),
+                            shiptex.colour_map(attrs.get("MATERIAL", ""))))
         elif typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
             sub = _parsed(_scene_path(attrs["SCENEGRAPH"]))
             if sub:
@@ -425,7 +464,8 @@ def _scene_meshes(root, pose=None):
     walk(scene[1], scene[0], np.eye(4), np.eye(4), 0)
     kept = [m for m in out if m[3] != "skip"]
     if out and not [m for m in kept if m[3] not in ("glow", "glass")]:
-        kept = [(g, h, w, name_class(c), q, f) for g, h, w, c, q, f in out if name_class(c) != "skip"]
+        kept = [(g, h, w, name_class(c), q, f, x) for g, h, w, c, q, f, x in out
+                if name_class(c) != "skip"]
     return kept
 
 
@@ -490,7 +530,9 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None, joints=frozenset()
             if rig and _material_class(attrs.get("MATERIAL", ""))[0] != MAT_JET:
                 return  # a rig the game drives: only its jet still belongs where it is: only the jet still belongs where the scene put it
             if attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
-                out.append((geometry, int(attrs["HASH"]), world, cls, posed, int(attrs.get("FIRSTSKINMAT") or 0)))
+                out.append((geometry, int(attrs["HASH"]), world, cls, posed,
+                            int(attrs.get("FIRSTSKINMAT") or 0),
+                            shiptex.colour_map(attrs.get("MATERIAL", ""))))
         elif typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
             sub = _parsed(_scene_path(attrs["SCENEGRAPH"]))
             if sub:
@@ -511,7 +553,7 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None, joints=frozenset()
     # unreadable (a game update, or a half-finished copy), so fall back to the names alone.
     solid = [m for m in kept if m[3] not in ("glow", "glass")]
     if not solid and out:
-        kept = [(g, h, w, name_class(c), q, f) for g, h, w, c, q, f in out]
+        kept = [(g, h, w, name_class(c), q, f, x) for g, h, w, c, q, f, x in out]
         kept = [m for m in kept if m[3] != "skip"]
     return kept
 
@@ -556,8 +598,10 @@ def _picked_meshes(ship, chosen, pose=None, joints=frozenset(), collect=None):
             if rig and _material_class(attrs.get("MATERIAL", ""))[0] != MAT_JET:
                 return  # a rig the game drives: only its jet still belongs where it is
             if owner is not None and attrs.get("HASH") and not EFFECTS.search(geometry.upper()):
-                owner.append((geometry, int(attrs["HASH"]), world, mat_class(attrs.get("MATERIAL", "")), posed,
-                              int(attrs.get("FIRSTSKINMAT") or 0)))
+                owner.append((geometry, int(attrs["HASH"]), world,
+                              mat_class(attrs.get("MATERIAL", "")), posed,
+                              int(attrs.get("FIRSTSKINMAT") or 0),
+                              shiptex.colour_map(attrs.get("MATERIAL", ""))))
         elif typ == "REFERENCE" and attrs.get("SCENEGRAPH"):
             sub = _parsed(_scene_path(attrs["SCENEGRAPH"]))
             if sub:
@@ -579,7 +623,8 @@ def _picked_meshes(ship, chosen, pose=None, joints=frozenset(), collect=None):
             out += m
     kept = [m for m in out if m[3] != "skip"]
     if out and not [m for m in kept if m[3] not in ("glow", "glass")]:
-        kept = [m for m in ((g, h, w, name_class(c), q, f) for g, h, w, c, q, f in out) if m[3] != "skip"]
+        kept = [m for m in ((g, h, w, name_class(c), q, f, x) for g, h, w, c, q, f, x in out)
+                if m[3] != "skip"]
     return kept
 
 
@@ -602,21 +647,29 @@ def _turn_normals(nrm, frame) -> np.ndarray:
     return np.divide(n, length, out=np.zeros_like(n), where=length > 1e-9).astype(np.float32)
 
 
-def _gather(acc, cls, pos, nrm, idx, frame):
-    """Add one placed mesh to its colour group, turning the triangles back out if it is mirrored."""
+def _gather(acc, key, pos, nrm, uv, idx, frame):
+    """Add one placed mesh to its group, turning the triangles back out if it is mirrored.
+
+    A group is one shading class painted by one texture. A ship has far fewer textures than
+    materials -- 25 on a Fighter, 7 on a Sentinel -- so this stays a couple of dozen groups.
+    """
     if len(nrm) != len(pos):          # a geometry whose normals we could not read: let the
         nrm = np.zeros_like(pos)      # viewer work them out from the triangles, as it used to
-    lst = acc.setdefault(cls, [[], [], [], 0])
+    if len(uv) != len(pos):
+        uv = np.zeros((len(pos), 2), np.float32)
+    lst = acc.setdefault(key, [[], [], [], [], 0])
     lst[0].append(pos.astype(np.float32))
     lst[1].append(nrm.astype(np.float32))
-    lst[2].append((idx.reshape(-1, 3)[:, ::-1].ravel() if np.linalg.det(frame[:3, :3]) < 0 else idx)
-                  + lst[3])
-    lst[3] += len(pos)
+    lst[2].append(uv.astype(np.float32))
+    lst[3].append((idx.reshape(-1, 3)[:, ::-1].ravel() if np.linalg.det(frame[:3, :3]) < 0 else idx)
+                  + lst[4])
+    lst[4] += len(pos)
 
 
 def _collected(acc) -> dict:
-    return {cls: (np.concatenate(v[0]).astype(np.float32), np.concatenate(v[1]).astype(np.float32),
-                  np.concatenate(v[2]).astype(np.uint32)) for cls, v in acc.items() if v[0]}
+    return {key: (np.concatenate(v[0]).astype(np.float32), np.concatenate(v[1]).astype(np.float32),
+                  np.concatenate(v[2]).astype(np.float32), np.concatenate(v[3]).astype(np.uint32))
+            for key, v in acc.items() if v[0]}
 
 
 def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
@@ -640,7 +693,7 @@ def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
         from . import skin
         bend = {g: skin.prepare(g, pose) for g in geos}
     acc, drawn = {}, set()
-    for g, h, world, cls, posed, first in meshes:
+    for g, h, world, cls, posed, first, tex in meshes:
         m = geos.get(g, {}).get(h)
         if m is None:
             continue
@@ -660,7 +713,8 @@ def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
         if skinned:
             p = skin.deform(bend[g], h, p, first).astype(np.float32)
             nrm = skin.deform_normals(bend[g], h, nrm, first)
-        _gather(acc, cls, p @ frame[:3, :3].T + frame[:3, 3], _turn_normals(nrm, frame), m[2], frame)
+        _gather(acc, (cls, tex), p @ frame[:3, :3].T + frame[:3, 3],
+                _turn_normals(nrm, frame), m[2], m[3], frame)
     groups = _collected(acc)
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
     return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()),
@@ -694,7 +748,7 @@ def corvette_model(modules) -> dict:
     geos = _geometry(sorted({g for ms in scenes.values() for g, *_ in ms if g}))
     acc, drawn = {}, set()
     for scene, place in placed:
-        for g, h, world, cls, _, _ in scenes[scene]:
+        for g, h, world, cls, _, _, tex in scenes[scene]:
             m = geos.get(g, {}).get(h)
             if m is None:
                 continue
@@ -703,8 +757,8 @@ def corvette_model(modules) -> dict:
             if once in drawn:  # see ship_model: the game's own data repeats a mesh here and there
                 continue
             drawn.add(once)
-            _gather(acc, cls, m[0].astype(np.float32) @ w[:3, :3].T + w[:3, 3],
-                    _turn_normals(m[1], w), m[2], w)
+            _gather(acc, (cls, tex), m[0].astype(np.float32) @ w[:3, :3].T + w[:3, 3],
+                    _turn_normals(m[1], w), m[2], m[3], w)
     groups = _collected(acc)
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
     return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()), "posable": False}
@@ -712,13 +766,15 @@ def corvette_model(modules) -> dict:
 
 def pack(model: dict, colours: dict | None = None) -> bytes:
     """Binary for the viewer: u32 header length, JSON header, then per group float32 xyz
-    positions, float32 xyz normals and uint32 indices."""
+    positions, float32 xyz normals, float32 uv and uint32 indices."""
     head = {"bounds": model["bounds"], "colours": colours or {}, "posable": model.get("posable", False), "groups": []}
     blobs, off = [], 0
-    for cls, (p, nrm, ix) in model["groups"].items():
-        head["groups"].append({"class": cls, "vertices": len(p), "indices": len(ix), "offset": off})
-        blobs += [p.tobytes(), nrm.tobytes(), ix.tobytes()]
-        off += p.nbytes + nrm.nbytes + ix.nbytes
+    for key, (p, nrm, uv, ix) in model["groups"].items():
+        cls, tex = key if isinstance(key, tuple) else (key, "")
+        head["groups"].append({"class": cls, "tex": tex, "vertices": len(p),
+                               "indices": len(ix), "offset": off})
+        blobs += [p.tobytes(), nrm.tobytes(), uv.tobytes(), ix.tobytes()]
+        off += p.nbytes + nrm.nbytes + uv.nbytes + ix.nbytes
     h = json.dumps(head).encode()
     h += b" " * (-(len(h) + 4) % 4)
     return struct.pack("<I", len(h)) + h + b"".join(blobs)

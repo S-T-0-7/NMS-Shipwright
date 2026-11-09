@@ -18,12 +18,21 @@ function placeHtml(s) {
 }
 function shipCard(ship, seed, title, note) {
   return `<div class="card res">
+    <img class="thumb" data-thumb="${esc(ship)}" data-seed="${esc(seed)}" alt="">
     <div style="margin-top:6px"><b>${esc(title)}</b>${note ? ` <small class="muted">${note}</small>` : ''}</div>
     <div class="row" style="margin-top:6px;justify-content:space-between"><code>${esc(seed)}</code>
       <button class="btn" data-seed="${esc(seed)}" data-ship="${esc(ship)}">Put in my save...</button></div></div>`;
 }
+/* Cards are built as strings all over the app, so the pictures are filled in afterwards. */
+function paintThumbs(root = document) {
+  root.querySelectorAll('img[data-thumb]').forEach(img => {
+    if (!img.dataset.done) { img.dataset.done = '1'; thumbInto(img, img.dataset.thumb, img.dataset.seed); }
+  });
+}
 function freighterCard(x, home) {
-  return `<div class="card res"><div><b>${esc(x.type[0].toUpperCase() + x.type.slice(1))}</b></div>
+  return `<div class="card res">
+    <img class="thumb" data-thumb="${esc(x.alias)}" data-seed="${esc(x.seed)}" alt="">
+    <div><b>${esc(x.type[0].toUpperCase() + x.type.slice(1))}</b></div>
     <div class="row" style="margin-top:6px;justify-content:space-between"><code>${esc(x.seed)}</code>
       <button class="btn" data-seed="${esc(x.seed)}" data-ship="${esc(x.alias)}" data-home="${esc(home)}">Apply to your freighter</button></div></div>`;
 }
@@ -59,6 +68,7 @@ async function showSystem() {
     <div>${others.map(x => `<span class="badge" title="${esc(x.seed)}">${esc(x.type)} &middot; ${esc(x.kind)}</span>`).join(' ')}</div>`;
   $$('#fSystem button[data-seed]').forEach(b => b.onclick = () => b.dataset.home ? applyFreighter(b.dataset.seed, b.dataset.ship, b.dataset.home)
     : applySeed(b.dataset.seed, b.dataset.ship));
+  paintThumbs(box);
 }
 $('#fShow').onclick = () => guard(showSystem);
 $('#fAddr').onkeydown = e => { if (e.key === 'Enter') guard(showSystem); };

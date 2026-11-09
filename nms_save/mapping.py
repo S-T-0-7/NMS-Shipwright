@@ -34,6 +34,24 @@ def _load() -> None:
         _name_to_key.setdefault(name, key)
 
 
+def _renamed(obj, table):
+    """A copy of `obj` with every key run through `table`, leaves untouched.
+
+    A save is some 650,000 nodes, and this walks all of them twice per edit -- once to read it
+    and once to write it back. The lookup is bound once here rather than fetched afresh at every
+    node, which is worth about a third of the time for a change that cannot alter the result.
+    """
+    get = table.get
+
+    def walk(o):
+        if isinstance(o, dict):
+            return {get(k, k): walk(v) for k, v in o.items()}
+        if isinstance(o, list):
+            return [walk(v) for v in o]
+        return o
+    return walk(obj)
+
+
 def deobfuscate(obj):
     """Recursively rename obfuscated keys to readable names.
 
@@ -43,31 +61,21 @@ def deobfuscate(obj):
     """
     _load()
     assert _key_to_name is not None
-
-    if isinstance(obj, dict):
-        return {
-            _key_to_name.get(k, k): deobfuscate(v)
-            for k, v in obj.items()
-        }
-    if isinstance(obj, list):
-        return [deobfuscate(v) for v in obj]
-    return obj
+    return _renamed(obj, _key_to_name)
 
 
 def obfuscate(obj):
     """Recursively rename readable keys back to obfuscated ones."""
     _load()
     assert _name_to_key is not None
+    return _renamed(obj, _name_to_key)
 
-    if isinstance(obj, dict):
-        result = {}
-        for k, v in obj.items():
-            new_key = _name_to_key.get(k, k)
-            result[new_key] = obfuscate(v)
-        return result
-    if isinstance(obj, list):
-        return [obfuscate(v) for v in obj]
-    return obj
+
+def key_for(name: str) -> str:
+    """The obfuscated key a readable name is stored under, for reading one branch of a save."""
+    _load()
+    assert _name_to_key is not None
+    return _name_to_key.get(name, name)
 
 
 # Legitimately-short *real* field names, confirmed by inspecting an actual

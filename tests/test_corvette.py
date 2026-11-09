@@ -161,12 +161,6 @@ class ModuleScenes(unittest.TestCase):
         the build station's hologram, which would show as a blue ship inside the real one."""
         self.assertEqual(self.cp.scenes_for("^U_PARAGON"), [])
 
-    def test_a_wing_draws_as_a_mirrored_pair(self):
-        got = self.cp.scenes_for("^B_WNG_A")
-        self.assertEqual(len(got), 2, "left and right: %s" % got)
-        self.assertTrue(any(s.endswith("_L.SCENE.MBIN") for s in got))
-        self.assertTrue(any(s.endswith("_R.SCENE.MBIN") for s in got))
-
     def test_a_family_whose_model_is_named_differently_still_resolves(self):
         """The turret is drawn by a gun and the gear by a leg, which no rule would guess."""
         self.assertTrue(any("GUN_A" in s for s in self.cp.scenes_for("^B_TUR_A")))
@@ -224,6 +218,42 @@ class ModuleScenes(unittest.TestCase):
     def test_the_hull_has_no_sockets(self):
         self.assertEqual(self.cp.snaps_for("U_PARAGON"), ())
 
+    def test_a_handed_module_draws_one_part_and_the_right_one(self):
+        """Wings and the lettered connectors come in pairs, and the game keeps a module per side:
+        B_WNG_A is the left wing, B_WNG_A_R the right, B_WNG_P_T and _B the top and bottom.
+
+        Taking the side from the family drew the whole family instead, which stood a mirrored
+        twin next to every left-hand part and left every right-hand one drawing nothing."""
+        for module, part in (("B_WNG_A", "WING_A_L"), ("B_WNG_A_R", "WING_A_R"),
+                             ("B_WNG_O_0", "WING_O_0_L"), ("B_WNG_O_2_R", "WING_O_2_R"),
+                             ("B_WNG_P_T", "WING_P_T"), ("B_WNG_Y_B", "WING_Y_B"),
+                             ("B_CON_L_3", "CONNECTOR_1X1_L_3"),
+                             ("B_CON_R_3", "CONNECTOR_1X1_R_3")):
+            got = self.cp.scenes_for(module)
+            self.assertEqual(len(got), 1, f"{module} draws {len(got)} parts, not one")
+            self.assertTrue(got[0].upper().endswith(part + ".SCENE.MBIN"),
+                            f"{module} drew {got[0]} rather than {part}")
+
+    def test_mirroring_a_handed_module_swaps_it_for_its_opposite(self):
+        """The two sides are separate parts, each authored as the other reflected, so a wing
+        mirrored across the ship becomes the other module rather than the same one turned round.
+        Top and bottom wings are a vertical pair and have no left-right opposite."""
+        h = self.cp.handed()
+        self.assertEqual(h.get("B_WNG_A"), "B_WNG_A_R")
+        self.assertEqual(h.get("B_WNG_A_R"), "B_WNG_A")
+        self.assertEqual(h.get("B_CON_L_1"), "B_CON_R_1")
+        self.assertIsNone(h.get("B_WNG_P_T"), "a top wing has no left-right opposite")
+        self.assertIsNone(h.get("B_HAB_D"), "a hab is not handed")
+        self.assertEqual([k for k, v in h.items() if h.get(v) != k], [],
+                         "a pair that does not point back at itself")
+
+    def test_every_module_draws_at_most_one_part(self):
+        """A module is one thing. Two scenes for one id means a side or a variant is being
+        guessed at, and one of the two lands somewhere it does not belong."""
+        several = {m: [s.rsplit("/", 1)[-1] for s in self.cp.scenes_for(m)]
+                   for m in self.cp.catalogue() if len(self.cp.scenes_for(m)) > 1}
+        self.assertEqual(several, {}, "these modules draw more than one part")
+
     def test_a_mesh_too_big_for_16_bit_indices_is_read_as_32(self):
         """The turret's gun has 68,416 vertices. Read 16 bits at a time it came out as twice as
         many triangles, each spanning the model, and the gun looked crumpled."""
@@ -234,7 +264,7 @@ class ModuleScenes(unittest.TestCase):
         geos = model3d._geometry(sorted({g for g, *_ in meshes if g}))
         big = [geos[g][h] for g, h, *_ in meshes if len(geos.get(g, {}).get(h, ([],))[0]) > 65536]
         self.assertTrue(big, "the gun's large mesh is there to check")
-        for pos, _, idx in big:
+        for pos, _, _, idx in big:
             tri = idx.reshape(-1, 3)
             span = np.linalg.norm(pos.max(0) - pos.min(0))
             edge = np.linalg.norm(pos[tri[:, 0]] - pos[tri[:, 1]], axis=1)

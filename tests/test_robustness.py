@@ -99,7 +99,7 @@ class Extraction(Base):
         os.remove(os.path.join(dest, "one.mbin"))
         self.gamefiles.extract(dest, ["one.mbin*"], "NMSARC.Test.pak")
         self.assertEqual(len(calls), 1, "repeat calls in one run do not re-check every file")
-        self.gamefiles._VERIFIED.clear()  # as if the app were restarted
+        self.gamefiles.forget()  # as if the app were restarted
         self.gamefiles.extract(dest, ["one.mbin*"], "NMSARC.Test.pak")
         self.assertEqual(len(calls), 2)
         self.assertTrue(os.path.exists(os.path.join(dest, "one.mbin")))
@@ -198,7 +198,7 @@ class ShipModels(unittest.TestCase):
         for ship, parts, seed in (("sentinel", ["_PIT_A"], 0), ("sentinel", None, 0x1234567890ABCDEF),
                                   ("fighter", None, 0xA547AB958C97E439)):
             model = self.m.ship_model(seed, ship, parts)
-            for cls, (pos, nrm, idx) in model["groups"].items():
+            for cls, (pos, nrm, uv, idx) in model["groups"].items():
                 self.assertTrue(len(idx) % 3 == 0, f"{ship} {cls} has a partial triangle")
                 self.assertLess(int(idx.max()), len(pos), f"{ship} {cls} points outside its own vertices")
 
@@ -224,7 +224,7 @@ class ShipModels(unittest.TestCase):
         pos = numpy.concatenate([g[0] for g in model["groups"].values()])
         nrm = numpy.concatenate([g[1] for g in model["groups"].values()])
         base, faces = 0, numpy.zeros_like(pos)
-        for p, _, idx in model["groups"].values():
+        for p, _, _, idx in model["groups"].values():
             tri = (idx[:len(idx) // 3 * 3].reshape(-1, 3) + base).astype(numpy.int64)
             cross = numpy.cross(pos[tri[:, 1]] - pos[tri[:, 0]], pos[tri[:, 2]] - pos[tri[:, 0]])
             for c in range(3):
@@ -245,7 +245,7 @@ class ShipModels(unittest.TestCase):
         meshes = self.m._scene_meshes(scene)
         geos = self.m._geometry(sorted({g for g, *_ in meshes if g}))
         boxes = {}
-        for g, h, world, cls, _, _ in meshes:
+        for g, h, world, cls, *_ in meshes:
             got = geos.get(g, {}).get(h)
             if got is None:
                 continue
@@ -324,8 +324,8 @@ class ShipModels(unittest.TestCase):
             landed = self.m.ship_model("0x1", ship)
             self.assertTrue(landed["posable"], f"{ship} should offer a flying pose")
             flight = self.m.ship_model("0x1", ship, flying=True)
-            lp = numpy.concatenate([p for p, _, _ in landed["groups"].values()])
-            fp = numpy.concatenate([p for p, _, _ in flight["groups"].values()])
+            lp = numpy.concatenate([p for p, *_ in landed["groups"].values()])
+            fp = numpy.concatenate([p for p, *_ in flight["groups"].values()])
             self.assertEqual(lp.shape, fp.shape, f"{ship}: the pose changed the mesh itself")
             self.assertTrue(numpy.isfinite(fp).all(), f"{ship}: the flying pose broke vertices")
             moved = numpy.linalg.norm(fp - lp, axis=1)
