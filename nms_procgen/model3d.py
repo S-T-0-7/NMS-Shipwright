@@ -32,18 +32,21 @@ MAT_SKIP = {12: "decal", 14: "mask", 58: "reflection plane", 59: "shadow only", 
 MAT_GLOW = {2, 9, 10, 18, 19, 22}  # lights, glows and holograms: added on top, never solid
 MAT_JET = 2                        # an engine's jet flame, which the scene puts at its nozzle
 
-# The gun turret is one of the rigs the game aims as you fly, and the scene only holds it at an
-# authoring angle -- barrels down and back under the wing, which is how it looked when drawn as the
-# scene has it. No frame of its own anims aims it either; they all point it backwards. With nothing
-# to aim at, it is pointed where the ship is going: the turret's own turn is dropped and swung a
-# quarter turn, which takes the barrels from straight up to level and forward.
+# The gun turret hangs off a chain of hinge joints the game aims as you fly. It used to be aimed
+# here too -- every joint in the chain had its turn replaced with a fixed forward one -- on the
+# belief that the scene held the barrels down and back under the wing.
+#
+# It does not. Laid out as the scene has it, the barrel comes out within 5.5 degrees of the ship's
+# nose on every type that carries one, and the mounts that do sit at an angle (the sail ship's,
+# 0.7 to 16 degrees) are meant to. Forcing the turn bought about a degree of aim and cost the gun
+# its seat: it slid 0.46 forward and 0.12 down, out from under the wing it bolts to, which is why
+# the guns looked like they were floating. A second fudge then dropped the whole gun 0.45 to stop
+# the first one pushing it up through the wing.
+#
+# So the chain is left exactly as the scene lays it out. The names are kept only to tell these
+# joints apart from a rig the game drives, whose meshes are dropped.
 GUN_JOINTS = frozenset({"TURRENTROOT", "TURRETROOT", "TURRETJNT", "TURRETENDJNT",  # the game spells it TURRENTROOT
                         "HINGE1JNT", "HINGE2JNT", "HINGE3JNT"})
-GUN_ROOTS = frozenset({"TURRENTROOT", "TURRETROOT"})  # the one the whole gun hangs from
-GUN_AIM = np.array([[1., 0., 0.], [0., 0., -1.], [0., 1., 0.]])
-# Pointed forward the gun sits half inside the wing it hangs under, so it is dropped to hang below
-# it: on a fighter the gun stands 0.79 to 1.46 high and the wing around it 1.01 to 1.30.
-GUN_DROP = 0.45
 MAT_GLASS = {62}                   # canopies, screens, refraction
 SKIP_SHADERS = ("PARTICLE", "DEFERREDDECAL")  # effects and decals the game draws over the hull
 
@@ -402,15 +405,8 @@ def _scene_meshes(root, pose=None):
         typ, name, t, attrs, children = n
         if depth > 12:
             return
-        gun = typ == "JOINT" and name.upper() in GUN_JOINTS
         world = world @ _matrix(t)
         posed = posed @ _local(name, t, pose)
-        if gun:  # see GUN_AIM
-            world, posed = world.copy(), posed.copy()
-            world[:3, :3] = posed[:3, :3] = GUN_AIM
-            if name.upper() in GUN_ROOTS:
-                world[1, 3] -= GUN_DROP
-                posed[1, 3] -= GUN_DROP
         if typ == "MESH":
             suffix = LOD_SUFFIX.search(name)
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):
@@ -484,12 +480,6 @@ def ship_meshes(seed, ship, parts=None, fill=True, pose=None, joints=frozenset()
             collect.setdefault(name.upper(), []).append(_matrix(t))
         world = world @ _matrix(t)
         posed = posed @ _local(name, t, pose)
-        if gun:  # see GUN_AIM
-            world, posed = world.copy(), posed.copy()
-            world[:3, :3] = posed[:3, :3] = GUN_AIM
-            if name.upper() in GUN_ROOTS:
-                world[1, 3] -= GUN_DROP
-                posed[1, 3] -= GUN_DROP
         if typ == "MESH":
             # Lower-detail copies sit inside the full-detail mesh and poke through it. Some of them
             # claim LODLEVEL 0, so the name (...LOD2) decides as well.
@@ -559,12 +549,6 @@ def _picked_meshes(ship, chosen, pose=None, joints=frozenset(), collect=None):
             ok = ok and picked
         world = world @ _matrix(t)
         posed = posed @ _local(name, t, pose)
-        if gun:  # see GUN_AIM
-            world, posed = world.copy(), posed.copy()
-            world[:3, :3] = posed[:3, :3] = GUN_AIM
-            if name.upper() in GUN_ROOTS:
-                world[1, 3] -= GUN_DROP
-                posed[1, 3] -= GUN_DROP
         if typ == "MESH":
             suffix = LOD_SUFFIX.search(name)
             if attrs.get("LODLEVEL", "0") != "0" or (suffix and suffix.group(1) != "0"):

@@ -236,6 +236,32 @@ class ShipModels(unittest.TestCase):
         self.assertGreater(float(agree.mean()), 0.9,
                            "the normals do not face the way the triangles do")
 
+    def test_the_gun_hangs_off_its_own_mounting_plate(self):
+        """The gun is five pieces: a plate bolted to the wing, two arms, the turret and the barrel.
+        The plate hangs off the scene root and the rest off a chain of hinge joints, so anything
+        done to those joints and not to the plate leaves the gun floating under it. Forcing the
+        aim used to do exactly that, by 0.357."""
+        scene = r"MODELS\COMMON\SPACECRAFT\SHARED\WEAPONS\SHIPGUN.SCENE.MBIN"
+        meshes = self.m._scene_meshes(scene)
+        geos = self.m._geometry(sorted({g for g, *_ in meshes if g}))
+        boxes = {}
+        for g, h, world, cls, _, _ in meshes:
+            got = geos.get(g, {}).get(h)
+            if got is None:
+                continue
+            p = got[0].astype(float) @ world[:3, :3].T + world[:3, 3]
+            name = "base" if abs(world[1, 3]) < 1e-9 and p[:, 1].max() < 0.1 else "hung"
+            lo, hi = p.min(0), p.max(0)
+            if name in boxes:
+                boxes[name] = (numpy.minimum(boxes[name][0], lo), numpy.maximum(boxes[name][1], hi))
+            else:
+                boxes[name] = (lo, hi)
+        self.assertEqual(sorted(boxes), ["base", "hung"], "the gun did not come out in two parts")
+        (alo, ahi), (blo, bhi) = boxes["base"], boxes["hung"]
+        apart = numpy.maximum(numpy.maximum(alo - bhi, blo - ahi), 0)
+        self.assertLess(float(apart.max()), 1e-6,
+                        "the gun hangs clear of its own mounting plate")
+
     def test_a_cache_file_that_will_not_open_is_read_again(self):
         """A cache file cut short -- a crash or a full disk while it was being written -- used to
         take the whole ship down with it, and stay broken until the cache was cleared by hand.
