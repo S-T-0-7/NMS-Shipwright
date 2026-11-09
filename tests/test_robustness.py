@@ -198,9 +198,66 @@ class ShipModels(unittest.TestCase):
         for ship, parts, seed in (("sentinel", ["_PIT_A"], 0), ("sentinel", None, 0x1234567890ABCDEF),
                                   ("fighter", None, 0xA547AB958C97E439)):
             model = self.m.ship_model(seed, ship, parts)
-            for cls, (pos, idx) in model["groups"].items():
+            for cls, (pos, nrm, idx) in model["groups"].items():
                 self.assertTrue(len(idx) % 3 == 0, f"{ship} {cls} has a partial triangle")
                 self.assertLess(int(idx.max()), len(pos), f"{ship} {cls} points outside its own vertices")
+
+    def test_ships_come_with_the_games_own_normals(self):
+        """Every vertex must arrive with a unit normal, or the shading falls back to flat faces.
+
+        A game update that moves the normal out of the data stream shows up here first: the
+        geometry still draws, but every vector comes back as zero.
+        """
+        for ship in ("fighter", "shuttle", "explorer", "freighter", "sentinel"):
+            model = self.m.ship_model("0x1", ship)
+            n = numpy.concatenate([g[1] for g in model["groups"].values()])
+            length = numpy.linalg.norm(n, axis=1)
+            self.assertEqual(len(n), sum(len(g[0]) for g in model["groups"].values()))
+            self.assertGreater(float((numpy.abs(length - 1) < 0.01).mean()), 0.99,
+                               f"{ship} lost the normals the game ships with")
+
+    def test_normals_point_the_way_the_triangles_do(self):
+        """The decode is octahedral and easy to get subtly wrong -- a swapped pair of components
+        still gives unit vectors, pointing somewhere else entirely. Averaging the faces round each
+        vertex is a rough check, but a wrong decode cannot pass it."""
+        model = self.m.ship_model("0x1", "fighter")
+        pos = numpy.concatenate([g[0] for g in model["groups"].values()])
+        nrm = numpy.concatenate([g[1] for g in model["groups"].values()])
+        base, faces = 0, numpy.zeros_like(pos)
+        for p, _, idx in model["groups"].values():
+            tri = (idx[:len(idx) // 3 * 3].reshape(-1, 3) + base).astype(numpy.int64)
+            cross = numpy.cross(pos[tri[:, 1]] - pos[tri[:, 0]], pos[tri[:, 2]] - pos[tri[:, 0]])
+            for c in range(3):
+                numpy.add.at(faces, tri[:, c], cross)
+            base += len(p)
+        length = numpy.linalg.norm(faces, axis=1, keepdims=True)
+        ok = length[:, 0] > 1e-9
+        agree = (faces[ok] / length[ok] * nrm[ok]).sum(1)
+        self.assertGreater(float(agree.mean()), 0.9,
+                           "the normals do not face the way the triangles do")
+
+    def test_a_cache_file_that_will_not_open_is_read_again(self):
+        """A cache file cut short -- a crash or a full disk while it was being written -- used to
+        take the whole ship down with it, and stay broken until the cache was cleared by hand.
+        One was sitting in the cache here: swarmhive, 815,915 bytes and not a zip file."""
+        geo = next(g for g, *_ in self.m.ship_meshes(0, "sentinel", ["_PIT_A"]) if g)
+        path = self.m._cache_file(geo)
+        self.assertTrue(self.m._geometry([geo]).get(geo), "nothing to break")
+        with open(path, "wb") as f:
+            f.write(b"this is not a zip file")
+        got = self.m._geometry([geo])
+        self.assertTrue(got.get(geo), "a cache file that will not open still fails the geometry")
+        self.assertGreater(os.path.getsize(path), 1000, "the bad copy was not written over")
+
+    def test_a_mesh_is_not_drawn_twice_in_the_same_place(self):
+        """The freighter's cargo scene lists two of its containers at one spot. Drawn twice they
+        only fight over which is in front, which flickers as the ship turns."""
+        meshes = self.m.ship_meshes(1, "freighter")
+        geos = self.m._geometry(sorted({g for g, *_ in meshes if g}))
+        listed = sum(len(geos.get(g, {}).get(h, ([],))[0]) for g, h, *_ in meshes)
+        drawn = sum(len(g[0]) for g in self.m.ship_model(1, "freighter")["groups"].values())
+        self.assertLess(drawn, listed, "the repeated containers were drawn anyway")
+        self.assertGreater(drawn, listed * 0.9, "far more than the repeats went missing")
 
     def test_a_half_finished_design_shows_a_whole_ship(self):
         """Picking one part must not hide every group the design has not chosen yet."""
@@ -241,8 +298,8 @@ class ShipModels(unittest.TestCase):
             landed = self.m.ship_model("0x1", ship)
             self.assertTrue(landed["posable"], f"{ship} should offer a flying pose")
             flight = self.m.ship_model("0x1", ship, flying=True)
-            lp = numpy.concatenate([p for p, _ in landed["groups"].values()])
-            fp = numpy.concatenate([p for p, _ in flight["groups"].values()])
+            lp = numpy.concatenate([p for p, _, _ in landed["groups"].values()])
+            fp = numpy.concatenate([p for p, _, _ in flight["groups"].values()])
             self.assertEqual(lp.shape, fp.shape, f"{ship}: the pose changed the mesh itself")
             self.assertTrue(numpy.isfinite(fp).all(), f"{ship}: the flying pose broke vertices")
             moved = numpy.linalg.norm(fp - lp, axis=1)

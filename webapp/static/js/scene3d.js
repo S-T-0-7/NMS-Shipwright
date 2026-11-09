@@ -17,10 +17,11 @@
   uniform vec3 col; uniform vec3 eye; uniform float emit; uniform float spec; uniform float alpha;
   uniform vec3 tint; uniform float tintMix; out vec4 o;
   void main(){
+    // The game's own normals, where the geometry carried them; the face of the triangle otherwise.
     vec3 V = normalize(eye - wp), F = normalize(cross(dFdx(wp), dFdy(wp)));
     if (dot(F, V) < 0.) F = -F;
-    vec3 N = normalize(vn); if (dot(N, F) < 0.) N = -N;
-    N = dot(N, F) > .82 ? N : F;
+    vec3 N = length(vn) > .5 ? normalize(vn) : F;
+    if (dot(N, V) < 0.) N = -N;
     vec3 L1 = normalize(vec3(.5,.8,.4)), L2 = normalize(vec3(-.6,.2,-.5));
     float d = max(dot(N,L1),0.)*.85 + max(dot(N,L2),0.)*.3 + .22 + .12*N.y;
     float s = pow(max(dot(N, normalize(L1+V)),0.), 40.) * spec;
@@ -92,6 +93,8 @@
     return new Float32Array([x[0], x[1], x[2], 0, up[0], up[1], up[2], 0, at[0], at[1], at[2], 0,
                              pos[0], pos[1], pos[2], 1]);
   }
+  /* The arrows and rings are built here rather than read from the game, so they are the one
+     thing left that needs its normals worked out. */
   function normals(pos, idx) {
     const n = new Float32Array(pos.length);
     for (let t = 0; t < idx.length; t += 3) {
@@ -229,10 +232,11 @@
       const head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl))), base = 4 + hl;
       const groups = head.groups.map(g => {
         const pos = new Float32Array(buf, base + g.offset, g.vertices * 3);
-        const idx = new Uint32Array(buf, base + g.offset + g.vertices * 12, g.indices);
+        const nrm = new Float32Array(buf, base + g.offset + g.vertices * 12, g.vertices * 3);
+        const idx = new Uint32Array(buf, base + g.offset + g.vertices * 24, g.indices);
         const vao = gl.createVertexArray();
         gl.bindVertexArray(vao);
-        for (const [loc, data] of [[0, pos], [1, normals(pos, idx)]]) {
+        for (const [loc, data] of [[0, pos], [1, nrm]]) {
           const b = gl.createBuffer();
           gl.bindBuffer(gl.ARRAY_BUFFER, b);
           gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);

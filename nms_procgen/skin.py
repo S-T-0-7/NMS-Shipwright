@@ -118,6 +118,34 @@ def prepare(geo_path: str, pose: dict):
         return None
 
 
+def deform_normals(ctx, mesh_hash: int, nrm, first_skin_mat: int):
+    """Turn one mesh's normals into the pose, by the same blend that moves its vertices.
+
+    Only the rotation of each skin matrix counts here: a normal has a direction and no place.
+    """
+    if not ctx or not len(nrm):
+        return nrm
+    try:
+        found = ctx["blend"].get(mesh_hash)
+        if not found:
+            return nrm
+        bidx, w, weighted = found
+        if len(bidx) != len(nrm):
+            return nrm
+        slots = ctx["slots"]
+        n = np.asarray(nrm, np.float64)
+        acc = np.zeros_like(n)
+        for inf in range(4):
+            m = slots[np.clip(first_skin_mat + bidx[:, inf], 0, len(slots) - 1)]
+            acc += w[:, inf:inf + 1] * np.einsum("nij,nj->ni", m[:, :3, :3], n)
+        out = n.copy()
+        out[weighted] = acc[weighted]
+        length = np.linalg.norm(out, axis=1, keepdims=True)
+        return np.divide(out, length, out=np.zeros_like(out), where=length > 1e-9)
+    except Exception:
+        return nrm
+
+
 def deform(ctx, mesh_hash: int, pos, first_skin_mat: int):
     """Bend one mesh's positions into the pose; returns them unchanged if it cannot be skinned."""
     if not ctx:

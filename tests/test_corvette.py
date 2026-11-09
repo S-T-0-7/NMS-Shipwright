@@ -234,7 +234,7 @@ class ModuleScenes(unittest.TestCase):
         geos = model3d._geometry(sorted({g for g, *_ in meshes if g}))
         big = [geos[g][h] for g, h, *_ in meshes if len(geos.get(g, {}).get(h, ([],))[0]) > 65536]
         self.assertTrue(big, "the gun's large mesh is there to check")
-        for pos, idx in big:
+        for pos, _, idx in big:
             tri = idx.reshape(-1, 3)
             span = np.linalg.norm(pos.max(0) - pos.min(0))
             edge = np.linalg.norm(pos[tri[:, 0]] - pos[tri[:, 1]], axis=1)

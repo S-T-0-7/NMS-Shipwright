@@ -7,12 +7,12 @@
   const FS = `#version 300 es
   precision highp float; in vec3 vn; in vec3 vp; uniform vec3 col; uniform vec3 eye; uniform float emit; uniform float spec; uniform float alpha; out vec4 o;
   void main(){
-    // The position stream welds vertices across sharp edges, so averaged normals smear hard panels
-    // dark. Use the face normal unless the smooth one is close to it (curved surfaces stay smooth).
+    // The normals come from the game's own vertex data, smoothing and all. A geometry we could
+    // not read them from arrives as zero, and then the face the triangle lies in has to do.
     vec3 V = normalize(eye - vp), F = normalize(cross(dFdx(vp), dFdy(vp)));
     if (dot(F, V) < 0.) F = -F;
-    vec3 N = normalize(vn); if (dot(N, F) < 0.) N = -N;
-    N = dot(N, F) > .82 ? N : F;
+    vec3 N = length(vn) > .5 ? normalize(vn) : F;
+    if (dot(N, V) < 0.) N = -N;   // a one-sided panel seen from behind still faces the light
     vec3 L1 = normalize(vec3(.5,.8,.4)), L2 = normalize(vec3(-.6,.2,-.5));
     float d = max(dot(N,L1),0.)*.85 + max(dot(N,L2),0.)*.3 + .22 + .12*N.y;
     float s = pow(max(dot(N, normalize(L1+V)),0.), 40.) * spec;
@@ -36,18 +36,6 @@
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   const norm = a => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
-
-  function normals(pos, idx) {
-    const n = new Float32Array(pos.length);
-    for (let t = 0; t < idx.length; t += 3) {
-      const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-      const ux = pos[b] - pos[a], uy = pos[b + 1] - pos[a + 1], uz = pos[b + 2] - pos[a + 2];
-      const vx = pos[c] - pos[a], vy = pos[c + 1] - pos[a + 1], vz = pos[c + 2] - pos[a + 2];
-      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-      for (const k of [a, b, c]) { n[k] += nx; n[k + 1] += ny; n[k + 2] += nz; }
-    }
-    return n;
-  }
 
   function mount(el) {
     const canvas = document.createElement('canvas');
@@ -122,9 +110,11 @@
       const head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl))), base = 4 + hl;
       for (const g of v.groups) { gl.deleteVertexArray(g.vao); g.bufs.forEach(b => gl.deleteBuffer(b)); }
       v.groups = head.groups.map(g => {
-        const pos = new Float32Array(buf, base + g.offset, g.vertices * 3), idx = new Uint32Array(buf, base + g.offset + g.vertices * 12, g.indices);
+        const pos = new Float32Array(buf, base + g.offset, g.vertices * 3);
+        const nrm = new Float32Array(buf, base + g.offset + g.vertices * 12, g.vertices * 3);
+        const idx = new Uint32Array(buf, base + g.offset + g.vertices * 24, g.indices);
         const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
-        const bufs = [pos, normals(pos, idx)].map((data, loc) => {
+        const bufs = [pos, nrm].map((data, loc) => {
           const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
           const at = gl.getAttribLocation(prog, loc ? 'n' : 'p'); gl.enableVertexAttribArray(at); gl.vertexAttribPointer(at, 3, gl.FLOAT, false, 0, 0); return b;
         });

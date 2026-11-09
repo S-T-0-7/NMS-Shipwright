@@ -22,7 +22,7 @@ from .generator import ROOTS, all_parts, generate
 
 MESH_PAK = "NMSARC.MeshCommon.pak"
 MODEL_DIR = os.path.join(gamefiles.CACHE, "models")
-FORMAT = 3  # bump when the cached mesh format changes
+FORMAT = 4  # bump when the cached mesh format changes
 _LOCK = threading.Lock()
 
 # material file name -> how the viewer shades it
@@ -146,8 +146,46 @@ def _extract(geometries):
     return raw
 
 
+NORMAL_SEM = 11  # cTkVertexElement semantic of the packed normal, the data stream's one uint32
+
+
+def _octa_normals(u) -> np.ndarray:
+    """Unit normals from the data stream's uint32 per vertex, octahedron-encoded.
+
+    Two unsigned 10-bit numbers, biased by 512 and scaled by 511, give a point on the octahedron
+    |x| + |y| + |z| = 1; the half with z below zero is folded back out to its own face. Read
+    against a box, whose faces can only be axis-aligned, all 24 vertices come out as exactly the
+    face they belong to, and over two dozen ship parts every vector is unit length and sits a mean
+    dot of 0.98 from the normals the triangles imply -- the gap being the authored smoothing that
+    averaging faces cannot know about.
+    """
+    e = (np.stack([u & 0x3FF, (u >> 10) & 0x3FF], 1).astype(np.float64) - 512.0) / 511.0
+    x, y = e[:, 0].copy(), e[:, 1].copy()
+    z = 1.0 - np.abs(x) - np.abs(y)
+    fold = z < 0
+    x[fold] = (1.0 - np.abs(e[fold, 1])) * np.sign(e[fold, 0])
+    y[fold] = (1.0 - np.abs(e[fold, 0])) * np.sign(e[fold, 1])
+    n = np.stack([x, y, z], 1)
+    length = np.linalg.norm(n, axis=1, keepdims=True)
+    return np.divide(n, length, out=np.zeros_like(n), where=length > 1e-9).astype(np.float16)
+
+
+def _mesh_normals(data, start, vsize, stride, offset, verts) -> np.ndarray:
+    """One mesh's normals, or nothing if this geometry does not carry them where it should.
+
+    Nothing is not a failure: the viewer works them out from the triangles instead, which is all
+    it ever had, so a geometry we cannot read this way draws as it did before.
+    """
+    if offset is None or not stride or not verts or vsize // stride != verts \
+            or offset + 4 > stride:
+        return np.zeros((0, 3), np.float16)
+    row = np.frombuffer(data, np.uint8, verts * stride, start).reshape(verts, stride)
+    return _octa_normals(np.ascontiguousarray(row[:, offset:offset + 4]).view(np.uint32).ravel()
+                         .astype(np.int64))
+
+
 def _convert(geo: bytes, data: bytes) -> dict:
-    """{hash: (positions float16 [n, 3], indices uint32 [m])} for every mesh stream of one geometry."""
+    """{hash: (positions float16 [n, 3], normals float16 [n, 3], indices uint32 [m])} per mesh."""
     G, MD, VL, VE = _layouts()
     lay = 0x20 + G.off("PositionVertexLayout")
     stride = i32(geo, lay + VL.off("Stride"))
@@ -155,6 +193,11 @@ def _convert(geo: bytes, data: bytes) -> dict:
     pos_off = next((geo[base + k * VE.size + VE.off("Offset")] for k in range(n)
                     if geo[base + k * VE.size + VE.off("SemanticID")] == 0), 0)
     wide = not i32(geo, 0x20 + G.off("Indices16Bit"))
+    dlay = 0x20 + G.off("VertexLayout")        # the data stream, parallel to the position one
+    dstride = i32(geo, dlay + VL.off("Stride"))
+    ebase, en = array(geo, dlay + VL.off("VertexElements"))
+    nrm_off = next((geo[ebase + k * VE.size + VE.off("Offset")] for k in range(en)
+                    if geo[ebase + k * VE.size + VE.off("SemanticID")] == NORMAL_SEM), None)
     out = {}
 
     def indices(start, size, verts):
@@ -186,7 +229,8 @@ def _convert(geo: bytes, data: bytes) -> dict:
         ps, pn = array(data, q + MD.off("MeshPositionDataStream"))
         verts = np.frombuffer(data, np.float16, pn // 2, ps).reshape(-1, stride // 2)[:, pos_off // 2:pos_off // 2 + 3]
         idx = indices(ms + vsize, isize, len(verts))
-        out[h] = (np.ascontiguousarray(verts), idx)
+        out[h] = (np.ascontiguousarray(verts),
+                  _mesh_normals(data, ms, vsize, dstride, nrm_off, len(verts)), idx)
     return out
 
 
@@ -196,12 +240,19 @@ def _geometry(geometries) -> dict:
     result, missing = {}, []
     for g in geometries:
         path = _cache_file(g)
-        if os.path.exists(path):
-            with np.load(path) as z:
-                if int(z["format"]) == FORMAT:
-                    hashes = z["hashes"]
-                    result[g] = {int(h): (z[f"p{i}"], z[f"i{i}"]) for i, h in enumerate(hashes)}
-                    continue
+        # A cache file that will not open -- cut short by a full disk, a crash while it was being
+        # written, or the game being updated underneath us -- is no reason to fail the whole ship.
+        # It goes back on the list and is read from the pak again, over the top of the bad copy.
+        try:
+            if os.path.exists(path):
+                with np.load(path) as z:
+                    if int(z["format"]) == FORMAT:
+                        hashes = z["hashes"]
+                        result[g] = {int(h): (z[f"p{i}"], z[f"n{i}"], z[f"i{i}"])
+                                     for i, h in enumerate(hashes)}
+                        continue
+        except Exception:
+            pass
         missing.append(g)
     if missing:
         with _LOCK:
@@ -213,8 +264,8 @@ def _geometry(geometries) -> dict:
                 path = _cache_file(g)
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 arrays = {"format": np.int32(FORMAT), "hashes": np.array(list(meshes), np.uint64)}
-                for i, (p, ix) in enumerate(meshes.values()):
-                    arrays[f"p{i}"], arrays[f"i{i}"] = p, ix
+                for i, (p, nr, ix) in enumerate(meshes.values()):
+                    arrays[f"p{i}"], arrays[f"n{i}"], arrays[f"i{i}"] = p, nr, ix
                 np.savez_compressed(path, **arrays)
                 result[g] = meshes
     return result
@@ -548,6 +599,42 @@ def _picked_meshes(ship, chosen, pose=None, joints=frozenset(), collect=None):
     return kept
 
 
+def _turn_normals(nrm, frame) -> np.ndarray:
+    """Carry normals through a part's transform.
+
+    A normal does not ride a matrix the way a position does. Half of a ship's parts are the other
+    half mirrored, and under a mirror (or any squash) only the inverse keeps a normal at right
+    angles to its surface -- multiplying it like a point tilts it, and the light slides off the
+    panel it belongs to.
+    """
+    if not len(nrm):
+        return nrm
+    try:
+        back = np.linalg.inv(frame[:3, :3])
+    except np.linalg.LinAlgError:
+        back = frame[:3, :3].T
+    n = nrm.astype(np.float64) @ back
+    length = np.linalg.norm(n, axis=1, keepdims=True)
+    return np.divide(n, length, out=np.zeros_like(n), where=length > 1e-9).astype(np.float32)
+
+
+def _gather(acc, cls, pos, nrm, idx, frame):
+    """Add one placed mesh to its colour group, turning the triangles back out if it is mirrored."""
+    if len(nrm) != len(pos):          # a geometry whose normals we could not read: let the
+        nrm = np.zeros_like(pos)      # viewer work them out from the triangles, as it used to
+    lst = acc.setdefault(cls, [[], [], [], 0])
+    lst[0].append(pos.astype(np.float32))
+    lst[1].append(nrm.astype(np.float32))
+    lst[2].append((idx.reshape(-1, 3)[:, ::-1].ravel() if np.linalg.det(frame[:3, :3]) < 0 else idx)
+                  + lst[3])
+    lst[3] += len(pos)
+
+
+def _collected(acc) -> dict:
+    return {cls: (np.concatenate(v[0]).astype(np.float32), np.concatenate(v[1]).astype(np.float32),
+                  np.concatenate(v[2]).astype(np.uint32)) for cls, v in acc.items() if v[0]}
+
+
 def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
     """{"groups": {class: (positions float32 [n,3], indices uint32)}, "bounds": (min, max)} in the game's axes
     (Y up, Z forward). The bounds frame exactly what is drawn.
@@ -568,30 +655,29 @@ def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
     if pose:
         from . import skin
         bend = {g: skin.prepare(g, pose) for g in geos}
-    acc: dict = {}
+    acc, drawn = {}, set()
     for g, h, world, cls, posed, first in meshes:
         m = geos.get(g, {}).get(h)
         if m is None:
             continue
-        p = m[0].astype(np.float32)
         # On a skinned part the skeleton does all the moving, so the mesh keeps the place its scene
         # gives it and the skin bends it. A part with no skeleton is carried by its nodes instead,
         # which is where the gear, guns and sail arms hanging off a joint get their movement.
-        if bend.get(g) is not None:
+        skinned = bend.get(g) is not None
+        frame = world if skinned else posed
+        # The same mesh at the same frame twice comes out of the game's own data -- a freighter's
+        # cargo scene lists two of its containers at one spot -- and drawing it twice only leaves
+        # the two of them fighting over which is in front.
+        once = (g, h, frame.round(4).tobytes())
+        if once in drawn:
+            continue
+        drawn.add(once)
+        p, nrm = m[0].astype(np.float32), m[1]
+        if skinned:
             p = skin.deform(bend[g], h, p, first).astype(np.float32)
-        else:
-            world = posed
-        p = p @ world[:3, :3].T + world[:3, 3]
-        if np.linalg.det(world[:3, :3]) < 0:  # mirrored: keep triangles facing outwards
-            idx = m[1].reshape(-1, 3)[:, ::-1].ravel()
-        else:
-            idx = m[1]
-        lst = acc.setdefault(cls, [[], [], 0])
-        lst[0].append(p)
-        lst[1].append(idx + lst[2])
-        lst[2] += len(p)
-    groups = {cls: (np.concatenate(v[0]).astype(np.float32), np.concatenate(v[1]).astype(np.uint32))
-              for cls, v in acc.items() if v[0]}
+            nrm = skin.deform_normals(bend[g], h, nrm, first)
+        _gather(acc, cls, p @ frame[:3, :3].T + frame[:3, 3], _turn_normals(nrm, frame), m[2], frame)
+    groups = _collected(acc)
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
     return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()),
             "posable": bool(flown)}  # offers a landed/flying toggle
@@ -622,36 +708,33 @@ def corvette_model(modules) -> dict:
             except FileNotFoundError:
                 scenes[scene] = []
     geos = _geometry(sorted({g for ms in scenes.values() for g, *_ in ms if g}))
-    acc: dict = {}
+    acc, drawn = {}, set()
     for scene, place in placed:
         for g, h, world, cls, _, _ in scenes[scene]:
             m = geos.get(g, {}).get(h)
             if m is None:
                 continue
             w = place @ world
-            p = (m[0].astype(np.float32) @ w[:3, :3].T + w[:3, 3]).astype(np.float32)
-            if np.linalg.det(w[:3, :3]) < 0:
-                idx = m[1].reshape(-1, 3)[:, ::-1].ravel()
-            else:
-                idx = m[1]
-            lst = acc.setdefault(cls, [[], [], 0])
-            lst[0].append(p)
-            lst[1].append(idx + lst[2])
-            lst[2] += len(p)
-    groups = {cls: (np.concatenate(v[0]).astype(np.float32), np.concatenate(v[1]).astype(np.uint32))
-              for cls, v in acc.items() if v[0]}
+            once = (g, h, w.round(4).tobytes())
+            if once in drawn:  # see ship_model: the game's own data repeats a mesh here and there
+                continue
+            drawn.add(once)
+            _gather(acc, cls, m[0].astype(np.float32) @ w[:3, :3].T + w[:3, 3],
+                    _turn_normals(m[1], w), m[2], w)
+    groups = _collected(acc)
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
     return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()), "posable": False}
 
 
 def pack(model: dict, colours: dict | None = None) -> bytes:
-    """Binary for the viewer: u32 header length, JSON header, then per group float32 xyz and uint32 indices."""
+    """Binary for the viewer: u32 header length, JSON header, then per group float32 xyz
+    positions, float32 xyz normals and uint32 indices."""
     head = {"bounds": model["bounds"], "colours": colours or {}, "posable": model.get("posable", False), "groups": []}
     blobs, off = [], 0
-    for cls, (p, ix) in model["groups"].items():
+    for cls, (p, nrm, ix) in model["groups"].items():
         head["groups"].append({"class": cls, "vertices": len(p), "indices": len(ix), "offset": off})
-        blobs += [p.tobytes(), ix.tobytes()]
-        off += p.nbytes + ix.nbytes
+        blobs += [p.tobytes(), nrm.tobytes(), ix.tobytes()]
+        off += p.nbytes + nrm.nbytes + ix.nbytes
     h = json.dumps(head).encode()
     h += b" " * (-(len(h) + 4) % 4)
     return struct.pack("<I", len(h)) + h + b"".join(blobs)
