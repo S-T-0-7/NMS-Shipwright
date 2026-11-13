@@ -37,6 +37,9 @@ DISPS = {
     "pg_off": ("planet_sentinels", 0x897, "488b88", "498b80????????488b88????????", 7),  # mov rcx,[rax+pg]
 }
 DISP_WINDOW = 0x2000  # how far it may have moved. 2+ matches raises rather than guess
+# how much of a sig may differ b4 we stop trustin it. a patch recompiles a func but leaves most
+# of the prologue alone -- few bytes changed = moved, quarter changed = diffrent func.
+FUZZ = 0.15
 APP_PTR_LOAD = ("gen", 0x779, "488b05")  # mov rax, [rip + app_ptr]
 PLANET_FLAG_FROM_APP_PTR = 0x40
 LEA_RCX, LEA_RDX, CALL = bytes.fromhex("488d0d"), bytes.fromhex("488d15"), bytes.fromhex("e8")
@@ -121,11 +124,42 @@ class _Image:
         return table
 
 
-def _unique(img, name):
-    hits = img.find(SIGS[name])
-    if len(hits) != 1:
-        raise AddressError(f"{name}: {len(hits)} signature matches (game code changed) [{_build(img)}]")
-    return hits[0]
+def _near(img, sig, align=0):
+    """closest 2 tolerant matches for a sig: [(addr, bytes that differ), ..]. only runs after
+    the exact search already failed. ?? positions arent compared. align=16 looks only where a
+    compiled func can start, which is 1/16th of the work for the same answer."""
+    import numpy as np
+    want = [None if sig[i:i + 2] == "??" else int(sig[i:i + 2], 16) for i in range(0, len(sig), 2)]
+    text = np.frombuffer(img.text, dtype=np.uint8)
+    n = len(text) - len(want)
+    if n <= 0:
+        return []
+    at = np.arange(0, n, align) if align else None
+    bad = np.zeros(len(at) if align else n, dtype=np.int32)
+    for k, b in enumerate(want):
+        if b is None:
+            continue
+        bad += (text[at + k] if align else text[k:k + n]) != b
+    return [(img.base + img.tva + int(at[i] if align else i), int(bad[i]))
+            for i in np.argsort(bad, kind="stable")[:2]]
+
+
+def _locate(img, name):
+    """(addr, bytes that differed) or (None, why not). one changed instruction in a prologue
+    used to brick the whole app; now it costs accuracy, not the feature. still refuses a close
+    call -- 2 candidates inside budget means guessing, and a wrong addr runs wrong code."""
+    sig = SIGS[name]
+    hits = img.find(sig)
+    if len(hits) == 1:
+        return hits[0], 0
+    if len(hits) > 1:
+        return None, "%d signature matches" % len(hits)
+    budget = int(sum(sig[i:i + 2] != "??" for i in range(0, len(sig), 2)) * FUZZ)
+    for align in (16, 0):   # the aligned sweep answers in a fraction of a second; the full one
+        near = _near(img, sig, align)   # is the backstop for a func that didnt start on 16
+        if near and near[0][1] <= budget and (len(near) < 2 or near[1][1] > budget):
+            return near[0][0], near[0][1]
+    return None, ("no match, nearest differs in %d bytes" % near[0][1] if near else "no match")
 
 
 def _stop(img, addrs, name):
@@ -156,7 +190,21 @@ def _disp(img, addrs, name):
 def _find_all(path):
     from .emu import extract_globals
     img = _Image(path)
-    a = {k: _unique(img, k) for k in ("gen", "info", "planet_sentinels", "skip_a", "skip_b", "palette_table")}
+    a, drift, failed = {}, {}, []
+    for k in ("gen", "info", "planet_sentinels", "skip_a", "skip_b", "palette_table"):
+        va, why = _locate(img, k)
+        if va is None:
+            failed.append("%s: %s" % (k, why))
+        else:
+            a[k] = va
+            if why:
+                drift[k] = why
+    if failed:
+        # which ones DID match is the whole diagnosis, so say so. a game patch recompiles a func
+        # or 2 and the rest stay put; a GOG/MS Store exe is a diffrent compile and nothing
+        # matches. thats a bug report we can act on instead of guess at.
+        raise AddressError("%s (game code changed) [%s; still matched: %s]"
+                           % ("; ".join(failed), _build(img), ", ".join(sorted(a)) or "nothing"))
     want = a["planet_sentinels"] + PLANET_INFO_FROM_SENTINELS
     a["planet_info"] = min(img.find(SIGS["planet_info"]) or [0], key=lambda h: abs(h - want))
     if abs(a["planet_info"] - want) > 0x4000:
@@ -179,6 +227,8 @@ def _find_all(path):
     folder = extract_globals()
     names = sorted(p.split(".")[0] for p in os.listdir(folder) if p.endswith(".global.mbin"))
     a["globals"] = img.globals_table(names)
+    if drift:
+        a["drift"] = drift
     return img.build, a
 
 

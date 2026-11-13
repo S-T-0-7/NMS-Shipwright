@@ -163,6 +163,56 @@ class GracefulFailure(Base):
         self.assertEqual(json.loads(codec.decode(reraw)[0])["n"], 5)
 
 
+class GamePatchDrift(unittest.TestCase):
+    """A game patch recompiles a function. One changed byte must not take the tool down.
+
+    A user on 7.14 reported "gen: 0 signature matches" from a build that resolves cleanly on a
+    Steam install, so the exact-match-or-die search was the whole failure. It now falls back to
+    the closest match, and still refuses when the closest one is not clearly the right one --
+    a wrong address does not fail, it quietly runs the wrong code.
+    """
+
+    def setUp(self):
+        from nms_save import gamepath
+        try:
+            self.exe = os.path.join(gamepath.require(), "Binaries", "NMS.exe")
+        except Exception as e:
+            self.skipTest(f"game files not available: {e}")
+        from nms_procgen import exeaddr
+        self.E = exeaddr
+        self.img = exeaddr._Image(self.exe)
+        self.whole = self.img.text
+
+    def _damage(self, va, n):
+        """Change the first n bytes of the function at va, as a patch would."""
+        t = bytearray(self.whole)
+        at = va - self.img.base - self.img.tva
+        for i in range(n):
+            t[at + i] ^= 0xFF
+        self.img.text = bytes(t)
+
+    def test_the_signatures_match_this_install_exactly(self):
+        for name in ("gen", "info", "planet_sentinels", "skip_a", "skip_b", "palette_table"):
+            va, drift = self.E._locate(self.img, name)
+            self.assertIsNotNone(va, f"{name} did not resolve")
+            self.assertEqual(drift, 0, f"{name} needed a loose match on an unpatched install")
+
+    def test_a_few_changed_bytes_still_find_the_function(self):
+        va, _ = self.E._locate(self.img, "gen")
+        self.assertIsNotNone(va)
+        self._damage(va, 3)
+        again, drift = self.E._locate(self.img, "gen")
+        self.assertEqual(again, va)
+        self.assertEqual(drift, 3)
+
+    def test_a_rewritten_prologue_is_refused_rather_than_guessed(self):
+        va, _ = self.E._locate(self.img, "gen")
+        self._damage(va, 20)
+        again, why = self.E._locate(self.img, "gen")
+        self.assertIsNone(again)
+        self.assertIn("no match", why)
+
+
 class ShipModels(unittest.TestCase):
     """The viewer must never end up with an invisible ship."""
 

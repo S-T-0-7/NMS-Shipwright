@@ -35,9 +35,19 @@ def _save_format():
     return f"{len(ps)} fields, all known" if not odd else f"{len(ps)} fields, {len(odd)} unknown to this version"
 
 
+def _gen_addresses():
+    """Where the ship generator lives in this NMS.exe, and how sure we are of it."""
+    from nms_procgen.exeaddr import resolve
+    a = resolve()
+    loose = a.get("drift") or {}
+    note = ("" if not loose else
+            " -- found by a loose match after a game patch (%s); worth re-checking a generated "
+            "ship against the game" % ", ".join("%s differs in %d bytes" % kv for kv in sorted(loose.items())))
+    return "build %s, %d addresses%s" % (a["build"][0], len(a), note)
+
+
 def health(deep=False):
     from nms_procgen import model3d
-    from nms_procgen.exeaddr import resolve
     from nms_save.gamemeta import exe_meta
     state = _check("Game install", "everything", lambda: f"{gamepath.require()} -- build "
                                                          f"{gameversion.build_id()['exe'][0]} bytes, "
@@ -50,8 +60,7 @@ def health(deep=False):
               _check("Quest tables", "quest skipping", lambda: f"{len(quests.missions())} quests"),
               _check("Recipes and rewards", "unlocks", lambda: f"{len(extras.recipes())} recipes, "
                                                                f"{len(extras.shop_specials())} shop items"),
-              _check("Ship generator addresses", "Find in game, system lookup",
-                     lambda: "build %s, %d addresses" % (resolve()["build"][0], len(resolve()))),
+              _check("Ship generator addresses", "Find in game, system lookup", _gen_addresses),
               _check("Save files", "everything", lambda: f"{len(locator.find_saves())} saves found"),
               _check("Save format", "everything", _save_format)]
     if deep:
