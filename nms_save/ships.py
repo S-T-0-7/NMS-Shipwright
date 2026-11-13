@@ -30,9 +30,13 @@ from __future__ import annotations
 import functools
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 SHIP_PATH = ("BaseContext", "PlayerStateData", "ShipOwnership")
+# Ships put into storage rather than flown. The game keeps them in their own list, each one
+# wrapping an ordinary ship entry under "Ownership" with the name and class it was stored
+# under beside it -- so everything that reads a ship reads these too, one level down.
+ARCHIVED_PATH = ("BaseContext", "PlayerStateData", "ArchivedShipOwnership")
 
 SEED_RE = re.compile(r"^0x[0-9A-Fa-f]+$")
 
@@ -116,9 +120,34 @@ def _category_guess(filename: str) -> str:
     return "Unknown"
 
 
+def list_archived(readable_json: dict) -> list[Ship]:
+    """Every ship in storage, read the same way the flown ones are.
+
+    A stored ship keeps its own name and class next to the ship itself, because the game shows
+    them in the storage list without loading the ship. The name is taken from there when it has
+    one, since that is what the player sees in game.
+    """
+    try:
+        entries = _dig(readable_json, ARCHIVED_PATH)
+    except ShipLookupError:
+        return []     # saves from before ship storage existed
+    out = []
+    for i, entry in enumerate(entries):
+        inner = entry.get("Ownership")
+        if not isinstance(inner, dict):
+            continue
+        for s in _ships_in([inner]):
+            out.append(replace(s, index=i, name=entry.get("ArchivedName") or s.name))
+    return out
+
+
 def list_ships(readable_json: dict) -> list[Ship]:
     """Return every populated ship slot (empty slots are skipped)."""
-    entries = _dig(readable_json, SHIP_PATH)
+    return _ships_in(_dig(readable_json, SHIP_PATH))
+
+
+def _ships_in(entries) -> list[Ship]:
+    """The populated ships of one list of slots; empty slots are skipped."""
     ships = []
 
     for i, entry in enumerate(entries):

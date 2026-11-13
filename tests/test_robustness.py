@@ -414,6 +414,61 @@ class Designs(unittest.TestCase):
         self.assertIsNone(self.designs.matching_seed(d["ship"], d["want"], ["0x1", "0x2"]))
 
 
+class StoredShips(unittest.TestCase):
+    """Ships put into storage. The game keeps them in their own list, each wrapping an ordinary
+    ship entry under "Ownership", with the name it was stored under beside it."""
+
+    HAULER = "MODELS/COMMON/SPACECRAFT/DROPSHIP/DROPSHIP_PROC.SCENE.MBIN"
+
+    def setUp(self):
+        for mod in [m for m in list(sys.modules) if m.startswith("nms_save")]:
+            del sys.modules[mod]
+        from nms_save import ships
+        self.ships = ships
+
+    def _save(self, archived):
+        return {"BaseContext": {"PlayerStateData": {
+            "ShipOwnership": [{"Name": "Flown", "Resource": {"Filename": self.HAULER,
+                                                             "Seed": [True, "0x1"]}}],
+            "ArchivedShipOwnership": archived}}}
+
+    def _stored(self, name, seed="0x2"):
+        return {"ArchivedName": name,
+                "Ownership": {"Name": "Its own name",
+                              "Resource": {"Filename": self.HAULER, "Seed": [True, seed]}}}
+
+    def test_a_stored_ship_is_read_like_any_other(self):
+        got = self.ships.list_archived(self._save([self._stored("Old Faithful")]))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0].seed, "0x2")
+        self.assertEqual(got[0].filename, self.HAULER)
+        self.assertTrue(got[0].is_procedural)
+
+    def test_the_name_it_was_stored_under_wins(self):
+        """The game shows that name in the storage list, so it is the one the player knows it by."""
+        got = self.ships.list_archived(self._save([self._stored("Old Faithful")]))
+        self.assertEqual(got[0].name, "Old Faithful")
+
+    def test_a_stored_ship_with_no_name_keeps_its_own(self):
+        got = self.ships.list_archived(self._save([self._stored("")]))
+        self.assertEqual(got[0].name, "Its own name")
+
+    def test_empty_storage_slots_are_skipped_but_counted_for_position(self):
+        save = self._save([{}, {"Ownership": {}}, self._stored("Third")])
+        got = self.ships.list_archived(save)
+        self.assertEqual([s.name for s in got], ["Third"])
+        self.assertEqual(got[0].index, 2, "a stored ship must keep the slot it sits in")
+
+    def test_a_save_from_before_storage_existed_is_not_an_error(self):
+        save = {"BaseContext": {"PlayerStateData": {"ShipOwnership": []}}}
+        self.assertEqual(self.ships.list_archived(save), [])
+
+    def test_storage_does_not_disturb_the_flown_ships(self):
+        save = self._save([self._stored("Old Faithful")])
+        flown = self.ships.list_ships(save)
+        self.assertEqual([s.name for s in flown], ["Flown"])
+
+
 class ShipEquipment(unittest.TestCase):
     """A ship must carry the parts, mark and class of the type it actually is."""
 

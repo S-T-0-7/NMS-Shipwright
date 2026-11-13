@@ -18,7 +18,11 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:8px
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
 .split{display:grid;grid-template-columns:minmax(300px,370px) 1fr;gap:16px;align-items:start}
 .shiplist{display:flex;flex-direction:column;gap:8px}
-.ship{display:grid;grid-template-columns:104px 1fr;gap:10px;padding:8px;cursor:pointer}.ship:hover{border-color:#3d4453}.ship.sel{border-color:var(--accent)}
+.ship{display:grid;grid-template-columns:104px 1fr;gap:10px;padding:8px;cursor:pointer}
+/* A ship's picture in the list, drawn once and kept. It holds the card's shape while it is
+   still being drawn, so the list does not jump about as they arrive. */
+.ship img.thumb{width:104px;height:66px;object-fit:contain;border-radius:6px}
+.liststep{margin:14px 2px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}.ship:hover{border-color:#3d4453}.ship.sel{border-color:var(--accent)}
 .thumb{width:104px;height:76px;border-radius:8px;background:#0a0c10 center/contain no-repeat;display:grid;place-items:center;color:var(--muted);font-size:11px;text-align:center}
 .meta b{display:block}.meta small{color:var(--muted)}
 .badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:6px;background:var(--panel2);color:var(--muted);margin:3px 4px 0 0}.badge.hot{background:#3a1d18;color:var(--accent2)}

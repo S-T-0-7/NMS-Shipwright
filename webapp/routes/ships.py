@@ -69,7 +69,16 @@ def ship_list(readable):
                     "origin": origin[:3]})
     entries = readable["BaseContext"]["PlayerStateData"]["ShipOwnership"]
     empty = [i for i, e in enumerate(entries) if not e.get("Resource", {}).get("Filename")]
-    return {"ships": out, "empty": empty}
+    # Ships in storage are shown and drawn, but not edited: writing one back means reaching
+    # into a slot the game fills by its own rules, and nothing here has been able to try that
+    # against a save that actually has one.
+    stored = [{"index": s.index, "name": s.name, "filename": s.filename, "seed": s.seed,
+               "ship": ship_alias(s.filename) if s.is_procedural else None,
+               "category": SHIP_LABELS.get(ship_alias(s.filename) if s.is_procedural else None,
+                                           s.category_guess),
+               "is_procedural": s.is_procedural, "stored": True}
+              for s in ships.list_archived(readable)]
+    return {"ships": out, "empty": empty, "stored": stored}
 
 
 @bp.route("/api/ships")

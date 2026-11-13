@@ -6,15 +6,43 @@ async function loadShips(have) {
   const res = have || await api('/api/ships?path=' + encodeURIComponent(S.path));
   S.ships = res.ships; S.empty = res.empty;
   $('#newShip').disabled = !S.ships.length; $('#newShip').title = S.empty.length ? `Empty slots: ${S.empty.join(', ')}` : 'No empty slots -- you can replace a ship instead';
-  $('#shipList').innerHTML = S.ships.map(s => `
-    <div class="card ship ${s.index === S.slot ? 'sel' : ''}" data-slot="${s.index}">
-      <div class="thumb">${esc(s.category)}</div>
-      <div class="meta"><b>${esc(s.name || '(unnamed)')}</b><div>${esc(s.category)} &middot; slot ${s.index}</div>
+  S.stored = res.stored || [];
+  /* The picture is the ship. Naming its type told you what you already knew from the name
+     underneath; seeing it is how you find the one you meant. A fixed model has no seed to
+     draw from, so those keep the label. */
+  const card = (s, stored) => `
+    <div class="card ship ${!stored && s.index === S.slot ? 'sel' : ''}" data-slot="${s.index}"${stored ? ' data-stored="1"' : ''}>
+      ${s.ship && s.seed ? `<img class="thumb" data-thumb="${esc(s.ship)}" data-seed="${esc(s.seed)}" alt="">`
+        : `<div class="thumb">${esc(s.category)}</div>`}
+      <div class="meta"><b>${esc(s.name || '(unnamed)')}</b><div>${esc(s.category)} &middot; ${stored ? 'in storage' : 'slot ' + s.index}</div>
         <small class="mono">${esc(s.seed)}</small><div>${s.primary ? '<span class="badge hot">CURRENT</span>' : ''}${s.is_procedural ? '' : '<span class="badge">FIXED MODEL</span>'}${s.paint ? '<span class="badge">PAINTED</span>' : ''}</div></div>
-    </div>`).join('') || '<p class="muted">No ships in this save.</p>';
-  $$('.ship').forEach(el => el.onclick = () => selectShip(+el.dataset.slot));
+    </div>`;
+  $('#shipList').innerHTML = (S.ships.map(s => card(s, false)).join('')
+      || '<p class="muted">No ships in this save.</p>')
+    + (S.stored.length ? `<h4 class="liststep">In storage (${S.stored.length})</h4>`
+       + S.stored.map(s => card(s, true)).join('') : '');
+  $$('.ship').forEach(el => el.onclick = () => (el.dataset.stored
+    ? selectStored(+el.dataset.slot) : selectShip(+el.dataset.slot)));
+  paintThumbs($('#shipList'));
   if (S.ships.some(s => s.index === S.slot)) selectShip(S.slot);
   else $('#shipDetail').innerHTML = '<p class="muted">Select a ship.</p>';
+}
+
+/* A stored ship can be looked at but not changed: it is shown on its own, without the seed
+   box, the stats or the paint picker that all write back to a slot. */
+function selectStored(slot) {
+  S.slot = null;
+  $$('.ship').forEach(el => el.classList.toggle('sel', !!el.dataset.stored && +el.dataset.slot === slot));
+  const s = (S.stored || []).find(x => x.index === slot);
+  if (!s) return;
+  $('#shipDetail').innerHTML = `
+    <h2 style="margin:0">${esc(s.name || '(unnamed)')} <span class="muted" style="font-weight:400">&middot; ${esc(s.category)} &middot; in storage</span></h2>
+    <div class="hero" id="sView" style="margin-top:10px">${s.ship ? '' : `<span class="muted">${s.is_procedural ? 'No 3D model for this ship type yet' : 'Fixed model: the seed does not change its look'}</span>`}</div>
+    <div class="row" style="margin-top:10px"><code>${esc(s.seed)}</code></div>
+    <p class="muted" style="margin:8px 0 0">This ship is in storage. It is shown here so you can see what you have put away;
+      the app does not write to storage slots, so its seed, stats and paint cannot be changed from here.
+      Take it out in game to edit it.</p>`;
+  if (s.ship) show3d('sView', modelUrl(s.ship, 'seed=' + encodeURIComponent(s.seed)));
 }
 
 function selectShip(slot) {
