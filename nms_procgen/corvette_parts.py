@@ -136,25 +136,53 @@ def _part_ids(family: str, variant: str) -> list[str]:
     return [t.format(v=variant) for t in PARTS.get(family, [])]
 
 
+#  A structural piece that leans to one side carries its direction in the suffix, and the
+#  compass points come in mirrored pairs: _NE against _NW, and _NETB against _NWTB, with any
+#  trailing number kept. Measured on six families, every NE/NW pair is an exact reflection in X
+#  -- B_STR_D_NE spans x 0..6 and B_STR_D_NW spans -6..0, same in y and z.
+#
+#  _E and _W are named by the same scheme and are almost certainly a pair too, but neither of
+#  them resolves to a model, so that one is inferred rather than measured.
+COMPASS = [("_NETB", "_NWTB"), ("_NE", "_NW"), ("_E", "_W")]
+
+
+def _compass_twin(mid: str):
+    """The opposite-handed structural module, keeping any trailing variant number.
+
+    The direction is the end of the id, and only the end: B_STR_E_E is family E facing east,
+    and looking for "_E" anywhere in it finds the family letter first.
+    """
+    base = mid.rstrip("0123456789")
+    number = mid[len(base):]
+    for a, b in COMPASS:
+        for here, there in ((a, b), (b, a)):
+            if base.endswith(here):
+                return base[:-len(here)] + there + number
+    return None
+
+
 @functools.lru_cache(maxsize=1)
 def handed() -> dict:
     """{module id: the module that is its mirror image}, both ways round.
 
-    A wing or a lettered connector is not mirrored by turning it: the game keeps a part for each
-    side, authored as the other one reflected, and swaps the module for its opposite. So this is
-    what mirroring one across the ship has to do too.
+    Mirroring is not turning. The game keeps a module per side, authored as the other one
+    reflected, and swaps one for the other -- wings, the lettered connectors, and the structural
+    pieces that lean. Guessing this from the id costs you: taking an "_R" suffix to mean
+    right-hand asks for hull blocks that do not exist, and missing the _NE/_NW pairs leaves
+    every aerofoil on the far side of the ship facing the wrong way.
     """
     cat, out = catalogue(), {}
     for mid in cat:
+        other = None
         m = WING.match(mid)
         if m and m.group(3) in (None, "R"):           # top and bottom are not a left-right pair
             other = mid + "_R" if m.group(3) is None else mid[:-2]
+        elif CONNECTOR.match(mid):
+            other = (mid.replace("_L_", "_R_") if CONNECTOR.match(mid).group(1) == "L"
+                     else mid.replace("_R_", "_L_"))
         else:
-            m = CONNECTOR.match(mid)
-            if not m:
-                continue
-            other = mid.replace("_L_", "_R_") if m.group(1) == "L" else mid.replace("_R_", "_L_")
-        if other in cat:
+            other = _compass_twin(mid)
+        if other and other in cat:
             out[mid] = other
     return out
 

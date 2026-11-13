@@ -247,6 +247,30 @@ class ModuleScenes(unittest.TestCase):
         self.assertEqual([k for k, v in h.items() if h.get(v) != k], [],
                          "a pair that does not point back at itself")
 
+    def test_a_leaning_structural_part_is_handed_too(self):
+        """The compass suffix says which way a structural piece leans, and the points come in
+        mirrored pairs. Missing them put every aerofoil on the far side of a build facing the
+        wrong way, because the same _NE part was placed on both sides and an _NE part only ever
+        reaches out one way."""
+        h = self.cp.handed()
+        self.assertEqual(h.get("B_STR_D_NE"), "B_STR_D_NW")
+        self.assertEqual(h.get("B_STR_D_NW"), "B_STR_D_NE")
+        self.assertEqual(h.get("B_STR_K_NE3"), "B_STR_K_NW3", "the variant number comes along")
+        self.assertEqual(h.get("B_STR_AK_NETB"), "B_STR_AK_NWTB")
+        self.assertIsNone(h.get("B_STR_D_N"), "north faces front: it has no opposite side")
+
+    def test_the_family_letter_is_not_mistaken_for_a_direction(self):
+        """B_STR_E_E is family E facing east. Looking for "_E" anywhere in the id finds the
+        family first and mirrors the wrong half of the name."""
+        h = self.cp.handed()
+        self.assertEqual(h.get("B_STR_E_E"), "B_STR_E_W")
+        self.assertEqual(h.get("B_STR_E_W"), "B_STR_E_E")
+
+    def test_every_mirror_points_back_at_its_own_module(self):
+        h = self.cp.handed()
+        self.assertEqual([k for k, v in h.items() if h.get(v) != k], [])
+        self.assertGreater(len(h), 500, "wings, connectors and the leaning structural parts")
+
     def test_every_module_draws_at_most_one_part(self):
         """A module is one thing. Two scenes for one id means a side or a variant is being
         guessed at, and one of the two lands somewhere it does not belong."""
