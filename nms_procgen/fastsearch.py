@@ -156,10 +156,15 @@ class _Scanner:
         self.plan = _compile(root, self.want, self.avoid, gamedata)
         self.paint = bool(paintable) and ship == "sentinel"  # only interceptors have the choice
         self.overlay = list(overlay or ()) if ship == "sentinel" else []
-        self.filtering = bool(self.plan or look or self.paint or self.overlay)
+        self.colouring = bool(look or self.paint or self.overlay)
+        self.filtering = bool(self.plan or self.colouring)
 
-    def batch(self, rng, size):
+    def batch(self, rng, size, count=False):
         """Survivors of the vectorised pass, and how many got the parts but not the colour.
+
+        count=True returns how many survived instead of which ones. Measuring the odds of a
+        common design turns up millions a batch, and handing those back as a list of Python
+        ints costs several times the scan that found them.
 
         That second number is the one worth having when a search comes back empty: a design
         whose parts turn up often and never in the colour asked for is not a slow search,
@@ -172,15 +177,21 @@ class _Scanner:
         s0, s1 = v & M32, v >> S32
         with np.errstate(over="ignore"):
             if not self.filtering:  # nothing asked for: one seed a batch, as it always was
-                return [int(_seed_of(s0[0], s1[0]))], 0
+                return (1 if count else [int(_seed_of(s0[0], s1[0]))]), 0
             mask = _eval(self.plan, s0, s1) if self.plan else np.ones(size, bool)
+            # count the parts here, b4 any colour narrows it. taken after the look filter it
+            # was the count of seeds that had already passed the colour -- the answer itself,
+            # not the thing it needs comparing against -- and it was only taken at all when
+            # paint or overlay was asked for, so a pinned primary colour reported nothing.
+            near = int(mask.sum()) if self.colouring else 0
             if self.look:
                 mask &= textures.look_mask(s0, s1, self.look)
-            near = int(mask.sum()) if (self.paint or self.overlay) else 0
             if self.paint:
                 mask &= textures.paintable_mask(s0, s1)
             if self.overlay:
                 mask &= textures.overlay_mask(s0, s1, self.overlay)
+            if count:
+                return int(mask.sum()), near
             return [int(x) for x in _seed_of(s0[mask], s1[mask])], near
 
     def confirm(self, seed):
@@ -216,11 +227,13 @@ def _worker_init():
 
 
 def _worker_batch(args):
-    key, kw, rounds, size = args
+    """(seeds tested, the hits or how many, seeds with the parts). A measuring run asks for
+    the count; a search asks for the seeds themselves."""
+    key, kw, rounds, size, count = args
     scan = _W.get(key) or _W.setdefault(key, _Scanner(**kw))
-    hits, near = [], 0
+    hits, near = 0 if count else [], 0
     for _ in range(rounds):
-        got, n = scan.batch(_W["rng"], size)
+        got, n = scan.batch(_W["rng"], size, count)
         hits += got
         near += n
     return rounds * size, hits, near
@@ -270,7 +283,7 @@ def _one_process(scan, rng, batch, stats, t0, *rest):
 def _many_processes(kw, workers, batch, stats, t0, *rest):
     """Hand every worker two jobs at a time, so none of them ever sits waiting on us."""
     rounds = max(1, (1 << 23) // batch)  # ~8 M seeds a job: a fraction of a second of work
-    job = (repr(sorted(kw.items(), key=str)), kw, rounds, batch)
+    job = (repr(sorted(kw.items(), key=str)), kw, rounds, batch, False)
     pool, pending = _pool(workers), []
     try:
         while True:
@@ -320,6 +333,46 @@ def fast_search(ship="fighter", want=(), avoid=(), limit=5, max_seeds=10 ** 11, 
             yield s, generate(s, ship, gamedata)
             if found >= limit:
                 return
+
+
+def measure(ship="fighter", want=(), avoid=(), gamedata=None, look=None, paintable=False,
+            overlay=None, seeds=1 << 24, workers=0):
+    """Try the real filter on a sample of seeds: {tested, parts, hits, colouring}.
+
+    The designer used to quote odds as the product of each group's weights. Thats right for
+    parts and wrong the moment a colour is asked for, because parts and colour come off the
+    same random stream -- the overlay is 4 steps from the seed's state and the first part
+    groups are walking those same steps. Measured over 134 M seeds: 1 interceptor in 4 is
+    black, and still 1 in 4 with any cockpit pinned, but pin the Stringer top flap and it is
+    1 in 12 -- and every single black one of those has the Cylon cockpit. Ask for black with
+    either of the other 2 and the real odds are past 1 in 100 million while the product says
+    1 in 6. No arithmetic over the weights can see that, so this samples the thing itself.
+
+    The vectorised pass alone decides, not confirm(), so a count here can be a hair high; that
+    is 1 in 4 billion from the zero-low-half state and does not matter at these sizes.
+    """
+    kw = dict(ship=ship, want=tuple(want), avoid=tuple(avoid), gamedata=gamedata, look=look,
+              paintable=paintable, overlay=overlay)
+    scan = _Scanner(**kw)
+    out = {"tested": 0, "parts": 0, "hits": 0, "colouring": scan.colouring}
+    if not scan.filtering:
+        return out
+    n = default_workers() if workers == 0 else max(1, int(workers))
+    rounds = max(1, int(seeds) // (WORKER_BATCH * n))
+    if n > 1:
+        job = (repr(sorted(kw.items(), key=str)), kw, rounds, WORKER_BATCH, True)
+        done = _pool(n).map(_worker_batch, [job] * n)
+    else:
+        rng = np.random.default_rng()
+        got = [scan.batch(rng, WORKER_BATCH, True) for _ in range(rounds)]
+        done = [(rounds * WORKER_BATCH, sum(h for h, _ in got), sum(c for _, c in got))]
+    for tested, hits, near in done:
+        out["tested"] += tested
+        out["hits"] += hits
+        out["parts"] += near
+    if not scan.colouring:
+        out["parts"] = out["hits"]      # nothing to be near-missed by
+    return out
 
 
 def make_filter(ship, want=(), avoid=(), gamedata=None, look=None):

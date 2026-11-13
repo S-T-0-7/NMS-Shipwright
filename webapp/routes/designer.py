@@ -13,7 +13,7 @@ import zlib
 from flask import Blueprint, Response, jsonify, request
 
 from nms_procgen import model3d, ROOTS, explain, load_descriptor, ref_to_descriptor, textures
-from nms_procgen.fastsearch import fast_search
+from nms_procgen.fastsearch import fast_search, measure
 from nms_save import gamefiles, player, save, ships
 
 from webapp.common import (GameRunning, JOBS, NO_SEED_LOOK, ROOT, SHIP_LABELS, body, game_running,
@@ -398,6 +398,26 @@ def api_design_search():
                                            limit_seconds(b), look, str(b.get("colour", ""))),
                      daemon=True).start()
     return jsonify({"ok": True, "job": job_id})
+
+
+@bp.route("/api/design/odds", methods=["POST"])
+def api_design_odds():
+    """One in how many seeds really is this design, sampled instead of multiplied out.
+
+    Multiplying the groups' weights answers for parts and cannot answer for a colour, because
+    the 2 come off one random stream: black is 1 interceptor in 4 whatever cockpit you pin,
+    and 1 in 12 under a Stringer top flap, of which every single one is a Cylon cockpit. A
+    user searched 100 billion seeds for a Wide cockpit in black on a quote of 1 in 13,824.
+    """
+    b = body()
+    ship = b.get("ship", "sentinel")
+    if ship not in ROOTS:
+        raise ValueError(f"unknown ship type {ship!r}")
+    blind = ship in NO_SEED_LOOK
+    look = {} if blind else parse_look(b.get("look"))
+    colour = "" if blind else str(b.get("colour", ""))
+    return jsonify(measure(ship, list(b.get("want", [])), look=look,
+                           **COLOUR_CHOICES.get(colour, {})))
 
 
 @bp.route("/api/jobs/<job_id>")

@@ -903,6 +903,41 @@ class SearchingManySeedsAtOnce(unittest.TestCase):
         for s in hits:  # rare, but if one does turn up it has to be the colour asked for
             self.assertEqual(textures.overlay_of(s), "3", hex(s))
 
+    def test_the_parts_count_is_taken_before_the_colour_filter(self):
+        """It was taken after it, and only when paint or an overlay was asked for, so pinning
+        a palette colour reported that nothing at all had the parts. That count is the only
+        thing separating "too rare" from "the game will not do this", so it has to be there
+        whenever a colour is.
+        """
+        from nms_procgen import fastsearch
+        stats = {}
+        list(fastsearch.fast_search("sentinel", ["_TOPFLAP_A"], (), 1, max_seeds=1 << 20,
+                                    stats=stats, look={"primary": {0}}))
+        self.assertGreater(stats["wrong_colour"], 0, "the seeds with the parts went uncounted")
+
+    def test_measured_odds_see_what_the_weights_cannot(self):
+        """Parts and colour come off one random stream, so they are not independent and the
+        product of the groups' weights cannot price a colour. The weights call a Stinger flap
+        with the Wide cockpit 1 seed in 6 either way; in black it is past 1 in a hundred
+        million, and a user searched 100 billion seeds on the strength of the 6.
+        """
+        from nms_procgen import fastsearch
+        cylon = fastsearch.measure("sentinel", ["_PIT_A", "_TOPFLAP_A"], overlay=["3"], seeds=1 << 22)
+        wide = fastsearch.measure("sentinel", ["_PIT_B", "_TOPFLAP_A"], overlay=["3"], seeds=1 << 22)
+        self.assertGreater(cylon["hits"], 0, "black under the Cylon cockpit is 1 in 24")
+        self.assertLess(wide["hits"] * 1000, cylon["hits"], "the cockpit decides the colour")
+        # The parts are equally common either way: it is only the colour the cockpit rules out.
+        for m in (cylon, wide):
+            self.assertTrue(m["colouring"])
+            self.assertGreater(m["parts"], m["tested"] // 12)
+
+    def test_measuring_a_design_with_no_colour_counts_the_design(self):
+        from nms_procgen import fastsearch
+        m = fastsearch.measure("sentinel", ["_PIT_A", "_TOPFLAP_A"], seeds=1 << 22)
+        self.assertFalse(m["colouring"])
+        self.assertEqual(m["parts"], m["hits"])     # nothing to be passed over by
+        self.assertGreater(m["hits"], m["tested"] // 12)
+
 
 class OriginsAreChecked(unittest.TestCase):
     """A seed reversed to a star system is a lead until the generator agrees."""

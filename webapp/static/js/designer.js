@@ -71,10 +71,53 @@ const humanTime = secs => !isFinite(secs) ? 'a very long time'
   : secs < 90 ? `${Math.max(1, Math.round(secs))} s`
   : secs < 5400 ? `${Math.round(secs / 60)} min`
   : secs < 172800 ? `${(secs / 3600).toFixed(1)} h` : `${Math.round(secs / 86400)} days`;
+/* The weights answer for parts and are blind to the colour, so they go up first and the real
+   number replaces them: parts and colour come off one random stream, and some combinations all
+   but rule a colour out. Black is one interceptor in four under any cockpit you care to pin,
+   and one in twelve under a Stringer top flap -- every one of which has the Cylon cockpit. Ask
+   for either of the others in black and the honest answer is past 1 in 100 million, which is
+   why this stopped being arithmetic and started being a sample. */
+let oddsTimer, oddsTag = 0;
 function updateOdds() {
   const n = oddsOneIn(), secs = n / searchRate();
   $('#dOdds').textContent = n > 1 ? `About 1 in ${Math.round(n).toLocaleString()} seeds has these parts: `
     + `roughly ${humanTime(secs)} per result.${secs > 1800 ? ' Set some details back to "Any" to speed it up.' : ''}` : '';
+  clearTimeout(oddsTimer);
+  S.measured = null;                         // stale the moment the design changes
+  const mine = ++oddsTag;
+  oddsTimer = setTimeout(() => measureOdds(mine), 350);
+}
+/* Sampling uses the same workers the search does, so it waits its turn rather than fighting
+   a search that is already running. */
+async function measureOdds(tag) {
+  const want = wanted(), colour = $('#dColour').value;
+  if (S.job && !$('#dStop').disabled) return;
+  if (!want.length && !lookSet() && !colour) return;
+  let m;
+  try {
+    m = await post('/api/design/odds', {ship: $('#dShip').value, want, look: S.look, colour});
+  } catch (e) { return; }                    // leave the weights estimate standing
+  if (tag !== oddsTag) return;               // a later change already asked again
+  // the odds, or the bound when the sample had none: either beats the weights for the ETA
+  S.measured = m.hits ? m.tested / m.hits : m.tested;
+  $('#dOdds').textContent = oddsText(m);
+}
+function oddsText(m) {
+  const tested = Number(m.tested) || 0, bound = tested.toLocaleString();
+  if (!tested) return '';
+  if (m.hits) {
+    const n = tested / m.hits;
+    return `About 1 in ${Math.round(n).toLocaleString()} seeds is this (tried on ${bound}): `
+      + `roughly ${humanTime(n / searchRate())} per result.`;
+  }
+  // None in the sample. Say what that bounds the odds at and leave the call to the reader --
+  // these are rare, not impossible, and we have called rare impossible before.
+  if (m.colouring && m.parts > 0)
+    return `The parts are about 1 in ${Math.round(tested / m.parts).toLocaleString()} seeds, but none of `
+      + `${bound} had them in the colour you asked for, so together they are rarer than 1 in ${bound}. `
+      + 'Parts and colour both come from the seed, so some combinations all but rule a colour out: '
+      + 'change the part that drives it, or set the colour back to Any.';
+  return `None of ${bound} seeds tried is this, so it is rarer than 1 in ${bound}. Expect a long search.`;
 }
 $('#fBox').ontoggle = () => { if ($('#fBox').open) guard(loadFind); };
 /* native Save / Open dialogs in the app window; download / file picker in a browser */
@@ -285,14 +328,17 @@ function renderLookPicker() {
       `<label><input type="checkbox" data-mode="${m}" ${S.look.mode.includes(m) ? 'checked' : ''}> ${cap(m)}</label>`).join('')}
       <span class="muted">(none ticked = any)</span></div></div>`;
   box.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { S.lookOpen = S.lookOpen === b.dataset.open ? null : b.dataset.open; renderLookPicker(); });
-  box.querySelectorAll('[data-clear]').forEach(b => b.onclick = () => { S.look[b.dataset.clear] = []; renderLookPicker(); });
+  /* Every change of colour re-measures, because the colour is half of what makes a design
+     rare and used to be left out of the estimate entirely. */
+  box.querySelectorAll('[data-clear]').forEach(b => b.onclick = () => { S.look[b.dataset.clear] = []; renderLookPicker(); updateOdds(); });
   box.querySelectorAll('.lookgrid i').forEach(el => el.onclick = () => {
     const list = S.look[el.dataset.k], i = +el.dataset.i, at = list.indexOf(i);
     if (at >= 0) list.splice(at, 1); else list.push(i);
-    renderLookPicker();
+    renderLookPicker(); updateOdds();
   });
   box.querySelectorAll('[data-mode]').forEach(cb => cb.onchange = () => {
     S.look.mode = [...box.querySelectorAll('[data-mode]:checked')].map(x => x.dataset.mode);
+    updateOdds();
   });
 }
 const lookSet = () => S.look && ['primary', 'secondary', 'undercoat', 'mode'].some(k => S.look[k].length);
@@ -332,24 +378,31 @@ $('#dGo').onclick = () => guard(async () => {
   const want = wanted(); if (!want.length && !lookSet()) throw new Error('Pick at least one part or colour first.');
   const r = await post('/api/design/search', {ship: $('#dShip').value, want, n: +$('#dN').value,
     seconds: searchSeconds(), look: S.look, colour: $('#dColour').value});
-  S.job = {id: r.job, ship: $('#dShip').value, want: +$('#dN').value, oneIn: oddsOneIn()}; $('#dResults').innerHTML = '';
+  S.job = {id: r.job, ship: $('#dShip').value, want: +$('#dN').value,
+           oneIn: S.measured || oddsOneIn()}; $('#dResults').innerHTML = '';
   $('#dGo').disabled = $('#dFind').disabled = true; $('#dStop').disabled = false; pollJob();
 });
 $('#dStop').onclick = () => S.job && post(`/api/jobs/${S.job.id}/cancel`, {});
 $('#dLimit').onchange = () => { $('#dSecs').disabled = !$('#dLimit').checked; };
+$('#dColour').onchange = updateOdds;
 /* Seconds to allow, or null for "until I press Stop". */
 const searchSeconds = () => $('#dLimit').checked ? Math.max(60, (+$('#dSecs').value || 10) * 60) : null;
 
 /* How long the rest of the search should take, from the odds and the speed it is really running at. */
 function etaText(j, job) {
-  const tested = Number(j.tested) || 0, secs = Number(j.seconds) || 0;
+  const tested = Number(j.tested) || 0, secs = Number(j.seconds) || 0, got = j.results.length;
   if (secs > 2 && tested) localStorage.setItem('searchRate', Math.round(tested / secs));
-  if (!job.oneIn || job.oneIn <= 1 || secs < 2 || !tested) return '';
-  const rate = tested / secs, left = Math.max(0, (job.want || 1) - j.results.length);
+  // What the search has watched go past beats anything worked out beforehand. With nothing
+  // found yet it is still a bound: a design half a billion seeds have not produced is not
+  // one seed in six, and saying so is how the estimate came to look broken.
+  const oneIn = got ? tested / got : Math.max(job.oneIn || 1, tested);
+  if (oneIn <= 1 || secs < 2 || !tested) return '';
+  const rate = tested / secs, left = Math.max(0, (job.want || 1) - got);
   if (!left) return '';
   // Seeds are independent, so what has been tested already does not bring the next result closer.
-  return `${(rate / 1e6).toFixed(1)} M seeds/s, about ${humanTime(job.oneIn / rate)} per result`
-    + (left > 1 ? `, ${humanTime(left * job.oneIn / rate)} for all ${left} left` : '');
+  const hedge = got ? 'about ' : 'at least ';
+  return `${(rate / 1e6).toFixed(1)} M seeds/s, ${hedge}${humanTime(oneIn / rate)} per result`
+    + (left > 1 ? `, ${hedge}${humanTime(left * oneIn / rate)} for all ${left} left` : '');
 }
 /* An empty search means one of three things -- too rare, not left running long enough, or
    parts that all but rule the colour out -- and all three look the same in the status line.
@@ -363,7 +416,7 @@ function verdict(j, job) {
   // top flap over the narrow cockpit is black about one seed in twenty million, measured over
   // 250 million of them. So give the count and the bound it puts on the odds, and let the
   // reader decide -- calling it impossible on a sample this size is how we got it wrong before.
-  if (near > 50000 && $('#dColour').value)
+  if (near > 50000 && ($('#dColour').value || lookSet()))
     return ` -- ${near.toLocaleString()} seeds had these parts and none in the colour you asked for, `
       + `so with these parts that colour is rarer than 1 in ${near.toLocaleString()}. `
       + 'Change the part that drives the colour, or set the colour back to Any.';
