@@ -19,6 +19,16 @@ def a_save():
              "Position": [0.0, 0.0, 0.0], "Up": [0.0, 1.0, 0.0], "At": [0.0, 0.0, 1.0]}]}]}}}
 
 
+def has_game():
+    try:
+        from nms_save import gamepath
+        return bool(gamepath.require())
+    except Exception:
+        return False
+
+
+HAB = "MODELS/COMMON/SPACECRAFT/BIGGS/MODULES/PARTS/HAB_D_1X2_CORE.SCENE.MBIN"
+
 class Layouts(unittest.TestCase):
     def setUp(self):
         self.save = a_save()
@@ -105,19 +115,141 @@ class Halves(unittest.TestCase):
         self.assertEqual(corvette.halves(p), [p], "save6.hg does not exist yet")
 
 
-if __name__ == "__main__":
-    unittest.main()
+
+@unittest.skipUnless(has_game(), "needs No Man's Sky installed")
+class StructuralTurns(unittest.TestCase):
+    """20 structural variants a family, 5 models between them, and the variant names the turn.
+
+    Looking "_NE1" up as a part of its own found nothing, so 486 of 854 modules drew as
+    nothing at all -- a corvette built out of them came back full of holes. The turn is read
+    off the placement scenes, which name the side of every socket, and these check it against
+    both of the files that know: the socket positions and the mesh.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from nms_procgen import corvette_parts, model3d
+        cls.cp, cls.m = corvette_parts, model3d
+
+    @staticmethod
+    def _ry(degrees):
+        import math
+        import numpy as np
+        t = math.radians(degrees)
+        return np.array([[math.cos(t), 0, math.sin(t)], [0, 1, 0], [-math.sin(t), 0, math.cos(t)]])
+
+    def _socket_points(self, module_id):
+        import numpy as np
+        return sorted(tuple(np.round(np.array(m).reshape(4, 4).T[:3, 3], 3) + 0.0)
+                      for _, _, m in self.cp.snaps_for(module_id))
+
+    def test_a_variant_is_its_base_shape_turned_by_exactly_that_much(self):
+        """The strong one. Turn the base variant's sockets by what turn_for says and every
+        socket has to land on one of the variant's own, to 3 decimal places -- position and
+        all, not just which side it is on. 648 variants, no exceptions."""
+        import numpy as np
+        fams = {}
+        for mid in self.cp.catalogue():
+            family, variant = self.cp._split(mid)
+            if family and family.startswith("STR"):
+                fams.setdefault(family, []).append(variant)
+        checked, wrong = 0, []
+        for family, variants in sorted(fams.items()):
+            for variant in variants:
+                mid = "B_%s_%s" % (family, variant)
+                shape, _ = self.cp.str_shape(variant)
+                base = "B_%s_%s" % (family, self.cp.str_variant(shape, 0))
+                here, there = self._socket_points(base), self._socket_points(mid)
+                if not here or not there:
+                    continue
+                turned = sorted(tuple(np.round(p, 3) + 0.0)
+                                for p in np.array(here) @ self._ry(self.cp.turn_for(mid)).T)
+                checked += 1
+                if turned != there:
+                    wrong.append(mid)
+        self.assertGreater(checked, 600, "most of the catalogue is structural")
+        self.assertEqual(wrong, [])
+
+    def test_the_turned_mesh_reaches_the_faces_the_game_joins_it_by(self):
+        """The independent one: the sockets came from the placement scene, this is the model.
+
+        A wedge that takes a neighbour on its E and N has to be solid against x=+3 and z=-3
+        and cut away from the other two. The 2 faces are different sizes -- 7.2 across against
+        5.2 -- so it is which faces the mesh reaches at all that has to line up.
+        """
+        import numpy as np
+        faces = {"E": (0, 3.0), "W": (0, -3.0), "N": (2, -3.0), "S": (2, 3.0)}
+        wrong = []
+        for family in ("STR_A", "STR_B", "STR_D", "STR_K", "STR_AE"):
+            for variant in ("N", "E", "S", "W", "NE", "NE1", "NE2", "NE3",
+                            "NW", "NW1", "NW2", "NW3"):
+                mid = "B_%s_%s" % (family, variant)
+                drawn = self.cp.draw_for(mid)
+                if mid not in self.cp.catalogue() or not drawn:
+                    continue
+                model = self.m.corvette_model([(s, (0, 0, 0), (0, 1, 0), (0, 0, 1), turn)
+                                               for s, turn in drawn])
+                p = np.concatenate([g[0] for g in model["groups"].values()])
+                reached = set()
+                for name, (axis, plane) in faces.items():
+                    near = p[np.abs(p[:, axis] - plane) < 0.15]
+                    if len(near) > 2 and np.ptp(near[:, 2 if axis == 0 else 0]) > 0.05:
+                        reached.add(name)
+                joins = {k[-1] for k, io, _ in self.cp.snaps_for(mid)
+                         if io == "in" and k[-1] in "NESW"}
+                if reached != joins:
+                    wrong.append((mid, sorted(joins), sorted(reached)))
+        self.assertEqual(wrong, [])
+
+    def test_the_shape_and_the_turn_name_the_variant_back(self):
+        for variant in ("N", "E", "S", "W", "NE", "NE1", "NE2", "NE3",
+                        "NETB", "NETB1", "NWTB2", "NW3"):
+            shape, quarters = self.cp.str_shape(variant)
+            self.assertEqual(self.cp.str_variant(shape, quarters), variant)
+
+    def test_ne_is_a_shape_and_not_a_compass_letter(self):
+        """"NE" in "NESW" is true, because that is a substring test. Taken as a cardinal it
+        made every plain wedge draw the flat block and mirror to the wrong module."""
+        self.assertEqual(self.cp.str_shape("NE"), ("NE", 0))
+        self.assertEqual(self.cp.str_shape("N"), ("N", 0))
+        self.assertTrue(self.cp.scenes_for("B_STR_D_NE")[0].upper().endswith("NE_3.SCENE.MBIN"))
+
+    def test_the_z_airlocks_are_the_plain_ones_facing_the_other_way(self):
+        """B_ALK_Z_A carries B_ALK_A's sockets with in and out swapped, which is a half turn.
+
+        C is the odd one: the plain B_ALK_C is a 4-way hub with 20 sockets while B_ALK_Z_C is
+        the same NS hatch as the others, so its half turn follows the family rather than being
+        measured off the pair.
+        """
+        import numpy as np
+        for letter in "ABD":
+            plain, zed = "B_ALK_%s" % letter, "B_ALK_Z_%s" % letter
+            turned = sorted(tuple(np.round(p, 3) + 0.0) for p in
+                            np.array(self._socket_points(plain)) @ self._ry(180).T)
+            self.assertEqual(turned, self._socket_points(zed))
+            self.assertEqual(self.cp.turn_for(zed), 180.0)
+            self.assertEqual(self.cp.scenes_for(zed), self.cp.scenes_for(plain))
+        self.assertEqual(self.cp.turn_for("B_ALK_Z_C"), 180.0)
+
+    def test_everything_but_the_interior_now_draws(self):
+        """What is left is the pieces whose part the row genuinely does not determine: a wall,
+        a door or a stairway is chosen by the hab it stands in and the way it runs, and the
+        row records neither."""
+        left = sorted(m for m in self.cp.catalogue() if not self.cp.scenes_for(m))
+        self.assertTrue(all(m.startswith(("B_WALL_", "B_DOOR", "B_STAIRS")) for m in left), left)
+        drawn = sum(1 for m in self.cp.catalogue() if self.cp.scenes_for(m))
+        self.assertGreater(drawn, 800, "was 338 while the turned variants resolved to nothing")
+
+    def test_a_turn_rides_along_with_the_placement(self):
+        """corvette_model takes the turn as a 5th item, and a module without one is untouched."""
+        plain = self.m.corvette_model([(HAB, [0, 0, 0], [0, 1, 0], [0, 0, 1])])["bounds"]
+        same = self.m.corvette_model([(HAB, [0, 0, 0], [0, 1, 0], [0, 0, 1], 0)])["bounds"]
+        turned = self.m.corvette_model([(HAB, [0, 0, 0], [0, 1, 0], [0, 0, 1], -90)])["bounds"]
+        self.assertEqual(plain, same)
+        self.assertAlmostEqual(turned[1][0], plain[1][2], places=3, msg="x and z swap")
+        self.assertAlmostEqual(turned[1][1], plain[1][1], places=3, msg="height is untouched")
 
 
-def has_game():
-    try:
-        from nms_save import gamepath
-        return bool(gamepath.require())
-    except Exception:
-        return False
-
-
-HAB = "MODELS/COMMON/SPACECRAFT/BIGGS/MODULES/PARTS/HAB_D_1X2_CORE.SCENE.MBIN"
 
 
 @unittest.skipUnless(has_game(), "needs No Man's Sky installed")
@@ -255,9 +387,23 @@ class ModuleScenes(unittest.TestCase):
         h = self.cp.handed()
         self.assertEqual(h.get("B_STR_D_NE"), "B_STR_D_NW")
         self.assertEqual(h.get("B_STR_D_NW"), "B_STR_D_NE")
-        self.assertEqual(h.get("B_STR_K_NE3"), "B_STR_K_NW3", "the variant number comes along")
         self.assertEqual(h.get("B_STR_AK_NETB"), "B_STR_AK_NWTB")
         self.assertIsNone(h.get("B_STR_D_N"), "north faces front: it has no opposite side")
+
+    def test_a_turned_wedge_mirrors_to_the_opposite_turn_not_the_same_number(self):
+        """Reflecting turns a piece the other way, so the numbers do not pair off straight.
+
+        This test used to ask for B_STR_K_NE3 -> B_STR_K_NW3 and got it, which is wrong and
+        was wrong in a way nothing caught: a mirrored wedge came out at the right handedness
+        and the wrong angle. The placement scenes settle it -- B_STR_K_NE3 attaches by its E
+        and S faces, and the module that attaches by the reflection of those, W and S, is
+        B_STR_K_NW1.
+        """
+        h = self.cp.handed()
+        for a, b in (("NE", "NW"), ("NE1", "NW3"), ("NE2", "NW2"), ("NE3", "NW1")):
+            self.assertEqual(h.get("B_STR_K_" + a), "B_STR_K_" + b)
+            self.assertEqual(h.get("B_STR_K_" + b), "B_STR_K_" + a)
+        self.assertEqual(h.get("B_STR_AK_NETB1"), "B_STR_AK_NWTB3")
 
     def test_the_family_letter_is_not_mistaken_for_a_direction(self):
         """B_STR_E_E is family E facing east. Looking for "_E" anywhere in the id finds the
@@ -299,3 +445,6 @@ class ModuleScenes(unittest.TestCase):
         hab = self.cp.catalogue()["B_HAB_D"]
         self.assertFalse(hab["rotatable"], "the menu refuses to turn a hab")
         self.assertTrue(hab["placement"].endswith(".SCENE.MBIN"))
+
+if __name__ == "__main__":
+    unittest.main()

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import functools
 import json
+import math
 import os
 import re
 import struct
@@ -721,6 +722,15 @@ def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
             "posable": bool(flown)}  # offers a landed/flying toggle
 
 
+def _yaw(degrees) -> np.ndarray:
+    """A turn about the module's own vertical, which is what the structural variants ask for."""
+    t = math.radians(degrees)
+    m = np.eye(4)
+    m[0, 0] = m[2, 2] = math.cos(t)
+    m[0, 2], m[2, 0] = math.sin(t), -math.sin(t)
+    return m
+
+
 def _placement(position, up, at) -> np.ndarray:
     """A module's own frame, from the Up and At the save stores for it."""
     up, at = np.asarray(up, np.float64), np.asarray(at, np.float64)
@@ -733,11 +743,16 @@ def _placement(position, up, at) -> np.ndarray:
 def corvette_model(modules) -> dict:
     """{"groups", "bounds"} for a built corvette, shaped like ship_model's.
 
-    `modules` is (scene, position, up, at) per module, as the save stores them. A module goes
-    exactly where its transform puts it: nothing is snapped, and a module whose scene is
-    missing is left out rather than taking the rest of the ship down with it.
+    `modules` is (scene, position, up, at) per module as the save stores them, and optionally a
+    5th item: degrees to turn the model about the module's own vertical before placing it. The
+    structural pieces need it -- 5 models cover their 20 variants and the variant names the
+    turn. A module goes exactly where its transform puts it: nothing is snapped, and a module
+    whose scene is missing is left out rather than taking the rest of the ship down with it.
     """
-    placed = [(scene, _placement(pos, up, at)) for scene, pos, up, at in modules]
+    placed = []
+    for scene, pos, up, at, *turn in modules:
+        m = _placement(pos, up, at)
+        placed.append((scene, m @ _yaw(turn[0]) if turn and turn[0] else m))
     scenes = {}
     for scene, _ in placed:
         if scene not in scenes:

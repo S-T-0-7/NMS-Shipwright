@@ -36,6 +36,7 @@ PARTS = {
     "HAB": ["_BIGGS_HAB_1X2_CORE"],
     "HAB1": ["_BIGGS_HAB_1X1_CORE"],
     "HOP": ["_BIGGS_HOP1X2_"],
+    "LAN": ["_BIGGS_LAN_{v}_1X2_CORE"],
     "LND": ["_BIGGS_LND1X1"],
     "MAG": ["_BIGGS_MAG{v}"],
     "SHL": ["_BIGGS_EXTSHL1X1{v}"],
@@ -122,6 +123,66 @@ def _split(module_id: str):
     return "_".join(bits[1:-1]), bits[-1]
 
 
+#  The parts table models 5 structural shapes and the game turns them: a flat block, 2 wedges
+#  that are each other's reflection, and the 2 top-bottom pieces. 20 variants a family, 5
+#  shapes, 4 quarter turns apiece -- and the variant spells the turn 2 ways. The cardinal group
+#  names the side the piece attaches by, so N becomes E, S and W; every other group counts 1, 2,
+#  3 after its own name, and counts the other way round.
+#
+#  Read off the placement scenes, which name the side of every socket: B_STR_A_N takes a
+#  neighbour on its N, E and W, B_STR_A_E on its E, N and S -- the same sockets a quarter turn
+#  round. The wedges go the other way: B_STR_D_NE attaches by {E,N} and B_STR_D_NE3 by {E,S},
+#  1 quarter turn, not 3. The TB groups carry no sockets to read, so they are taken to count
+#  like the wedges they are named after.
+#
+#  486 modules drew as nothing while "_NE1" and "_E" were looked up as parts in their own
+#  right, which on a corvette built out of them is a ship full of holes.
+STR_SHAPES = ("NWTB", "NETB", "NW", "NE", "N")
+CARDINALS = "NESW"       # a quarter turn of -90 about the vertical takes each to the next
+
+
+def str_shape(variant: str):
+    """(the shape the parts table models, quarter turns of -90) for a structural variant."""
+    if len(variant) == 1 and variant in CARDINALS:   # "in" on a string is a substring test,
+        return "N", CARDINALS.index(variant)         # and "NE" is a substring of "NESW"
+    base = variant.rstrip("0123456789")
+    if base not in STR_SHAPES:
+        return None, 0
+    turn = variant[len(base):]
+    return base, (4 - int(turn)) % 4 if turn else 0
+
+
+def str_variant(shape: str, quarters: int) -> str:
+    """The variant naming this shape at this turn -- str_shape backwards."""
+    quarters %= 4
+    if shape == "N":
+        return CARDINALS[quarters]
+    return shape if not quarters else "%s%d" % (shape, 4 - quarters)
+
+
+#  A family that is another family turned round, with no part of its own. B_ALK_Z_A carries
+#  B_ALK_A's sockets with in and out swapped -- RoomN out becomes RoomN in, RoomS in becomes
+#  RoomS out -- which is the same hatch facing the other way.
+TURNED_FAMILY = {"ALK_Z": ("ALK", 180.0)}
+
+
+def turn_for(module_id: str) -> float:
+    """Degrees about a module's own vertical that its model needs before being placed.
+
+    Zero for most things. The structural pieces share 5 models between 20 variants and the
+    variant names the turn; the Z airlocks are the plain ones the other way round.
+    """
+    family, variant = _split(module_id.lstrip("^"))
+    if not family:
+        return 0.0
+    if family in TURNED_FAMILY:
+        return TURNED_FAMILY[family][1]
+    if not family.startswith("STR_"):
+        return 0.0
+    shape, quarters = str_shape(variant)
+    return -90.0 * quarters if shape else 0.0
+
+
 def _part_ids(family: str, variant: str) -> list[str]:
     """The parts one module is built from.
 
@@ -129,36 +190,45 @@ def _part_ids(family: str, variant: str) -> list[str]:
     code and the piece in the variant instead, so they are worked out rather than listed.
     Handed parts do not come through here at all; see _sided.
     """
+    family = TURNED_FAMILY.get(family, (family,))[0]
     if family.startswith("STR_"):
-        return ["_BIGGS_EXTSTR_1X1_" + variant]
+        return ["_BIGGS_EXTSTR_1X1_" + (str_shape(variant)[0] or variant)]
     if family.startswith("DECO_"):
         return ["_BIGGS_EXTDECORATION" + ("" if variant == "0" else variant)]
-    return [t.format(v=variant) for t in PARTS.get(family, [])]
+    #  A family can carry a tail the table does not name: the module is B_GEN_6_1, the family
+    #  reads GEN_6, and the part is _BIGGS_GEN1X1_6_1 -- the tail belongs to the variant, not
+    #  the family. So the longest family the table does know wins and the rest moves across.
+    key, tail = family, ""
+    while key and key not in PARTS:
+        key, _, segment = key.rpartition("_")
+        tail = segment if not tail else "%s_%s" % (segment, tail)
+    if not key:
+        return []
+    return [t.format(v=variant if not tail else "%s_%s" % (tail, variant)) for t in PARTS[key]]
 
 
-#  A structural piece that leans to one side carries its direction in the suffix, and the
-#  compass points come in mirrored pairs: _NE against _NW, and _NETB against _NWTB, with any
-#  trailing number kept. Measured on six families, every NE/NW pair is an exact reflection in X
-#  -- B_STR_D_NE spans x 0..6 and B_STR_D_NW spans -6..0, same in y and z.
-#
-#  _E and _W are named by the same scheme and are almost certainly a pair too, but neither of
-#  them resolves to a model, so that one is inferred rather than measured.
-COMPASS = [("_NETB", "_NWTB"), ("_NE", "_NW"), ("_E", "_W")]
+#  Reflecting a structural piece swaps its shape for the mirror shape and turns it the other
+#  way: mirror(R(t)) is mirror-shape at R(-t). So the numbers do not pair off against each
+#  other. B_STR_D_NE attaches by {E,N} and reflects to {N,W}, which is B_STR_D_NW; but
+#  B_STR_D_NE1 attaches by {N,W}, reflects to {N,E}, and that is B_STR_D_NW3, not NW1. Pairing
+#  NE1 with NW1 left half of every mirrored wedge at the wrong angle.
+MIRROR_SHAPE = {"N": "N", "NE": "NW", "NW": "NE", "NETB": "NWTB", "NWTB": "NETB"}
 
 
 def _compass_twin(mid: str):
-    """The opposite-handed structural module, keeping any trailing variant number.
+    """This module's reflection in X, or None.
 
-    The direction is the end of the id, and only the end: B_STR_E_E is family E facing east,
-    and looking for "_E" anywhere in it finds the family letter first.
+    A piece whose reflection is itself -- the flat block facing fore or aft -- is left out: the
+    answer there is the module you already hold.
     """
-    base = mid.rstrip("0123456789")
-    number = mid[len(base):]
-    for a, b in COMPASS:
-        for here, there in ((a, b), (b, a)):
-            if base.endswith(here):
-                return base[:-len(here)] + there + number
-    return None
+    family, variant = _split(mid)
+    if not family or not family.startswith("STR_"):
+        return None
+    shape, quarters = str_shape(variant)
+    if not shape:
+        return None
+    twin = "B_%s_%s" % (family, str_variant(MIRROR_SHAPE[shape], -quarters))
+    return None if twin == mid else twin
 
 
 @functools.lru_cache(maxsize=1)
@@ -226,3 +296,12 @@ def scenes_for(module_id: str) -> list[str]:
         if model:
             out.append(model)
     return out
+
+
+def draw_for(module_id: str) -> list[tuple]:
+    """(scene, degrees about the module's own vertical) per scene that draws one module.
+
+    The turn is how 5 modelled structural shapes cover 20 variants; everything else is 0.
+    """
+    turn = turn_for(module_id)
+    return [(scene, turn) for scene in scenes_for(module_id)]

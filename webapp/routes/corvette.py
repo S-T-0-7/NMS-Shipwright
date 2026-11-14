@@ -28,9 +28,9 @@ def _turned(obj):
 
 
 def _placed(entry):
-    """(scene, position, up, at) per scene to draw, which is what corvette_model wants."""
-    return [(scene, o["Position"], o["Up"], o["At"]) for o in corvette.modules(entry)
-            for scene in corvette_parts.scenes_for(o["ObjectID"])]
+    """(scene, position, up, at, turn) per scene to draw, which is what corvette_model wants."""
+    return [(scene, o["Position"], o["Up"], o["At"], turn) for o in corvette.modules(entry)
+            for scene, turn in corvette_parts.draw_for(o["ObjectID"])]
 
 
 @bp.route("/api/corvettes")
@@ -106,10 +106,11 @@ def api_corvette_palette():
 @functools.lru_cache(maxsize=64)
 def _part_model(part):
     """One module drawn at the origin, for the builder to place copies of."""
-    scenes = corvette_parts.scenes_for(part)
-    if not scenes:
+    drawn = corvette_parts.draw_for(part)
+    if not drawn:
         raise ValueError("nothing draws %s" % part)
-    return model3d.pack(model3d.corvette_model([(s, (0, 0, 0), (0, 1, 0), (0, 0, 1)) for s in scenes]))
+    return model3d.pack(model3d.corvette_model(
+        [(s, (0, 0, 0), (0, 1, 0), (0, 0, 1), turn) for s, turn in drawn]))
 
 
 @bp.route("/api/corvette/mirror")
