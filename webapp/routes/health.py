@@ -41,8 +41,8 @@ def _gen_addresses():
     a = resolve()
     loose = a.get("drift") or {}
     note = ("" if not loose else
-            " -- found by a loose match after a game patch (%s); worth re-checking a generated "
-            "ship against the game" % ", ".join("%s differs in %d bytes" % kv for kv in sorted(loose.items())))
+            " -- not matched the usual way, probably after a game patch (%s); worth re-checking a "
+            "generated ship against the game" % ", ".join("%s: %s" % kv for kv in sorted(loose.items())))
     return "build %s, %d addresses%s" % (a["build"][0], len(a), note)
 
 

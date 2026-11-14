@@ -54,13 +54,21 @@ class AddressError(RuntimeError):
 
 
 def _build(img):
-    """exe stamp + size, for error messages."""
-    return "exe %d/%d" % img.build
+    """Which NMS.exe this was, for error messages.
+
+    A user reported "0 signature matches" on Steam 7.14 while the same build resolved cleanly
+    here, and the one line that would have told us which binary they had was the one they
+    trimmed out of the report. So the path goes in too: a 2nd install, a leftover folder or a
+    modded exe all look identical in a stamp and are obvious in a path.
+    """
+    where = " at %s" % img.path if img.path else ""
+    return "exe %d/%d%s" % (img.build + (where,))
 
 
 class _Image:
     def __init__(self, path):
         import pefile
+        self.path = path
         with open(path, "rb") as f:
             self.data = f.read()
         pe = pefile.PE(data=self.data, fast_load=True)
@@ -162,6 +170,19 @@ def _locate(img, name):
     return None, ("no match, nearest differs in %d bytes" % near[0][1] if near else "no match")
 
 
+def _gen_from_call_site(img):
+    """gen's address from the one place that calls it, without reading its prologue at all.
+
+    GEN_CALL is a shape rather than a byte pattern -- the 2 leas of the ship's own buffers,
+    the lea of the stack slot, then the call -- and the exe contains exactly 1 of it. A patch
+    that recompiles the generator rewrites its first instructions and leaves that shape alone,
+    which is the difference between "0 signature matches" and a tool that still works. The
+    offsets read off the same match are checked against it afterwards either way.
+    """
+    hits = {img.rip_target(img.base + img.tva + m.end() - 1, 1, 5) for m in GEN_CALL.finditer(img.text)}
+    return hits.pop() if len(hits) == 1 else None
+
+
 def _stop(img, addrs, name):
     fn, off, expect = STOPS[name]
     base, want = addrs[fn], bytes.fromhex(expect)
@@ -193,12 +214,15 @@ def _find_all(path):
     a, drift, failed = {}, {}, []
     for k in ("gen", "info", "planet_sentinels", "skip_a", "skip_b", "palette_table"):
         va, why = _locate(img, k)
+        if va is None and k == "gen":
+            va = _gen_from_call_site(img)
+            why = "found by its call site, not its own code" if va else why
         if va is None:
             failed.append("%s: %s" % (k, why))
         else:
             a[k] = va
-            if why:
-                drift[k] = why
+            if why:   # matched, but not the way it is supposed to match. say how.
+                drift[k] = why if isinstance(why, str) else "%d bytes differ" % why
     if failed:
         # which ones DID match is the whole diagnosis, so say so. a game patch recompiles a func
         # or 2 and the rest stay put; a GOG/MS Store exe is a diffrent compile and nothing

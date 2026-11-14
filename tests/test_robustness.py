@@ -205,6 +205,18 @@ class GamePatchDrift(unittest.TestCase):
         self.assertEqual(again, va)
         self.assertEqual(drift, 3)
 
+    def test_the_generator_is_found_by_its_call_site_when_its_own_code_changes(self):
+        """The one locator that does not read the function it is looking for.
+
+        Exactly 1 place in the exe calls the generator, and the call is a shape -- 2 leas of
+        the ship's buffers, a lea of the stack slot, the call -- not a byte pattern, so a
+        prologue recompiled past all recognition leaves it standing.
+        """
+        va, _ = self.E._locate(self.img, "gen")
+        self._damage(va, 40)
+        self.assertIsNone(self.E._locate(self.img, "gen")[0], "40 changed bytes should not match")
+        self.assertEqual(self.E._gen_from_call_site(self.img), va)
+
     def test_a_rewritten_prologue_is_refused_rather_than_guessed(self):
         va, _ = self.E._locate(self.img, "gen")
         self._damage(va, 20)
