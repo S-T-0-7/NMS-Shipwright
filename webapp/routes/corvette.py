@@ -93,7 +93,7 @@ def api_corvette_palette():
     named = items.catalogue()
     groups = {}
     for part, row in corvette_parts.catalogue().items():
-        if not row["in_menu"] or not corvette_parts.scenes_for(part):
+        if not row["in_menu"] or not corvette_parts.drawable(part):
             continue
         label = (named.get(part) or {}).get("name") or part
         groups.setdefault(_group(corvette_parts._split(part)[0] or part), []).append(

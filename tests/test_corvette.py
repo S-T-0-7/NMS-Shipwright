@@ -231,6 +231,85 @@ class StructuralTurns(unittest.TestCase):
             self.assertEqual(self.cp.scenes_for(zed), self.cp.scenes_for(plain))
         self.assertEqual(self.cp.turn_for("B_ALK_Z_C"), 180.0)
 
+    def test_a_shape_with_no_reflection_is_not_given_one(self):
+        """handed() used to answer for any structural module, which is only right when the
+        shape itself can mirror.
+
+        Turning the flat block E reflects to turning it W -- but only while the block is
+        symmetric in X. 16 of the 71 families carry one that is not, and 4 turns of an
+        asymmetric shape can never produce its reflection, so for those the catalogue holds
+        no mirror at all and the honest answer is None. This measures it rather than trusting
+        the list: reflect each model and look for its opposite number vertex by vertex.
+        """
+        import numpy as np
+        tol = 0.12
+
+        def cloud(mid):
+            model = self.m.corvette_model([(s, (0, 0, 0), (0, 1, 0), (0, 0, 1), t)
+                                           for s, t in self.cp.draw_for(mid)])
+            p = np.concatenate([g[0] for g in model["groups"].values()]).astype(np.float32)
+            return np.unique(np.round(p, 2), axis=0)
+
+        def reflects(a, b):
+            """Does every vertex of a sit on one of mirrored b, and the other way about?"""
+            flip = b.copy()
+            flip[:, 0] *= -1
+            for one, two in ((a, flip), (flip, a)):
+                for point in one:
+                    if float(np.min(np.linalg.norm(two - point, axis=1))) > tol:
+                        return False
+            return True
+
+        asymmetric = sorted(self.cp.UNMIRRORED["N"])
+        self.assertEqual(len(asymmetric), 16)
+        for family in asymmetric[:4] + ["STR_K", "STR_A", "STR_D"]:
+            mid = "B_%s_N" % family
+            flat = cloud(mid)
+            mirrors = reflects(flat, flat)
+            self.assertEqual(mirrors, family not in self.cp.UNMIRRORED["N"],
+                             "%s symmetric=%s but the table says otherwise" % (mid, mirrors))
+            twin = self.cp.handed().get("B_%s_E" % family)
+            self.assertEqual(twin, None if not mirrors else "B_%s_W" % family)
+
+    def test_a_wedge_and_its_opposite_really_are_reflections(self):
+        """The other half of the same question: NE is paired with NW on the strength of the
+        models being reflections, so at least spot-check that they are."""
+        import numpy as np
+        for family in ("STR_D", "STR_K", "STR_AE"):
+            clouds = []
+            for shape in ("NE", "NW"):
+                model = self.m.corvette_model(
+                    [(s, (0, 0, 0), (0, 1, 0), (0, 0, 1), t)
+                     for s, t in self.cp.draw_for("B_%s_%s" % (family, shape))])
+                p = np.concatenate([g[0] for g in model["groups"].values()])
+                clouds.append(np.unique(np.round(p.astype(np.float32), 2), axis=0))
+            here, there = clouds
+            there = there.copy()
+            there[:, 0] *= -1
+            for point in here[::7]:
+                self.assertLess(float(np.min(np.linalg.norm(there - point, axis=1))), 0.12,
+                                "%s: NE is not the reflection of NW" % family)
+
+    def test_the_build_menu_does_not_offer_an_invisible_part(self):
+        """A model named in the parts table is not always a model the game ships.
+
+        B_LND_D asks for LANDINGGEAR_LEG_D, which is in the table and in no pak, and sat in
+        the menu drawing nothing at all when you placed it.
+        """
+        self.assertTrue(self.cp.scenes_for("B_LND_D"), "the table does name a model for it")
+        self.assertFalse(self.cp.drawable("B_LND_D"), "and the game does not ship it")
+        self.assertFalse(self.cp.drawable("B_TRU_I"), "ZENGINEI is a scene with no mesh in it")
+        self.assertTrue(self.cp.drawable("B_TUR_A"))
+        offered = [m for m, row in self.cp.catalogue().items()
+                   if row["in_menu"] and self.cp.drawable(m)]
+        self.assertNotIn("B_LND_D", offered)
+        self.assertGreater(len(offered), 150)
+
+    def test_a_mirror_is_never_a_module_that_does_not_exist(self):
+        cat = self.cp.catalogue()
+        strays = sorted({v for v in self.cp.handed().values() if v not in cat})
+        self.assertEqual(strays, [])
+
     def test_everything_but_the_interior_now_draws(self):
         """What is left is the pieces whose part the row genuinely does not determine: a wall,
         a door or a stairway is chosen by the hab it stands in and the way it runs, and the

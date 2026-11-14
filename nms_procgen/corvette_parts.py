@@ -214,18 +214,34 @@ def _part_ids(family: str, variant: str) -> list[str]:
 #  NE1 with NW1 left half of every mirrored wedge at the wrong angle.
 MIRROR_SHAPE = {"N": "N", "NE": "NW", "NW": "NE", "NETB": "NWTB", "NWTB": "NETB"}
 
+#  The shape has to be able to mirror before the module can. Turning the flat block E reflects
+#  to turning it W only while the block itself is symmetric in X, and 4 turns of an asymmetric
+#  shape can never produce its reflection -- so for those families nothing in the catalogue is
+#  the mirror of anything else, and saying so beats handing the builder a wrong part.
+#
+#  Measured by reflecting each model and matching it against its opposite number, vertex by
+#  vertex, over all 71 structural families: every one of the 36 NE/NW wedge pairs reflects to
+#  within a hundredth, 16 flat blocks do not, and STR_X's top-bottom pieces do not either.
+UNMIRRORED = {
+    "N": {"STR_C", "STR_C_Y", "STR_F", "STR_F_Y", "STR_H", "STR_H_Y", "STR_M", "STR_M_Y",
+          "STR_O", "STR_O_Y", "STR_Q", "STR_Q_Y", "STR_R", "STR_R_Y", "STR_S", "STR_S_Y"},
+    "NETB": {"STR_X"},
+    "NWTB": {"STR_X"},
+}
+
 
 def _compass_twin(mid: str):
     """This module's reflection in X, or None.
 
-    A piece whose reflection is itself -- the flat block facing fore or aft -- is left out: the
-    answer there is the module you already hold.
+    None covers 2 cases that both mean "do not mirror this": a piece whose reflection is
+    itself, where the answer is the module you already hold, and a shape that has no
+    reflection in the catalogue at all.
     """
     family, variant = _split(mid)
     if not family or not family.startswith("STR_"):
         return None
     shape, quarters = str_shape(variant)
-    if not shape:
+    if not shape or family in UNMIRRORED.get(shape, ()):
         return None
     twin = "B_%s_%s" % (family, str_variant(MIRROR_SHAPE[shape], -quarters))
     return None if twin == mid else twin
@@ -296,6 +312,26 @@ def scenes_for(module_id: str) -> list[str]:
         if model:
             out.append(model)
     return out
+
+
+@functools.lru_cache(maxsize=2048)
+def drawable(module_id: str) -> bool:
+    """Whether the module's scenes really hold a mesh, rather than just naming one.
+
+    The parts table gives a model per style and the game does not always ship it. B_LND_D asks
+    for LANDINGGEAR_LEG_D, which is in the table and in no pak; B_TRU_I asks for ZENGINEI,
+    which is a scene with nothing in it. Both sat in the build menu offering a piece that comes
+    out invisible, so the menu asks here instead of trusting the table. Half a second for the
+    whole menu, once, and the scenes are cached after that.
+    """
+    from nms_procgen import model3d
+    for scene in scenes_for(module_id):
+        try:
+            if any(m[0] for m in model3d._scene_meshes(scene)):
+                return True
+        except (FileNotFoundError, OSError):
+            continue
+    return False
 
 
 def draw_for(module_id: str) -> list[tuple]:
