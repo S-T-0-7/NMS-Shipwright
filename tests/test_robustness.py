@@ -368,21 +368,80 @@ class ShipModels(unittest.TestCase):
         self.assertEqual(self.m.LOD_SUFFIX.search("WingsALOD0").group(1), "0")
 
     def test_every_ship_that_deploys_can_be_flown(self):
-        """Not just the Sentinel: each type with a gear or wing anim must offer a flying pose."""
-        from nms_procgen import anim
-        for ship in ("sentinel", "fighter", "explorer", "shuttle"):
+        """Every type that sets down must offer a flying pose -- the hauler, the bio ship and the
+        sail ship included, all three of which this test used to assert could not."""
+        for ship in ("sentinel", "fighter", "explorer", "shuttle", "hauler", "living", "solar"):
             self.assertTrue(self.m.ship_model("0x1", ship)["posable"], f"{ship} should fly")
-        # A ship whose anim does not line up with its scene is left parked rather than guessed at;
-        # a freighter never takes off at all.
-        for ship in ("freighter", "living", "hauler", "solar"):
+        # A freighter has no landed state to take: the game ships no takeoff or landing anim for
+        # one, because it never sets down.
+        for ship in ("freighter", "capital_freighter"):
             self.assertFalse(self.m.ship_model("0x1", ship)["posable"],
-                             f"{ship} has nothing it can be shown flying with")
+                             f"{ship} never lands, so it has no flying pose to show")
+
+    def test_the_hauler_folds_both_ends_of_its_gear_away(self):
+        """Front and rear each animate separately, and the rear used to be left standing.
+
+        Its anim scores 0.50 -- every one of its 8 joints is on the ship, but half of them are a
+        second rig for the same legs under other names -- so a tight fit gate threw the whole
+        thing out and the hauler flew with its back legs down.
+        """
+        from nms_procgen import anim
+        loc = {}
+        self.m.ship_meshes("0x1", "hauler", None, True, None, frozenset(), loc)
+        ends = {a.path.rsplit("/", 1)[-1].split("_")[0] for _, a in anim._fitting("hauler", loc)}
+        self.assertEqual(ends, {"landinggearfront", "landinggearrear"})
+        posed = anim.ship_pose("hauler", True, loc)
+        for leg in ("LGROOT_F", "LGMID_F", "LGROOT_R", "LGMID_R"):
+            self.assertIn(leg, posed, f"{leg} was left where it stood")
+
+    def test_a_joint_the_ship_puts_elsewhere_is_not_turned_about_its_anims_pivot(self):
+        """The movement an anim stores is a turn about that joint's own pivot, so it may only be
+        laid on a joint the ship puts in the same place.
+
+        Both hauler gear anims carry a second rig for the legs -- LANDINGGEAR1_R beside LGROOT_R --
+        whose rest pose sits over 2 units from anything on the ship. Turning those about a pivot
+        2 units out swung a leg down through the floor, 2.6 below the ground.
+        """
+        from nms_procgen import anim
+        loc = {}
+        self.m.ship_meshes("0x1", "hauler", None, True, None, frozenset(), loc)
+        posed = anim.ship_pose("hauler", True, loc)
+        for stray in ("LANDINGGEAR1_R", "LANDINGGEAR2_R", "REARFLAP1"):
+            self.assertIn(stray, loc, f"{stray} is meant to be a joint the ship carries")
+            self.assertNotIn(stray, posed, f"{stray} was turned about a pivot the ship has not got")
+        landed = self.m.ship_model("0x1", "hauler")["bounds"][0][1]
+        flying = self.m.ship_model("0x1", "hauler", flying=True)["bounds"][0][1]
+        self.assertGreater(flying, landed, "the hauler hangs lower flying than parked")
+
+    def test_the_sail_ship_is_the_one_modelled_flying_not_parked(self):
+        """Its scene has the mast up and the sails out, so for it the movement is the landing.
+
+        The giveaway was the ground: every other type rests at y ~ 0 landed, and the sail ship
+        alone hung 3.5 below it, because what was being shown as landed was the ship in flight.
+        Three anims settle where the landing ends -- unfold the sails, go to low flight, or stand
+        in the customiser, each played backwards -- and all three agree on the same pose.
+        """
+        from nms_procgen import anim
+        self.assertIn("solar", anim.SCENE_IS_FLYING)
+        for seed in ("0x1", "0xDEADBEEF", "0x5A5A5A5A"):
+            loc = {}
+            self.m.ship_meshes(seed, "solar", None, True, None, frozenset(), loc)
+            self.assertTrue(anim._fitting("solar", loc), f"solar {seed}: no anim fits it")
+            # Flying is the scene it came with; the movement belongs to the other state.
+            self.assertFalse(anim.ship_pose("solar", True, loc), f"solar {seed}: flying moved it")
+            self.assertTrue(anim.ship_pose("solar", False, loc), f"solar {seed}: nothing landed it")
+            landed = self.m.ship_model(seed, "solar")["bounds"]
+            flying = self.m.ship_model(seed, "solar", flying=True)["bounds"]
+            self.assertLess(abs(landed[0][1]), 0.1, f"solar {seed} landed does not reach the ground")
+            # Sails out is the taller ship, and much the taller: that is the whole point of them.
+            self.assertGreater(flying[1][1] - flying[0][1], (landed[1][1] - landed[0][1]) * 2,
+                               f"solar {seed}: the sails did not open")
 
     def test_the_flying_pose_bends_a_ship_without_breaking_it(self):
         """Flying moves the gear and wings only -- it must not tip, grow or tear the ship."""
         from nms_procgen import anim
         span = lambda p: float(numpy.linalg.norm(p.max(0) - p.min(0)))
-        for ship in ("sentinel", "fighter", "explorer", "shuttle"):
+        for ship in ("sentinel", "fighter", "explorer", "shuttle", "hauler", "living", "solar"):
             landed = self.m.ship_model("0x1", ship)
             self.assertTrue(landed["posable"], f"{ship} should offer a flying pose")
             flight = self.m.ship_model("0x1", ship, flying=True)
@@ -396,8 +455,11 @@ class ShipModels(unittest.TestCase):
             self.assertGreater(moved.max(), 0.1, f"{ship} did not move at all")
             self.assertGreater((moved > 1e-3).mean(), 0.002, f"{ship} barely moved a vertex")
             # An anim read in its own axes would turn the whole ship over and throw parts off; a
-            # real deploy only folds pieces in, so the ship keeps its size.
-            self.assertLess(span(fp), span(lp) * 1.4, f"{ship}: flying tipped it over or tore it apart")
+            # real deploy only folds pieces in, so the ship keeps its size. The sail ship is the
+            # exception the others prove: opening a solar sail is meant to make it much bigger,
+            # and it roughly quadruples in height, so it gets a bound of its own.
+            grows = 2.0 if ship == "solar" else 1.4
+            self.assertLess(span(fp), span(lp) * grows, f"{ship}: flying tipped it over or tore it apart")
             self.assertLess(moved.max(), span(lp), f"{ship}: a part flew off on its own")
 
 

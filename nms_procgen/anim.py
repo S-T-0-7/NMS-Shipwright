@@ -1,7 +1,9 @@
 # Ship pose animation: reads the game's .ANIM.MBIN (cTkAnimMetadata) and gives the local
-# transform of each posed node at a frame. "Landed" is the ship's own scene, exactly as it is
-# drawn today; both poses come from ship_pose(), which reads a deploy anim's first frame for
-# parked and its last for flying. See model3d.ship_model(pose=).
+# transform of each posed node at a frame. One of the two states is the ship's own scene, exactly
+# as it is drawn today, and the other is reached by a movement out of a deploy anim -- its first
+# frame against its last. For almost every type the scene is the parked ship and the movement
+# flies it; the sail ship is modelled flying, so for it the movement lands it instead (see
+# SCENE_IS_FLYING). Both come from ship_pose(). See model3d.ship_model(pose=).
 #
 # Format (verified vs sentineltakeoff.anim.mbin): rotations are 3 int16 per quaternion
 # (x,y,z = i16/32767, w = sqrt(max(0, 1-x^2-y^2-z^2))); translations/scales are Vec4f. Each node
@@ -42,17 +44,42 @@ class Anim(NamedTuple):
 
 SHIP_ANIMS = {
     "sentinel": [Anim(_SC + "sentinelship/anims/sentineltakeoff.anim.mbin")],
-    # The sail ship's "takeoff" throws its sail arms right over; its tuck-in, played backwards from
-    # stowed, is the one that folds the mast down the way the game flies it.
-    "solar": [Anim(_SC + "sailship/sailshipparts/sailshipanims/sailship_tuckin.anim.mbin", backwards=True)],
+    # The sail ship is the one type modelled flying: its scene has the mast up and the sails out,
+    # which is why it alone hung 3.5 below the ground "landed" while every other type rests at 0.
+    # So its movement is the landing, and three separate anims agree on where that ends -- unfold
+    # the sails, go to low flight, or stand in the customiser, each played backwards from the
+    # scene, and all three put the hull on the ground at 0.03 and fold it from 14.1 high to 3.4.
+    # All three are listed because they corroborate each other rather than divide the work: the
+    # best fit claims each joint first and the others agree with it. The sail ship's own part
+    # anims (sailship_shared, sailshipsail_*, sailshiptips_*) are deliberately left out -- they
+    # fit 0.66 backwards and add 2 joints, but those 2 put the hull 0.98 below the ground.
+    "solar": [Anim(_SC + f"sailship/sailshipparts/sailshipanims/sailship_{n}.anim.mbin", backwards=True)
+              for n in ("cutomiser", "lowflight", "sailsunfold")],
     "fighter": [Anim(_SC + f"fighters/cockpit/anims/cockpit{c}_landinggear_retract.anim.mbin") for c in "abdef"]
                + [Anim(_SC + "fighters/wings/wings_d/anims/wingd_takeoff.anim.mbin")],
     "explorer": [Anim(_SC + "scientific/accessories/landinggear/anims/landinggear_takeoff.anim.mbin")],
     "shuttle": [Anim(_SC + "shuttle/accessories/anims/landinggear_takeoff.anim.mbin")],
+    # The hauler's gear is one fixed accessory, front and rear, and each end animates on its own.
+    # Both anims also carry a second rig for the same legs under other names (LANDINGGEAR1_R beside
+    # LGROOT_R, REARFLAP1 beside FLAP_R); those are the joints the pivot check below throws out.
+    "hauler": [Anim(_SC + f"dropships/accessories/landinggear/anims/landinggear{e}_takeoff.anim.mbin")
+               for e in ("front", "rear")],
+    # bioshiptakeoff is 501 frames that start and end in the same pose, so it is no use for this --
+    # the landing, played backwards, is where the bio ship's legs actually fold.
+    "living": [Anim(_SC + "s-class/bioparts/anims/bioshiplanding.anim.mbin", backwards=True)],
+    # Unresolved, and long-standing: on a seed carrying WINGS_A, the
+    # wings_a takeoff fits perfectly -- both its joints are on the ship and their rest poses match
+    # the scene to 0.00 -- and then turns each wing 165 degrees, from standing up to hanging under
+    # the hull, so from above the ship has no wings at all. Left as the game's own data has it
+    # rather than guessed at, but it is the one pose here that does not look like a ship flying.
     "exotic": [Anim(_SC + "s-class/royalparts/landinggear/anims/landinggear_a_takeoff.anim.mbin"),
                Anim(_SC + "s-class/squidparts/landinggear/anims/landinggear_a_takeoff.anim.mbin"),
-               Anim(_SC + "s-class/squidparts/nosesection/anims/nosesection_a_takeoff.anim.mbin")]
+               Anim(_SC + "s-class/squidparts/nosesection/anims/nosesection_a_takeoff.anim.mbin"),
+               Anim(_SC + "s-class/royalparts/engine/anims/engine_c_takeoff.anim.mbin"),
+               Anim(_SC + "s-class/squidparts/engine/anims/engine_a_takeoff.anim.mbin")]
               + [Anim(_SC + f"s-class/royalparts/wings/anims/wings_{w}_takeoff.anim.mbin") for w in "abc"],
+    # Freighters have no landed state to take: the game ships no takeoff or landing anim anywhere
+    # under industrial/, because they never set down.
 }
 ANIM_PAK = "NMSARC.AnimMBIN.pak"
 
@@ -153,12 +180,34 @@ def _extract_anim(rel_path: str):
     return full if os.path.exists(full) else None
 
 
-FITS = 0.6  # how much of an anim must land on the scene before it is this ship's
+#  How much of an anim must land on the scene before it is this ship's. A loose gate, because the
+#  per-joint pivot check in ship_pose is what really decides: an anim that is not this ship's finds
+#  no joint of its own to move and comes out doing nothing, whatever it scored. Keeping the gate
+#  tight instead cost the hauler its rear legs, which score 0.50 on an anim that is plainly theirs
+#  -- all 8 joints are on the ship -- because half of them are the second rig for the same legs.
+FITS = 0.4
+REST = 0.02   # how close a joint's rest pose must sit to the scene's to count as the same joint
+SLIDE = 1.0   # degrees; under this the movement is a slide, and a slide has no pivot to get wrong
+
+
+def _turn_of(m) -> float:
+    """How far a 4x4's rotation turns, in degrees."""
+    return float(np.degrees(np.arccos(np.clip((np.trace(m[:3, :3]) - 1) / 2, -1, 1))))
+
+
+#  Types whose scene is the flying ship rather than the parked one, so the movement listed for
+#  them lands it instead of flying it. Only the sail ship, which is modelled with its mast up.
+SCENE_IS_FLYING = frozenset({"solar"})
 
 
 def ship_pose(ship: str, flying: bool, loc: dict) -> dict:
-    """{NODE_NAME_UPPER: 4x4} -- what flying does to a node, as a movement to lay on its scene
-    transform (`delta @ scene_local`). Parked is the scene untouched, so that comes back empty.
+    """{NODE_NAME_UPPER: 4x4} -- what the state the scene is NOT in does to a node, as a movement
+    to lay on its scene transform (`delta @ scene_local`). The state the scene already holds is
+    the scene untouched, so that comes back empty.
+
+    For almost every type that is parked: the scene is the ship standing on the ground, and the
+    movement flies it. The sail ship is the exception -- it is modelled with its mast up and its
+    sails out -- so there the movement lands it and flying is the scene as it came.
 
     The movement is `last @ inverse(first)` of a deploy anim: a node that does not animate comes
     out as the identity and is left alone. Taking the frame as the pose outright would be the same
@@ -168,7 +217,7 @@ def ship_pose(ship: str, flying: bool, loc: dict) -> dict:
 
     `loc` is {node name: [local 4x4, ...]} for the nodes this ship carries -- see _fitting.
     """
-    if not flying:
+    if flying == (ship in SCENE_IS_FLYING):
         return {}
     out: dict = {}
     # Best fit first, and the first to claim a node keeps it: where two candidates both drive a
@@ -184,9 +233,19 @@ def ship_pose(ship: str, flying: bool, loc: dict) -> dict:
             if end is None or np.allclose(m, end, atol=1e-6) or name in out:
                 continue
             try:
-                out[name] = end @ np.linalg.inv(m)
+                d = end @ np.linalg.inv(m)
             except np.linalg.LinAlgError:
-                pass
+                continue
+            # A turn in the anim is a turn about that joint's own pivot. Where the ship puts the
+            # joint somewhere else the pivot is not ours to use, and laying the turn on anyway
+            # swings the part about the wrong point: it is what put the hauler's rear leg 2.6
+            # below the ground and threw an Exotic's wings over on their hinge, both of which
+            # carry a second rig for the part under names the ship also has. A slide has no pivot,
+            # so it is safe wherever the joint sits.
+            if _turn_of(d) > SLIDE and not any(np.allclose(x, m, atol=REST)
+                                               for x in loc.get(name, ())):
+                continue
+            out[name] = d
     return out
 
 
@@ -225,7 +284,7 @@ def _fitting(ship: str, loc: dict) -> tuple:
         here = [k for k in parked if k in loc and not np.allclose(parked[k], flying.get(k, parked[k]), atol=1e-6)]
         if not here:
             continue
-        fit = sum(any(np.allclose(x, parked[k], atol=0.02) for x in loc[k]) for k in here) / len(here)
+        fit = sum(any(np.allclose(x, parked[k], atol=REST) for x in loc[k]) for k in here) / len(here)
         if fit >= FITS:
             out.append((fit, a))
     return tuple(out)

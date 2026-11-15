@@ -684,9 +684,13 @@ def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
     # those, then the real pass with the pose that comes out of it.
     here: dict = {}
     ship_meshes(seed, ship, parts, fill, None, frozenset(), here)
+    # Both states are asked for, because the scene is not always the parked one: the sail ship is
+    # modelled with its mast up and its sails out, so for it the movement belongs to landing. A
+    # ship offers the toggle when either state is something other than the scene it came with.
     flown = anim.ship_pose(ship, True, here)
+    landed = anim.ship_pose(ship, False, here)
     joints = anim.driven(ship, here)
-    pose = flown if flying else None
+    pose = flown if flying else landed
     meshes = ship_meshes(seed, ship, parts, fill, pose, joints)
     geos = _geometry(sorted({g for g, *_ in meshes if g}))
     bend: dict = {}
@@ -719,7 +723,7 @@ def ship_model(seed, ship, parts=None, fill=True, flying=False) -> dict:
     groups = _collected(acc)
     allp = np.concatenate([g[0] for g in groups.values()]) if groups else np.zeros((1, 3), np.float32)
     return {"groups": groups, "bounds": (allp.min(0).tolist(), allp.max(0).tolist()),
-            "posable": bool(flown)}  # offers a landed/flying toggle
+            "posable": bool(flown or landed)}  # offers a landed/flying toggle
 
 
 def _yaw(degrees) -> np.ndarray:

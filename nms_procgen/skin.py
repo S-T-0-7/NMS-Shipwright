@@ -1,10 +1,11 @@
 # Posed ship geometry: CPU skinning so a ship can be drawn flying as well as landed.
 #
-# A skinned part stores every vertex in the scene's bind pose -- the landed ship. anim.ship_pose
-# says where the deploy puts each joint; walking the part's own scene (its .SCENE.MBIN, where the
-# JOINT nodes live) with that movement applied gives every joint a bind and a posed world matrix in
-# the part's model space. Skinning a vertex by sum_i weight_i * (posed_i @ inverse(bind_i)) bends
-# the landed mesh into the flying one.
+# A skinned part stores every vertex in the scene's bind pose -- for most types the landed ship,
+# though the sail ship is modelled flying and bends the other way. anim.ship_pose says where the
+# deploy puts each joint; walking the part's own scene (its .SCENE.MBIN, where the JOINT nodes
+# live) with that movement applied gives every joint a bind and a posed world matrix in the part's
+# model space. Skinning a vertex by sum_i weight_i * (posed_i @ inverse(bind_i)) bends the mesh
+# from the state its scene holds into the other one.
 #
 # Everything is matched by number, not by guesswork:
 #  * Each scene JOINT carries JOINTINDEX, and cTkGeometryData.SkinMatrixLayout holds those same
