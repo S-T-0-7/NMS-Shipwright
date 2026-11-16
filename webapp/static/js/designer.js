@@ -249,16 +249,18 @@ function initSeedBox() {
 }
 
 async function initDesigner() {
-  S.models = await api('/api/models');
-  const types = await api('/api/design/types');
+  // Four lists that know nothing about each other; asking for them one after the other only
+  // added up their round trips.
+  const [models, types, lookOpts] = await Promise.all([
+    api('/api/models'), api('/api/design/types'), api('/api/look/options'), loadDesigns()]);
+  S.models = models;
+  S.lookOpts = lookOpts;
   $('#dShip').innerHTML = types.map(t => `<option value="${t.ship}">${esc(t.label)}</option>`).join('');
   $('#dShip').value = 'sentinel';
-  S.lookOpts = await api('/api/look/options');
   /* Only interceptors can colour themselves, so only they get the option. */
   const paintRow = () => { $('#dPaintRow').hidden = $('#dShip').value !== 'sentinel'; };
   paintRow();
   $('#dShip').onchange = () => { paintRow(); guard(loadTree); }; $('#dReset').onclick = () => guard(loadTree);
-  await loadDesigns();
   $('#dSaved').onchange = designNote;
   fillTargets();
   $('#dInstall').onclick = () => guard(installDesign).finally(() => { $('#dInstall').disabled = false; $('#dInstallStop').hidden = true; });

@@ -68,15 +68,30 @@ def save_dir(folder: str) -> str:
     if not looks_like_game(folder):
         raise GamePathError(f"{folder} is not a No Man's Sky folder: it has no Binaries/NMS.exe "
                             "and GAMEDATA/PCBANKS. Pick the folder the game itself is in.")
-    data = _settings()
-    data["nms_dir"] = folder
+    remember("nms_dir", folder)
+    find.cache_clear()
+    return folder
+
+
+def _write_settings(data: dict) -> None:
     os.makedirs(SETTINGS_DIR, exist_ok=True)
     tmp = SETTINGS + ".part"
     with open(tmp, "w") as f:
         json.dump(data, f, indent=1)
     os.replace(tmp, SETTINGS)
-    find.cache_clear()
-    return folder
+
+
+def setting(name: str, default=None):
+    """One preference out of settings.json, or `default` if it was never set."""
+    return _settings().get(name, default)
+
+
+def remember(name: str, value) -> None:
+    """Keep a preference in settings.json. It lives beside the cache, never in the save folder
+    or the game folder, so nothing the tool writes can be mistaken for the game's own files."""
+    data = _settings()
+    data[name] = value
+    _write_settings(data)
 
 
 def _reg(root, key, value):

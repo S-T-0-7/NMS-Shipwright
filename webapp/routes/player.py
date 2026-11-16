@@ -8,7 +8,7 @@ import shutil
 
 from flask import Blueprint, jsonify, request
 
-from nms_save import player, quests, save
+from nms_save import gamepath, player, quests, save
 
 from webapp.common import GameRunning, body, game_running, open_save, write
 
@@ -43,17 +43,48 @@ def api_quests_skip():
 BACKUP_TIME = re.compile(r"\.(\d{8})-(\d{6})-\d+\.bak$")
 
 
+def _listing(path):
+    out = []
+    for f in save.backups_of(path):
+        m = BACKUP_TIME.search(f)
+        day, clock = (m.group(1), m.group(2)) if m else ("", "")
+        made = f"{day[:4]}-{day[4:6]}-{day[6:]} {clock[:2]}:{clock[2:4]}:{clock[4:]}" if m else ""
+        try:
+            size = os.path.getsize(f)
+        except OSError:            # deleted from under us between the listing and the stat
+            continue
+        out.append({"file": f, "made": made, "size": size})
+    out.reverse()                  # backups_of is oldest first; the page wants newest first
+    return out
+
+
 @bp.route("/api/backups")
 def api_backups():
     path = request.args.get("path")
     open_save(path)  # validates the path
-    out = []
-    for f in glob.glob(f"{path}.*.bak"):
-        m = BACKUP_TIME.search(f)
-        day, clock = (m.group(1), m.group(2)) if m else ("", "")
-        made = f"{day[:4]}-{day[4:6]}-{day[6:]} {clock[:2]}:{clock[2:4]}:{clock[4:]}" if m else ""
-        out.append({"file": f, "made": made, "size": os.path.getsize(f)})
-    return jsonify(sorted(out, key=lambda x: x["made"], reverse=True))
+    return jsonify({"keep": save.keep_count(), "backups": _listing(path)})
+
+
+@bp.route("/api/backups/keep", methods=["POST"])
+def api_backups_keep():
+    """Set how many backups to keep and clear out the rest straight away.
+
+    The number is remembered for every save, not just this one; 0 means keep them all. Pruning
+    only ever removes this tool's own <save>.<stamp>.bak copies, newest kept.
+    """
+    b = body()
+    path = b.get("path")
+    open_save(path)
+    keep = b.get("keep")
+    if keep is not None:
+        try:
+            keep = max(0, int(keep))
+        except (TypeError, ValueError):
+            raise ValueError("How many backups to keep has to be a whole number.")
+        gamepath.remember("keep_backups", keep)
+    removed = save.prune_backups(path)
+    return jsonify({"ok": True, "keep": save.keep_count(), "removed": len(removed),
+                    "backups": _listing(path)})
 
 
 @bp.route("/api/backups/restore", methods=["POST"])
@@ -71,4 +102,7 @@ def api_backups_restore():
         data = f.read()
     with open(path, "wb") as f:
         f.write(data)
+    # The safety copy is a backup like any other, so it counts against the limit -- but only
+    # once the restore is down, and never the file it was restored from.
+    save.prune_backups(path, protect=[src])
     return jsonify({"ok": True, "safety_copy": safety})

@@ -1183,5 +1183,135 @@ class CrossPlatformPaths(unittest.TestCase):
             shutil.rmtree(lib, ignore_errors=True)
 
 
+class BackupsAreKeptInCheck(unittest.TestCase):
+    """Every write leaves a backup behind; prune_backups is what stops them piling up forever.
+
+    It deletes the player's files, so what it will and will not touch is worth pinning down.
+    """
+
+    def setUp(self):
+        from nms_save import save
+        self.save = save
+        self.dir = tempfile.mkdtemp()
+        self.path = os.path.join(self.dir, "save3.hg")
+        with open(self.path, "wb") as f:
+            f.write(b"live save")
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def backup(self, stamp):
+        f = os.path.join(self.dir, "save3.hg.%s.bak" % stamp)
+        with open(f, "wb") as fh:
+            fh.write(b"old")
+        return f
+
+    def stamps(self, n):
+        return [self.backup("202611%02d-120000-000000" % (d + 1)) for d in range(n)]
+
+    def test_the_oldest_go_and_the_newest_stay(self):
+        made = self.stamps(10)
+        gone = self.save.prune_backups(self.path, keep=3)
+        self.assertEqual(sorted(gone), sorted(made[:7]))
+        left = self.save.backups_of(self.path)
+        self.assertEqual(left, made[7:], "the three newest are the ones to keep")
+
+    def test_keeping_zero_deletes_nothing_at_all(self):
+        """0 is "keep every one". A save is always backed up before it is written, so there is
+        no such thing as keeping none, and reading 0 that way would delete the lot."""
+        made = self.stamps(5)
+        self.assertEqual(self.save.prune_backups(self.path, keep=0), [])
+        self.assertEqual(self.save.backups_of(self.path), made)
+
+    def test_fewer_backups_than_the_limit_is_left_alone(self):
+        made = self.stamps(2)
+        self.assertEqual(self.save.prune_backups(self.path, keep=20), [])
+        self.assertEqual(self.save.backups_of(self.path), made)
+
+    def test_nothing_but_this_tools_own_backups_is_ever_deleted(self):
+        """A .bak somebody else dropped in the save folder, or renamed so as to keep it, is not
+        ours to remove -- and neither is the save itself or another slot's backups."""
+        self.stamps(6)
+        strangers = []
+        for name in ("save3.hg.bak", "save3.hg.keepme.bak", "save3.hg.20261101-120000.bak",
+                     "save3.hg.backup", "save4.hg.20260101-120000-000000.bak", "save3.hg"):
+            f = os.path.join(self.dir, name)
+            if not os.path.exists(f):
+                with open(f, "wb") as fh:
+                    fh.write(b"not mine")
+            strangers.append(f)
+        self.save.prune_backups(self.path, keep=1)
+        for f in strangers:
+            self.assertTrue(os.path.exists(f), "%s was deleted and should not have been" % f)
+
+    def test_a_file_named_in_protect_survives_however_old_it_is(self):
+        """What a restore passes in: the backup being restored from must not vanish mid-restore."""
+        made = self.stamps(8)
+        oldest = made[0]
+        gone = self.save.prune_backups(self.path, keep=2, protect=[oldest])
+        self.assertNotIn(oldest, gone)
+        self.assertTrue(os.path.exists(oldest))
+
+    def test_order_comes_from_the_name_not_the_modified_time(self):
+        """shutil.copy2 hands a backup the save's own mtime, so every backup of one save can
+        carry the same one. Sorting by mtime would then throw away an arbitrary set."""
+        made = self.stamps(4)
+        for f in made:                       # exactly what copy2 leaves behind
+            os.utime(f, (1700000000, 1700000000))
+        self.assertEqual(self.save.backups_of(self.path), made)
+        self.save.prune_backups(self.path, keep=1)
+        self.assertEqual(self.save.backups_of(self.path), made[-1:])
+
+    def test_a_backup_that_will_not_delete_does_not_fail_the_tidy_up(self):
+        made = self.stamps(4)
+        import nms_save.save as mod
+        real = mod.os.remove
+        stuck = made[0]
+
+        def fussy(f):
+            if f == stuck:
+                raise PermissionError("open in another program")
+            return real(f)
+
+        mod.os.remove = fussy
+        try:
+            gone = self.save.prune_backups(self.path, keep=1)
+        finally:
+            mod.os.remove = real
+        self.assertNotIn(stuck, gone)
+        self.assertEqual(sorted(gone), sorted(made[1:3]))
+        self.assertTrue(os.path.exists(stuck))
+
+    def test_a_write_makes_a_backup_and_tidies_up_in_one_go(self):
+        """The whole point: nobody has to remember to do it."""
+        from nms_save import codec, mapping
+        raw = codec.encode(json.dumps(mapping.obfuscate({"Version": 1})), False, 0)
+        with open(self.path, "wb") as f:
+            f.write(raw)
+        self.stamps(25)
+        opened = self.save.open_save(self.path)
+        keep = self.save.keep_count()
+        fresh = opened.write()
+        left = self.save.backups_of(self.path)
+        self.assertEqual(len(left), keep, "a write should leave exactly the limit behind")
+        self.assertIn(fresh, left, "and never the one it just made")
+
+    def test_the_limit_is_the_players_and_survives_a_restart(self):
+        from nms_save import gamepath
+        keep_file = gamepath.SETTINGS
+        d = tempfile.mkdtemp()
+        gamepath.SETTINGS = os.path.join(d, "settings.json")
+        gamepath.SETTINGS_DIR = d
+        try:
+            self.assertEqual(self.save.keep_count(), self.save.KEEP_BACKUPS)
+            gamepath.remember("keep_backups", 5)
+            self.assertEqual(self.save.keep_count(), 5)
+            self.assertEqual(gamepath.setting("keep_backups"), 5)   # read back off disk
+        finally:
+            gamepath.SETTINGS = keep_file
+            gamepath.SETTINGS_DIR = os.path.dirname(keep_file)
+            shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

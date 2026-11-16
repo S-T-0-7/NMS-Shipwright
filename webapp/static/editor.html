@@ -160,6 +160,12 @@
     </details>
     <h3>Backups</h3>
     <p class="muted" style="margin-top:0">Every change backs your save up first. Restoring also backs up the current file.</p>
+    <div class="row">
+      <label for="bKeep">Keep the newest</label>
+      <input id="bKeep" type="number" min="0" max="999" step="1" style="width:5.5em">
+      <span class="muted" id="bKeepNote"></span>
+      <button class="btn" id="bKeepSave" data-icon="trash">Apply and tidy up</button>
+    </div>
     <table><thead><tr><th>Backup</th><th>Made</th><th>Size</th><th></th></tr></thead><tbody id="bRows"></tbody></table>
   </section>
 

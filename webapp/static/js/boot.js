@@ -101,9 +101,12 @@ $('#qFilter').oninput = renderQuests;
 $('#qShow').onchange = renderQuests;
 $('#qHelpers').onchange = renderQuests;
 
-async function loadBackups() {
-  if (!S.path) return;
-  const list = await api('/api/backups?path=' + encodeURIComponent(S.path));
+function showBackups(d) {
+  const list = d.backups;
+  if ($('#bKeep') !== document.activeElement) $('#bKeep').value = d.keep;
+  $('#bKeepNote').textContent = d.keep
+    ? `backups of each save; older ones are deleted as new ones are made. ${list.length} kept now.`
+    : 'Set to 0: every backup is kept, nothing is ever deleted.';
   $('#bRows').innerHTML = list.length ? list.map((b, i) => `<tr><td><code>${esc(b.file.split(/[\\/]/).pop())}</code></td><td>${esc(b.made)}</td>
     <td>${(b.size / 1024).toFixed(0)} KB</td><td><button class="btn" data-i="${i}">${ic('up')}Restore</button></td></tr>`).join('')
     : '<tr><td colspan="4" class="muted">No backups for this save yet.</td></tr>';
@@ -113,12 +116,34 @@ async function loadBackups() {
     toast('Backup restored.'); await loadShips(); await loadBackups();
   }));
 }
+async function loadBackups() {
+  if (!S.path) return;
+  showBackups(await api('/api/backups?path=' + encodeURIComponent(S.path)));
+}
+/* Changing the number deletes files, so it happens on a button and says what it did -- never
+   quietly as you type, and never on a number you were halfway through entering. */
+$('#bKeepSave').onclick = () => guard(async () => {
+  if (!S.path) return;
+  const keep = Math.max(0, Math.min(999, parseInt($('#bKeep').value, 10) || 0));
+  const have = (await api('/api/backups?path=' + encodeURIComponent(S.path))).backups.length;
+  const doomed = keep ? Math.max(0, have - keep) : 0;
+  if (doomed && !confirm(`Keep the newest ${keep} backups of each save?\n\n` +
+      `${doomed} older backup${doomed === 1 ? '' : 's'} of this save will be deleted now, and ` +
+      'from here on the oldest is deleted whenever a new one is made. Deleted backups cannot be ' +
+      'brought back.')) return;
+  const d = await post('/api/backups/keep', {path: S.path, keep});
+  toast(d.removed ? `Keeping the newest ${d.keep}. Deleted ${d.removed} older backup${d.removed === 1 ? '' : 's'}.`
+                  : (d.keep ? `Keeping the newest ${d.keep}. Nothing needed deleting.` : 'Keeping every backup.'));
+  showBackups(d);
+});
 
 (async () => {
   paintIcons();
   await guard(async () => {
-    await loadStatus(); S.palettes = await api('/api/palettes');
-    await loadSaves(); await loadShips(); await initDesigner();
+    // The pill, the palettes and the save list have nothing to say to each other, so they go
+    // together; only the ship list has to wait, because it needs the save that was picked.
+    await Promise.all([loadStatus(), api('/api/palettes').then(p => { S.palettes = p; }), loadSaves()]);
+    await Promise.all([loadShips(), initDesigner()]);
   });
   loadHealth(false).catch(() => {});  // warns in the banner if a game update broke something
   setInterval(() => loadStatus().catch(() => {}), 5000);

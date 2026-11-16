@@ -1,8 +1,10 @@
 """Part tree, seed search and saved designs."""
 from __future__ import annotations
 
+import collections
 import functools
 import glob
+import hashlib
 import json
 import os
 import re
@@ -14,7 +16,7 @@ from flask import Blueprint, Response, jsonify, request
 
 from nms_procgen import model3d, ROOTS, explain, load_descriptor, ref_to_descriptor, textures
 from nms_procgen.fastsearch import fast_search, measure
-from nms_save import gamefiles, player, save, ships
+from nms_save import gamefiles, gameversion, player, save, ships
 
 from webapp.common import (GameRunning, JOBS, NO_SEED_LOOK, ROOT, SHIP_LABELS, body, game_running,
                            limit_seconds, model_filename, open_save, parse_look, part_label, part_names,
@@ -53,10 +55,91 @@ def api_texture():
                     headers={"ETag": tag, "Cache-Control": "no-cache"})
 
 
+# ---- the ship cache ---------------------------------------------------------------------------
+# One packed ship is a few megabytes and the best part of a second to build, and the page asks for
+# the same one more than once: the card picture and the big viewer both want it, a seed found in a
+# search turns up again in the Designer, and Fly/Land flips between two models of the one ship. So
+# the bytes are kept and tagged, and the browser is told to revalidate instead of refetch -- a
+# repeat costs a 304 rather than a megabyte and a rebuild. Keyed on the installed build as well as
+# the request, so a cached ship cannot outlive the game files it was made from.
+MODEL_CACHE_BYTES = 64 << 20           # a dozen or so ships; evicted oldest-first. The browser
+#  keeps its own copy, so this is here for the repeat the browser cannot answer and for the two
+#  requests that arrive together -- not to hold every ship the session has ever drawn.
+_models: "collections.OrderedDict[str, bytes]" = collections.OrderedDict()
+_models_held = 0
+_models_lock = threading.Lock()
+_building: dict = {}                   # key -> Event, so the same ship is only ever built once
+
+
+def _build_tag() -> str:
+    try:
+        b = gameversion.check()["build"]
+        return "%d.%d.%d" % (b["exe"][0], b["exe"][1], b["paks"])
+    except Exception:       # no game found: the cache still works, it just has nothing to pin to
+        return "0"
+
+
+def _model_cached(key):
+    with _models_lock:
+        data = _models.get(key)
+        if data is not None:
+            _models.move_to_end(key)
+        return data
+
+
+def _model_keep(key, data):
+    global _models_held
+    with _models_lock:
+        if key in _models:
+            return
+        _models[key] = data
+        _models_held += len(data)
+        while _models_held > MODEL_CACHE_BYTES and len(_models) > 1:
+            _models_held -= len(_models.popitem(last=False)[1])
+
+
+def _model_bytes(key, build):
+    """The packed ship for this request, built once however many ask for it at the same moment."""
+    data = _model_cached(key)
+    if data is not None:
+        return data
+    with _models_lock:
+        wait = _building.get(key)
+        if wait is None:
+            _building[key] = mine = threading.Event()
+    if wait is not None:                    # somebody else is building this one; take theirs
+        wait.wait(timeout=60)
+        return _model_cached(key) or build()
+    try:
+        data = build()
+        _model_keep(key, data)
+        return data
+    finally:
+        with _models_lock:
+            _building.pop(key, None)
+        mine.set()
+
+
+def models_forget():
+    """Drop every cached ship (after a game update, or when the game folder moves)."""
+    global _models_held
+    with _models_lock:
+        _models.clear()
+        _models_held = 0
+
+
 @bp.route("/api/model")
 def api_model():
     """3D model (model3d.pack binary) of a seed, or of ?parts=id,id,... from the Designer."""
     a = request.args
+    key = _build_tag() + "?" + request.query_string.decode("utf-8", "replace")
+    tag = '"m%s"' % hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
+    cache = {"ETag": tag, "Cache-Control": "no-cache"}   # no-cache = keep it, but ask me first
+    if request.headers.get("If-None-Match") == tag:
+        return Response(status=304, headers=cache)
+    held = _model_cached(key)
+    if held is not None:
+        return Response(held, mimetype="application/octet-stream", headers=cache)
     ship = a.get("ship", "fighter")
     if ship not in ROOTS and ship not in model3d.SPECIAL_SCENES:
         raise ValueError(f"unknown ship type {ship!r}")
@@ -88,9 +171,9 @@ def api_model():
             colours["paint"] = textures.overlay_colour(seed, ship) or colours["paint"]
     except Exception:
         pass
-    data = model3d.pack(model3d.ship_model(seed, ship, parts, a.get("fill") == "1",
-                                           a.get("pose") == "flight"), colours)
-    return Response(data, mimetype="application/octet-stream", headers={"Cache-Control": "no-store"})
+    data = _model_bytes(key, lambda: model3d.pack(
+        model3d.ship_model(seed, ship, parts, a.get("fill") == "1", a.get("pose") == "flight"), colours))
+    return Response(data, mimetype="application/octet-stream", headers=cache)
 
 
 @bp.route("/api/design/types")

@@ -364,8 +364,15 @@
       }
     }
 
+    /* The builder is one page of eight, and a page nobody is on has nothing worth drawing. The
+       scene keeps its state either way, so it simply picks up again when it comes back. */
+    let onscreen = true;
+    const watch = new IntersectionObserver(es => { onscreen = es[es.length - 1].isIntersecting; });
+    watch.observe(canvas);
+
     function frame() {
       if (!S.alive) return;
+      if (!onscreen || document.hidden) { requestAnimationFrame(frame); return; }
       const w = canvas.clientWidth * devicePixelRatio | 0, h = canvas.clientHeight * devicePixelRatio | 0;
       if (w && h && (canvas.width !== w || canvas.height !== h)) { canvas.width = w; canvas.height = h; }
       gl.viewport(0, 0, canvas.width, canvas.height);
@@ -492,7 +499,7 @@
       S.dist = Math.max(20, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) * 1.15);
     };
     S.canvas = canvas;
-    S.destroy = () => { S.alive = false; gl.getExtension('WEBGL_lose_context') && gl.getExtension('WEBGL_lose_context').loseContext(); };
+    S.destroy = () => { S.alive = false; watch.disconnect(); gl.getExtension('WEBGL_lose_context') && gl.getExtension('WEBGL_lose_context').loseContext(); };
     requestAnimationFrame(frame);
     return S;
   }

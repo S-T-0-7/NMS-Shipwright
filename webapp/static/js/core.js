@@ -54,6 +54,29 @@ const VIEWS = [['three', '3/4'], ['front', 'Front'], ['side', 'Side'], ['top', '
 const THUMBS = new Map();
 let thumbChain = Promise.resolve(), thumbView = null;
 
+/* Drawing them has to go one at a time -- there is one renderer -- but downloading them does
+   not, and the download is the long half. So each ship is asked for as soon as its card exists,
+   a few at a time, and by the time the renderer reaches it the bytes are already in the browser's
+   cache (/api/model is tagged, so this costs one round trip, not the model again). Without this
+   the queue spends most of its life waiting on a server it could have asked ten seconds ago. */
+const AHEAD = 3;
+const fetched = new Set();
+const waiting = [];
+let fetching = 0;
+function prefetch(url) {
+  if (fetched.has(url)) return;
+  fetched.add(url);
+  waiting.push(url);
+  pump();
+}
+function pump() {
+  while (fetching < AHEAD && waiting.length) {
+    fetching++;
+    fetch(waiting.shift()).then(r => r.arrayBuffer()).catch(() => {})
+      .then(() => { fetching--; pump(); });
+  }
+}
+
 function thumbViewer() {
   if (thumbView) return thumbView;
   const box = document.createElement('div');
@@ -69,6 +92,8 @@ function thumbViewer() {
 function thumbInto(img, ship, seed) {
   const key = ship + '|' + seed;
   if (THUMBS.has(key)) { img.src = THUMBS.get(key); img.classList.add('ready'); return; }
+  const src = modelUrl(ship, 'seed=' + encodeURIComponent(seed));
+  prefetch(src);
   thumbChain = thumbChain.then(async () => {
     if (!img.isConnected || THUMBS.has(key)) {
       if (THUMBS.has(key)) { img.src = THUMBS.get(key); img.classList.add('ready'); }
@@ -77,10 +102,10 @@ function thumbInto(img, ship, seed) {
     const v = thumbViewer();
     if (!v) return;
     try {
-      await quiet(() => v.load(modelUrl(ship, 'seed=' + encodeURIComponent(seed))));
+      await quiet(() => v.load(src));
       v.view('three');
-      // the textures arrive on their own schedule; give them a moment before the still
-      await new Promise(r => setTimeout(r, 260));
+      // wait on the textures this ship actually asked for, rather than on a guessed delay
+      await v.settled(900);
       const url = v.snapshot('image/webp');
       THUMBS.set(key, url);
       img.src = url;
@@ -237,7 +262,7 @@ const shortPath = p => p.split(/[\\/]/).slice(-2).join('/');
 $$('nav button').forEach(b => b.onclick = () => {
   $$('nav button').forEach(x => x.classList.toggle('active', x === b));
   $$('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + b.dataset.page));
-  const load = {player: async () => { await loadPlayer(); await loadBackups(); setupExport(); await loadHealth(false); }, quests: loadQuests,
+  const load = {player: async () => { setupExport(); await Promise.all([loadPlayer(), loadBackups(), loadHealth(false)]); }, quests: loadQuests,
                 inventory: loadInventories, unlocks: loadUnlocks, corvette: loadCorvette,
                 designer: () => post('/api/find/warm', {}).catch(() => {})}[b.dataset.page];
   if (load) guard(load);
@@ -267,4 +292,4 @@ $('#saveSel').onchange = e => { S.path = e.target.value; guard(loadShips);
   const act = $$('.page').find(p => p.classList.contains('active'))?.id;
   const reload = {'page-quests': loadQuests, 'page-inventory': loadInventories, 'page-unlocks': loadUnlocks}[act];
   if (reload) guard(reload); };
-$('#refresh').onclick = () => guard(async () => { await loadStatus(); await loadSaves(); await loadShips(); });
+$('#refresh').onclick = () => guard(async () => { await Promise.all([loadStatus(), loadSaves()]); await loadShips(); });

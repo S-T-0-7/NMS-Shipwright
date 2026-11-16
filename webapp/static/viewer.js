@@ -102,6 +102,12 @@
     const U = n => gl.getUniformLocation(prog, n);
     const v = {yaw: -2.4, pitch: .35, dist: 1, auto: true, groups: [], center: [0, 0, 0], radius: 1,
                alive: true, tint: 1};
+    /* Drawing is not free, and most of the time there is nothing new to draw: a still ship in a
+       panel nobody is looking at costs exactly as much as one being dragged. So a frame is only
+       put up when the view has actually changed (need()), or while the ship is spinning, and
+       never while the canvas is off screen or the window is in the background. */
+    let dirty = true, onscreen = true;
+    const need = () => { dirty = true; };
     const exts = {};
     const haveExt = name => (name in exts ? exts[name] : (exts[name] = gl.getExtension(name)));
     const maps = new Map();   // texture path -> WebGLTexture (or null once it is known to fail)
@@ -129,16 +135,23 @@
       return tex;
     }
 
+    const inflight = new Set();
     function mapFor(path) {
       if (!path) return null;
       if (maps.has(path)) return maps.get(path);
       maps.set(path, null);                       // flat colour until it arrives
-      fileFor(path).then(buf => { if (buf && v.alive) maps.set(path, upload(buf)); });
+      const job = fileFor(path).then(buf => { if (buf && v.alive) { maps.set(path, upload(buf)); need(); } })
+        .catch(() => {}).then(() => inflight.delete(job));
+      inflight.add(job);
       return null;
     }
-    const reset = () => { v.yaw = -2.4; v.pitch = .35; v.dist = v.radius * 2.6; };
+    /* Resolves once the textures this ship asked for are on the GPU, or after `ms`, whichever
+       comes first -- what the card pictures wait on instead of guessing at a delay. */
+    v.settled = (ms = 1500) => Promise.race([Promise.all([...inflight]),
+                                             new Promise(r => setTimeout(r, ms))]);
+    const reset = () => { v.yaw = -2.4; v.pitch = .35; v.dist = v.radius * 2.6; need(); };
     // The HUD's Spin button follows the spin, which a drag or a view button also stops.
-    const setAuto = on => { v.auto = on; v.onauto?.(on); };
+    const setAuto = on => { v.auto = on; need(); v.onauto?.(on); };
 
     function frame() {
       const w = canvas.clientWidth * devicePixelRatio | 0, h = canvas.clientHeight * devicePixelRatio | 0;
@@ -173,34 +186,42 @@
     }
     function draw() {
       if (!v.alive) return;
-      frame();
+      if ((v.auto || dirty) && onscreen && !document.hidden) { frame(); dirty = false; }
       requestAnimationFrame(draw);
     }
+    // A panel scrolled out of view, or on a tab that is not the open one, stops drawing; the
+    // hidden canvas the card pictures are taken on never draws at all, because it takes its
+    // stills with frame() directly.
+    const watch = new IntersectionObserver(es => { onscreen = es[es.length - 1].isIntersecting; need(); });
+    const sized = new ResizeObserver(need);
+    watch.observe(canvas); sized.observe(canvas);
+    document.addEventListener('visibilitychange', need);
+    const letGo = () => { watch.disconnect(); sized.disconnect(); document.removeEventListener('visibilitychange', need); };
 
     let drag = null, pinch = null;
     canvas.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; setAuto(false); canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; });
     canvas.addEventListener('pointermove', e => {
       if (!drag) return;
       v.yaw -= (e.clientX - drag[0]) * .008; v.pitch = Math.max(-1.5, Math.min(1.5, v.pitch + (e.clientY - drag[1]) * .008));
-      drag = [e.clientX, e.clientY];
+      drag = [e.clientX, e.clientY]; need();
     });
     canvas.addEventListener('pointerup', () => { drag = null; canvas.style.cursor = 'grab'; });
-    canvas.addEventListener('wheel', e => { e.preventDefault(); v.dist = Math.max(v.radius * .6, Math.min(v.radius * 8, v.dist * Math.exp(e.deltaY * .001))); }, {passive: false});
+    canvas.addEventListener('wheel', e => { e.preventDefault(); v.dist = Math.max(v.radius * .6, Math.min(v.radius * 8, v.dist * Math.exp(e.deltaY * .001))); need(); }, {passive: false});
     canvas.addEventListener('touchmove', e => {
       if (e.touches.length !== 2) { pinch = null; return; }
       const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      if (pinch) v.dist = Math.max(v.radius * .6, Math.min(v.radius * 8, v.dist * pinch / d)); pinch = d;
+      if (pinch) v.dist = Math.max(v.radius * .6, Math.min(v.radius * 8, v.dist * pinch / d)); pinch = d; need();
     });
     canvas.addEventListener('dblclick', () => { reset(); setAuto(true); });
 
-    v.view = name => { setAuto(false); [v.yaw, v.pitch] = {front: [0, .05], side: [Math.PI / 2, .05], top: [0, 1.5], back: [Math.PI, .1], three: [-2.4, .35]}[name]; };
+    v.view = name => { setAuto(false); [v.yaw, v.pitch] = {front: [0, .05], side: [Math.PI / 2, .05], top: [0, 1.5], back: [Math.PI, .1], three: [-2.4, .35]}[name]; need(); };
     v.spin = on => setAuto(on ?? !v.auto);
     v.setPose = on => { v.posed = on; return v.srcUrl ? v.load(v.srcUrl) : null; };  // flying vs landed
-    v.destroy = () => { v.alive = false; gl.getExtension('WEBGL_lose_context')?.loseContext(); };
+    v.destroy = () => { v.alive = false; letGo(); gl.getExtension('WEBGL_lose_context')?.loseContext(); };
     /* A still of the ship as it stands. The frame is drawn and read in the same task, because
        the drawing buffer is cleared the moment the browser composites. */
     v.snapshot = (type = 'image/png') => { frame(); return canvas.toDataURL(type); };
-    v.setColours = cols => { for (const g of v.groups) if (g.cls === 'paint' && cols.paint) g.col = cols.paint; else if (cols[g.cls]) g.col = cols[g.cls]; };
+    v.setColours = cols => { for (const g of v.groups) if (g.cls === 'paint' && cols.paint) g.col = cols.paint; else if (cols[g.cls]) g.col = cols[g.cls]; need(); };
     v.load = async url => {
       v.srcUrl = url.replace(/&pose=flight\b/, '');  // remember the base so Fly/Land can reload it
       const r = await fetch(v.posed ? v.srcUrl + '&pose=flight' : v.srcUrl);
@@ -233,8 +254,11 @@
       const [lo, hi] = head.bounds;
       v.center = [-(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
       v.radius = Math.max(.5, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2);
-      if (!v.loaded) { reset(); v.loaded = true; }  // fit on the first model only; later loads keep
-      return head;                                   // the user's angle/zoom (double-click resets)
+      // Fit on the first model only; later loads keep the angle and zoom the user set
+      // (double-click resets).
+      if (!v.loaded) { reset(); v.loaded = true; }
+      need();
+      return head;
     };
     requestAnimationFrame(draw);
     return v;
