@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.9.1
+
+- **A game patch no longer takes the whole tool down.** The tool finds the game's own ship code
+  by searching NMS.exe for byte patterns, and a patch that recompiles one function changes those
+  bytes. Until now a single changed instruction meant "0 signature matches (game code changed)"
+  and nothing worked. It now falls back to the closest match when only a few bytes differ, and
+  still refuses outright when two candidates are equally close -- a wrong address does not fail
+  loudly, it quietly runs the wrong code.
+- **The ship generator is found without reading its own code at all.** It is the one function
+  that matters most and the one most likely to be recompiled, so it has a second way of being
+  found: the single place in the game that calls it, matched by the shape of the call rather
+  than by its bytes. A prologue rewritten past all recognition leaves that shape standing.
+- **Save > Game data says when a match was loose.** The game-code check now reports which
+  functions were not matched the usual way and how, so a generated ship can be sanity-checked
+  against the game instead of being trusted blindly.
+- **The error says which NMS.exe it was.** The game-code failure now carries the exe's path as
+  well as its stamp, because a second install, a leftover folder and a modded exe are
+  indistinguishable without it.
+- **Ships you have in storage are listed.** The freighter's storage bays are read like any other
+  slot, under the name each ship was stored as, with empty bays skipped.
+- **Landed and flying, for every ship that lands.** The Fly/Land toggle used to be the Sentinel
+  interceptor's alone. It now covers fighters, explorers, shuttles, haulers, living ships and
+  solar sails, each from the game's own deploy animation. Freighters do not get it, because the
+  game ships no landing animation for one -- they never set down.
+- **The solar sail was being drawn flying all along.** Its scene is the only one the game models
+  in flight, mast up and sails out, which is why it alone hung three and a half units below the
+  ground when parked. Landed now puts its hull on the ground, and flying opens the sails.
+- **A folding part is no longer swung about the wrong hinge.** An animation's turn belongs to
+  that joint's own pivot, and some ships carry a second set of names for the same legs. Laying
+  the turn on the wrong copy put a hauler's rear leg two and a half units underground.
+- **Corvette modules draw the right part, and only one of it.** A handed module drew both its
+  left and right halves at once; mirroring one now swaps it for its opposite instead of leaving
+  a part inside out, and a leaning structural part is handed like any other.
+- **The gun hangs off its own mounting plate.** Its five pieces -- plate, two arms, turret and
+  barrel -- were not all hanging where the game puts them.
+- **Search odds are measured, not guessed.** The part count is taken before the colour filter,
+  and the odds come from a measured sample, which catches cases the weights alone cannot.
+- **Backups clean up after themselves.** Every change still backs your save up first, but the
+  oldest are now deleted as new ones arrive. Save > Backups sets how many to keep (20 by
+  default, or 0 to keep every one) and says what it deleted. Only the tool's own timestamped
+  copies are ever touched.
+- **The app is quicker and quieter.** Ship pictures download several at a time instead of one
+  after another, so a save full of ships fills in about a second rather than ten; a ship already
+  drawn is not fetched or rebuilt again; and the 3D views stop redrawing when nothing is moving
+  or they are on a page you are not looking at.
+
 ## 1.9.0
 
 - **Corvettes.** A new page shows the corvette in your save -- the whole ship drawn from the
