@@ -1313,5 +1313,66 @@ class BackupsAreKeptInCheck(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class WhoIsAboardTheFreighter(unittest.TestCase):
+    """The aliens on a freighter are not in the save, so the home system is the only handle.
+
+    Worth pinning down, because it is easy to assume a freighter carries a race the way a
+    frigate does. It does not: the freighter is a filename and a seed, nothing more.
+    """
+
+    @staticmethod
+    def _save(freighter=True):
+        return {"BaseContext": {"PlayerStateData": {
+            "CurrentFreighter": {"Filename": "MODELS/COMMON/SPACECRAFT/INDUSTRIAL/CAPITALFREIGHTER_PROC.SCENE.MBIN"
+                                             if freighter else "",
+                                 "Seed": [True, "0xABC"], "ProceduralTexture": {"Samplers": []}, "AltId": ""},
+            "CurrentFreighterHomeSystemSeed": [False, "0x0"]}}}
+
+    def test_a_freighter_carries_no_race_of_its_own(self):
+        """A frigate has Race; a freighter has nowhere to put one, which is the whole finding."""
+        from nms_save import ships
+        d = self._save()
+        self.assertNotIn("Race", d["BaseContext"]["PlayerStateData"]["CurrentFreighter"])
+        self.assertEqual(sorted(ships.get_freighter(d)), ["filename", "home", "seed"])
+
+    def test_moving_the_home_system_touches_nothing_else(self):
+        from nms_save import ships
+        d = self._save()
+        before = json.dumps(d, sort_keys=True)
+        ships.set_freighter_home(d, 0x40000000000)
+        self.assertEqual(d["BaseContext"]["PlayerStateData"]["CurrentFreighterHomeSystemSeed"],
+                         [True, "0x40000000000"])
+        # the look, the seed and the model are not the home system's business
+        d["BaseContext"]["PlayerStateData"]["CurrentFreighterHomeSystemSeed"] = [False, "0x0"]
+        self.assertEqual(json.dumps(d, sort_keys=True), before)
+
+    def test_a_save_with_no_freighter_is_refused_rather_than_given_one(self):
+        from nms_save import ships
+        with self.assertRaises(ValueError):
+            ships.set_freighter_home(self._save(freighter=False), 1)
+
+    def test_a_region_holds_more_than_one_race_to_choose_from(self):
+        """The picker is only worth offering if the races really are mixed together nearby."""
+        from nms_save import gamepath
+        try:
+            gamepath.require()
+        except Exception as e:
+            self.skipTest(f"game files not available: {e}")
+        from nms_procgen import locate, systemgen
+        here = locate.unpack_ua(locate.pack_ua(-82, 9, -1720, 389))
+        found = {}
+        with systemgen.borrow() as sg:
+            for index in range(40):
+                at = locate.pack_ua(here["x"], here["y"], here["z"], index, here["galaxy"])
+                try:
+                    found.setdefault(sg.system(at, planets=False)["race"], at)
+                except Exception:
+                    continue
+        self.assertGreaterEqual(len(set(found) - {"none"}), 2,
+                                f"only found {sorted(found)} in 40 systems of one region")
+        for race, at in found.items():
+            self.assertEqual(locate.unpack_ua(at)["galaxy"], 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

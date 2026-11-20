@@ -1,7 +1,33 @@
-/* Unlocks & Fleet: knowledge, rewards, multi-tools, frigates, companions. */
+/* Four pages off one save read: Unlocks (knowledge, rewards), Fleet (the freighter and its
+   frigates), Multi-tools and Companions. /api/extras answers all of them, so the answer is kept
+   and shared rather than asked for again when you cross between them; any write throws it away
+   and asks afresh. */
+let EXTRAS = null;
+
+async function extras(fresh) {
+  if (fresh || !EXTRAS) EXTRAS = await api('/api/extras?path=' + encodeURIComponent(S.path));
+  return EXTRAS;
+}
+
+/* After a write, whichever page is open redraws from a fresh read. */
+const EXTRAS_PAGES = {'page-fleet': () => loadFleet(), 'page-multitools': () => loadMultitools(),
+                      'page-companions': () => loadCompanions()};
+function reloadExtras() {
+  EXTRAS = null;
+  const open = Object.keys(EXTRAS_PAGES).find(id => $('#' + id)?.classList.contains('active'));
+  return open ? EXTRAS_PAGES[open]() : loadUnlocks();
+}
+const extrasAct = (body, msg) => guard(async () => {
+  await post('/api/extras', {path: S.path, ...body});
+  toast(msg + ' Backup made.');
+  await reloadExtras();
+});
+
+const classBox = (v, id) => `<select id="${id}">${['C', 'B', 'A', 'S'].map(c => `<option ${c === v ? 'selected' : ''}>${c}</option>`).join('')}</select>`;
+
 async function loadUnlocks() {
   if (!S.path) return;
-  const d = await api('/api/extras?path=' + encodeURIComponent(S.path));
+  const d = await extras();
   const bar = ([a, b]) => `<progress max="${b}" value="${a}"></progress> <span class="muted">${a} / ${b}</span>`;
   $('#uKnow').innerHTML = `<div class="form" style="grid-template-columns:150px 1fr auto;align-items:center;row-gap:8px">
     ${Object.entries(d.knowledge.words).map(([race, v]) => `<label>${esc(race)} words</label><div>${bar(v)}</div>
@@ -15,35 +41,51 @@ async function loadUnlocks() {
     let n = 0;
     await post('/api/extras', {path: S.path, action: 'words'});
     for (const g of d.knowledge.groups) n += (await post('/api/extras', {path: S.path, action: g.group})).result || 0;
-    toast(`Unlocked ${n} blueprints and recipes, plus every word. Backup made.`); await loadUnlocks();
+    toast(`Unlocked ${n} blueprints and recipes, plus every word. Backup made.`);
+    await reloadExtras();
   });
-  const act = (body, msg) => guard(async () => { await post('/api/extras', {path: S.path, ...body}); toast(msg + ' Backup made.'); await loadUnlocks(); });
-  $$('#uKnow [data-words]').forEach(b => b.onclick = () => act({action: 'words', races: b.dataset.words === '*' ? null : [b.dataset.words]}, 'Words learned.'));
-  $$('#uKnow [data-learn]').forEach(b => b.onclick = () => act({action: b.dataset.learn}, 'Learned.'));
+  $$('#uKnow [data-words]').forEach(b => b.onclick = () => extrasAct({action: 'words', races: b.dataset.words === '*' ? null : [b.dataset.words]}, 'Words learned.'));
+  $$('#uKnow [data-learn]').forEach(b => b.onclick = () => extrasAct({action: b.dataset.learn}, 'Learned.'));
   await loadRewards();
-  const cls = (v, id) => `<select id="${id}">${['C', 'B', 'A', 'S'].map(c => `<option ${c === v ? 'selected' : ''}>${c}</option>`).join('')}</select>`;
-  $('#uTools').innerHTML = d.multitools.map(m => `<div class="card"><div class="row"><b>${esc(m.name || m.model)}</b>${m.active ? '<span class="badge hot">EQUIPPED</span>' : ''}<span class="muted">${m.slots} slots</span></div>
-    <div class="form" style="margin-top:8px"><label>Name</label><input id="mt_n${m.index}" value="${esc(m.name)}" placeholder="(unnamed)">
-      <label>Seed</label><input id="mt_s${m.index}" class="mono" value="${esc(m.seed)}"><label>Class</label>${cls(m.class, 'mt_c' + m.index)}</div>
-    <div class="row" style="margin-top:8px"><button class="btn primary" data-mt="${m.index}">Save</button><button class="btn" data-mtr="${m.index}">Random seed</button></div></div>`).join('') || '<p class="muted">No multi-tools.</p>';
-  $$('[data-mt]').forEach(b => b.onclick = () => { const i = b.dataset.mt;
-    act({action: 'multitool', index: +i, name: $('#mt_n' + i).value, seed: $('#mt_s' + i).value, class: $('#mt_c' + i).value}, 'Multi-tool saved.'); });
-  $$('[data-mtr]').forEach(b => b.onclick = () => { $('#mt_s' + b.dataset.mtr).value = randomSeed(); });
+}
+
+async function loadFleet() {
+  if (!S.path) return;
+  await loadFreighter();       // both live in find.js, with the rest of the star-system code
+  await loadFreighterBuilder();
+  const d = await extras();
   $('#uFrig').innerHTML = d.frigates.map(f => `<div class="card"><div class="row"><b>${esc(f.name || f.type + ' frigate')}</b><span class="badge">${esc(f.type)}</span>
       ${f.damaged ? '<span class="badge hot">DAMAGED</span>' : ''}<span class="muted">${f.expeditions} expeditions</span></div>
-    <div class="form" style="margin-top:8px"><label>Name</label><input id="fr_n${f.index}" value="${esc(f.name)}" placeholder="(unnamed)"><label>Class</label>${cls(f.class, 'fr_c' + f.index)}
+    <div class="form" style="margin-top:8px"><label>Name</label><input id="fr_n${f.index}" value="${esc(f.name)}" placeholder="(unnamed)"><label>Class</label>${classBox(f.class, 'fr_c' + f.index)}
       ${Object.entries(f.stats).map(([k, v]) => `<label>${esc(k)}</label><input type="number" data-stat="${esc(k)}" data-fr="${f.index}" value="${v}" style="width:90px">`).join('')}</div>
     <div class="row" style="margin-top:8px"><button class="btn primary" data-fs="${f.index}">Save</button>${f.damaged ? `<button class="btn" data-fx="${f.index}">Repair</button>` : ''}</div></div>`).join('') || '<p class="muted">No frigates.</p>';
   $$('[data-fs]').forEach(b => b.onclick = () => { const i = b.dataset.fs, stats = {};
     $$(`[data-fr="${i}"]`).forEach(el => stats[el.dataset.stat] = +el.value);
-    act({action: 'frigate', index: +i, name: $('#fr_n' + i).value, class: $('#fr_c' + i).value, stats}, 'Frigate saved.'); });
-  $$('[data-fx]').forEach(b => b.onclick = () => act({action: 'frigate', index: +b.dataset.fx, repair: true}, 'Frigate repaired.'));
+    extrasAct({action: 'frigate', index: +i, name: $('#fr_n' + i).value, class: $('#fr_c' + i).value, stats}, 'Frigate saved.'); });
+  $$('[data-fx]').forEach(b => b.onclick = () => extrasAct({action: 'frigate', index: +b.dataset.fx, repair: true}, 'Frigate repaired.'));
+}
+
+async function loadMultitools() {
+  if (!S.path) return;
+  const d = await extras();
+  $('#uTools').innerHTML = d.multitools.map(m => `<div class="card"><div class="row"><b>${esc(m.name || m.model)}</b>${m.active ? '<span class="badge hot">EQUIPPED</span>' : ''}<span class="muted">${m.slots} slots</span></div>
+    <div class="form" style="margin-top:8px"><label>Name</label><input id="mt_n${m.index}" value="${esc(m.name)}" placeholder="(unnamed)">
+      <label>Seed</label><input id="mt_s${m.index}" class="mono" value="${esc(m.seed)}"><label>Class</label>${classBox(m.class, 'mt_c' + m.index)}</div>
+    <div class="row" style="margin-top:8px"><button class="btn primary" data-mt="${m.index}">Save</button><button class="btn" data-mtr="${m.index}">Random seed</button></div></div>`).join('') || '<p class="muted">No multi-tools.</p>';
+  $$('[data-mt]').forEach(b => b.onclick = () => { const i = b.dataset.mt;
+    extrasAct({action: 'multitool', index: +i, name: $('#mt_n' + i).value, seed: $('#mt_s' + i).value, class: $('#mt_c' + i).value}, 'Multi-tool saved.'); });
+  $$('[data-mtr]').forEach(b => b.onclick = () => { $('#mt_s' + b.dataset.mtr).value = randomSeed(); });
+}
+
+async function loadCompanions() {
+  if (!S.path) return;
+  const d = await extras();
   $('#uPets').innerHTML = d.companions.map(p => `<div class="card"><div class="row"><b>${esc(p.name || p.creature)}</b><span class="muted">${esc(p.biome)}${p.predator ? ' · predator' : ''}</span></div>
     <div class="form" style="margin-top:8px"><label>Name</label><input id="pt_n${p.index}" value="${esc(p.name)}"><label>Size</label>
       <input id="pt_s${p.index}" type="number" step="0.05" min="0.1" max="10" value="${p.scale}" style="width:90px"></div>
     <div class="row" style="margin-top:8px"><button class="btn primary" data-pt="${p.index}">Save</button></div></div>`).join('') || '<p class="muted">No companions.</p>';
   $$('[data-pt]').forEach(b => b.onclick = () => { const i = b.dataset.pt;
-    act({action: 'companion', index: +i, name: $('#pt_n' + i).value, scale: +$('#pt_s' + i).value}, 'Companion saved.'); });
+    extrasAct({action: 'companion', index: +i, name: $('#pt_n' + i).value, scale: +$('#pt_s' + i).value}, 'Companion saved.'); });
 }
 
 const REW = {group: 'expedition'};

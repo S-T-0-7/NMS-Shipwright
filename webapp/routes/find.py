@@ -31,19 +31,80 @@ def api_system():
              for sh in s["ships"]]
     return jsonify({**locate.describe(ua), "region_valid": s["region_valid"], "planets": s["planets"],
                     "moons": s["moons"], "ships": ships, "dissonant": s["dissonant"], "planet_list": s["planet_list"],
+                    "race": s["race"], "inhabited": s["inhabited"],
                     "interceptor": None if s["interceptor"] is None else f"0x{s['interceptor']:016X}"})
+
+
+def _freighter(readable):
+    """What the save says about the freighter, plus the system its crew come from.
+
+    Nothing about the aliens aboard is written into the save -- there is no race on the
+    freighter and no model for anyone standing on it -- so the game works them out at load, and
+    the home system is the only thing it has to go on. Which race holds that system is something
+    this tool can already work out for any address, so it says so here.
+    """
+    f = dict(ships.get_freighter(readable))
+    f["home_race"] = f["home_place"] = None
+    try:
+        ua = int(f["home"], 16)
+    except (TypeError, ValueError):
+        return f
+    f["home_place"] = locate.describe(ua)
+    try:
+        with systemgen.borrow() as sg:
+            f["home_race"] = sg.system(ua, planets=False)["race"]
+    except Exception:       # a system that will not generate just leaves the race unknown
+        pass
+    return f
 
 
 @bp.route("/api/freighter", methods=["GET", "POST"])
 def api_freighter():
     if request.method == "GET":
-        return jsonify(ships.get_freighter(open_save(request.args.get("path")).readable))
+        return jsonify(_freighter(open_save(request.args.get("path")).readable))
     b = body()
     opened = open_save(b.get("path"))
     home = locate.parse_address(b["home"]) if b.get("home") else None
     ships.set_freighter(opened.readable, b.get("ship", "capital_freighter"), b.get("seed", ""), home)
     backup = write(opened)
-    return jsonify({"ok": True, "backup": backup, **ships.get_freighter(opened.readable)})
+    return jsonify({"ok": True, "backup": backup, **_freighter(opened.readable)})
+
+
+@bp.route("/api/freighter/home", methods=["POST"])
+def api_freighter_home():
+    """Move the freighter's home system and leave its look alone."""
+    b = body()
+    opened = open_save(b.get("path"))
+    home = locate.parse_address(b.get("home", ""), int(b.get("galaxy", 0)))
+    ships.set_freighter_home(opened.readable, home)
+    backup = write(opened)
+    return jsonify({"ok": True, "backup": backup, **_freighter(opened.readable)})
+
+
+# How far to look for a system of each race before giving up. A voxel holds up to
+# locate.MAX_SYSTEM_INDEX systems and one takes about five milliseconds, so this is well under a
+# second in practice: the races are mixed together and the first few dozen usually cover them.
+HOME_SEARCH = 240
+
+
+@bp.route("/api/freighter/races")
+def api_freighter_races():
+    """The nearest system of each race to an address, for choosing a home."""
+    ua = locate.parse_address(request.args.get("addr", ""), int(request.args.get("galaxy", 0)))
+    here = locate.unpack_ua(ua)
+    found = {}
+    with systemgen.borrow() as sg:
+        # out from the system it is now, so "the Gek system next door" really is next door
+        order = sorted(range(locate.MAX_SYSTEM_INDEX), key=lambda i: abs(i - here["system"]))
+        for index in order[:HOME_SEARCH]:
+            at = locate.pack_ua(here["x"], here["y"], here["z"], index, here["galaxy"])
+            try:
+                race = sg.system(at, planets=False)["race"]
+            except Exception:
+                continue
+            if race not in found:
+                found[race] = {**locate.describe(at), "race": race}
+    return jsonify({"searched": min(HOME_SEARCH, locate.MAX_SYSTEM_INDEX), "races": found})
 
 
 def run_find(job, center, radius, ship, want, limit, closest, look):

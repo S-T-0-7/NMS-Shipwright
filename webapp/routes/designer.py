@@ -176,9 +176,21 @@ def api_model():
     return Response(data, mimetype="application/octet-stream", headers=cache)
 
 
+#  Freighters generate like any other ship and the part tree works for them, but a freighter is
+#  not a ship you fly and does not go in a ship slot, so the Designer -- which ends in "put this
+#  in slot N" -- does not offer them. They are built on the Fleet page, which ends in "make this
+#  my freighter". The tree, preview and seed search still take them; only this list leaves them out.
+FREIGHTERS = ("freighter", "capital_freighter")
+
+
 @bp.route("/api/design/types")
 def api_design_types():
-    return jsonify([{"ship": k, "label": SHIP_LABELS.get(k, k)} for k in ROOTS])
+    return jsonify([{"ship": k, "label": SHIP_LABELS.get(k, k)} for k in ROOTS if k not in FREIGHTERS])
+
+
+@bp.route("/api/freighter/types")
+def api_freighter_types():
+    return jsonify([{"ship": k, "label": SHIP_LABELS.get(k, k)} for k in FREIGHTERS])
 
 @functools.lru_cache(maxsize=None)
 def design_tree(ship):

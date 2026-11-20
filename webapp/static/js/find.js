@@ -38,9 +38,196 @@ function freighterCard(x, home) {
 }
 async function applyFreighter(seed, ship, home) {
   if (!confirm(`Give your freighter this ${ship === 'capital_freighter' ? 'capital freighter' : 'freighter'} look (seed ${seed})?\n` +
-    `Its home system is set to where it was found, which sets its colours. Your freighter base and cargo stay. A backup is made first.`)) return;
-  await guard(async () => { await post('/api/freighter', {path: S.path, seed, ship, home}); toast('Freighter updated. Backup made.'); });
+    `Its home system is set to where it was found, which sets its colours and who is aboard. Your freighter base and cargo stay. A backup is made first.`)) return;
+  await guard(async () => {
+    await post('/api/freighter', {path: S.path, seed, ship, home});
+    toast('Freighter updated. Backup made.');
+    if ($('#frCard')) await loadFreighter();
+  });
 }
+/* ---- the freighter, and who is aboard it -------------------------------------------------
+   The crew is not in the save, so there is no field to set: the home system is the whole of it.
+   The race that holds a system is something the tool already works out for any address, so the
+   choice is offered as a race and turned into the nearest system of that race. */
+let FR = null;
+
+const RACE_NOTE = {Gek: 'Gek', "Vy'keen": "Vy'keen", Korvax: 'Korvax', none: 'nobody (uninhabited)'};
+
+async function loadFreighter() {
+  const box = $('#frCard');
+  box.innerHTML = '<p class="muted">Reading the save...</p>';
+  FR = await api('/api/freighter?path=' + encodeURIComponent(S.path));
+  if (!FR.filename) { box.innerHTML = '<p class="muted">This save has no freighter yet.</p>'; return; }
+  const kind = FR.filename.includes('CAPITAL') ? 'Capital freighter' : 'Freighter';
+  const place = FR.home_place;
+  box.innerHTML = `<div class="row" style="justify-content:space-between">
+      <div><b>${esc(kind)}</b> <code>${esc(FR.seed)}</code></div></div>
+    <p style="margin:8px 0 0">Home system: ${place ? `<code>${esc(place.glyphs)}</code> <span class="muted">${esc(place.coords)} &middot; ${esc(place.galaxy_name)}</span>`
+      : '<span class="muted">not set</span>'}</p>
+    <p style="margin:4px 0 0">Aboard: <b>${esc(RACE_NOTE[FR.home_race] || FR.home_race || 'unknown')}</b></p>
+    <div class="row" style="margin-top:10px"><button class="btn primary" id="frFind">Pick a different race</button>
+      <span class="muted" id="frNote"></span></div>
+    <div class="row" id="frRaces" style="margin-top:8px"></div>`;
+  $('#frFind').onclick = () => guard(findHomes);
+  if (!$('#frAddr').value) {
+    if (place) { $('#frAddr').value = place.glyphs; $('#frGal').value = place.galaxy; }
+    else {
+      const loc = S.loc || (S.loc = await api('/api/location?path=' + encodeURIComponent(S.path)));
+      $('#frAddr').value = loc.current.glyphs; $('#frGal').value = loc.current.galaxy;
+    }
+  }
+}
+
+async function findHomes() {
+  const from = FR.home_place ? FR.home_place.glyphs : null;
+  $('#frNote').textContent = 'Looking through the systems next door...';
+  const addr = from || (await api('/api/location?path=' + encodeURIComponent(S.path))).current.glyphs;
+  const d = await api('/api/freighter/races?addr=' + encodeURIComponent(addr));
+  const races = Object.entries(d.races).filter(([r]) => r !== 'none');
+  $('#frNote').textContent = `nearest of each race among ${d.searched} systems in the same region`;
+  $('#frRaces').innerHTML = races.map(([r, p]) =>
+    `<button class="btn" data-home="${esc(p.glyphs)}" title="${esc(p.coords)}">${esc(RACE_NOTE[r] || r)}
+       <span class="muted">&middot; ${esc(p.glyphs)}</span></button>`).join('')
+    || '<span class="muted">No inhabited system found nearby.</span>';
+  $$('#frRaces button').forEach(b => b.onclick = () => guard(() => setHome(b.dataset.home, b.textContent.trim().split(' ')[0])));
+}
+
+async function setHome(glyphs, race) {
+  if (!confirm(`Move your freighter's home system to ${glyphs}?\n\n` +
+    'That system is held by the ' + race + ', and the game draws the aliens aboard your freighter from the home system. ' +
+    'The freighter itself -- its shape, its colours, your base and cargo -- is not touched. A backup is made first.\n\n' +
+    'Worth knowing: the crew is not stored in the save, so this is the only thing the game has to go on, but the ' +
+    'tool cannot show you the result. Load the save and look.')) return;
+  FR = await post('/api/freighter/home', {path: S.path, home: glyphs});
+  toast('Home system moved. Backup made.');
+  await loadFreighter();
+}
+
+/* ---- building one from parts --------------------------------------------------------------
+   The same part tree and seed search the Designer uses, ending in "make this my freighter"
+   rather than "put this in slot N". A freighter's hull is not stored part by part -- the seed
+   decides the lot -- so picking parts is really describing what to go hunting for. */
+const FB = {job: null, timer: null};
+
+async function loadFreighterBuilder() {
+  if ($('#fbShip').options.length) return;        // the tree is built once and then kept
+  const types = await api('/api/freighter/types');
+  $('#fbShip').innerHTML = types.map(t => `<option value="${esc(t.ship)}">${esc(t.label)}</option>`).join('');
+  $('#fbShip').value = (FR && FR.filename && FR.filename.includes('CAPITAL')) ? 'capital_freighter' : 'freighter';
+  await fbTree();
+}
+
+async function fbTree() {
+  const box = $('#fbTree');
+  box.innerHTML = '<span class="muted">Reading the parts...</span>';
+  const tree = await api('/api/design/tree?ship=' + $('#fbShip').value);
+  box.innerHTML = '';
+  renderGroups(tree, box, fbPreview);
+  fbPreview();
+}
+
+function fbPreview() {
+  clearTimeout(FB.timer);
+  FB.timer = setTimeout(() => {
+    const parts = wantedIn('#fbTree'), box = $('#fbPreview');
+    $('#fbUse').hidden = true;
+    if (!parts.length) {
+      VIEWERS.fbPreview?.destroy(); delete VIEWERS.fbPreview;
+      box.classList.remove('v3d');
+      box.innerHTML = '<span class="muted">Nothing chosen yet. Pick a part and it appears here.</span>';
+      return;
+    }
+    /* Some choices carry no mesh of their own -- a capital freighter's _HULL_A3 draws nothing
+       until the rows under it are picked too -- and a blank panel with no word for it reads as
+       a broken preview. */
+    show3d('fbPreview', modelUrl($('#fbShip').value, 'parts=' + encodeURIComponent(parts.join(','))), null, head => {
+      if (head.groups.length) return;
+      VIEWERS.fbPreview?.destroy(); delete VIEWERS.fbPreview;
+      box.classList.remove('v3d');
+      box.innerHTML = '<span class="muted">These parts draw nothing on their own -- this one is a choice the hull hangs off '
+        + 'rather than a piece with a shape. Pick a few more rows and it appears.</span>';
+    });
+  }, 250);
+}
+
+/* A seed, straight out of the box or rolled, drawn as the whole freighter it really makes. */
+function fbShowSeed(seed) {
+  if (!seed) throw new Error('Type a seed first.');
+  FB.seed = seed;
+  show3d('fbPreview', modelUrl($('#fbShip').value, 'seed=' + encodeURIComponent(seed)));
+  $('#fbUse').hidden = false;
+  $('#fbStatus').textContent = `Showing seed ${seed}.`;
+}
+
+async function fbFind() {
+  const want = wantedIn('#fbTree');
+  if (!want.length) throw new Error('Pick at least one part first.');
+  const r = await post('/api/design/search', {ship: $('#fbShip').value, want, n: 5, seconds: 600});
+  FB.job = {id: r.job, ship: $('#fbShip').value};
+  $('#fbResults').innerHTML = '';
+  $('#fbFind').disabled = true; $('#fbStop').disabled = false;
+  fbPoll();
+}
+
+async function fbPoll() {
+  const job = FB.job, j = await api('/api/jobs/' + job.id);
+  $('#fbStatus').textContent = `${j.status}: tested ${Number(j.tested).toLocaleString()} seeds in `
+    + `${Number(j.seconds).toFixed(0)}s, found ${j.results.length}${j.error ? ' -- ' + j.error : ''}`;
+  const box = $('#fbResults');
+  if (box.children.length !== j.results.length) {
+    box.innerHTML = j.results.map(res => `<div class="card res">
+      <img class="thumb" data-thumb="${esc(job.ship)}" data-seed="${esc(res.seed)}" alt="">
+      <div class="row" style="margin-top:6px;justify-content:space-between"><code>${esc(res.seed)}</code>
+        <button class="btn" data-fbseed="${esc(res.seed)}">Make this my freighter</button></div></div>`).join('');
+    $$('#fbResults [data-fbseed]').forEach(b => b.onclick = () => fbUse(b.dataset.fbseed));
+    paintThumbs(box);
+  }
+  if (j.status === 'running') return void setTimeout(() => guard(fbPoll), 900);
+  $('#fbFind').disabled = false; $('#fbStop').disabled = true;
+}
+
+async function fbUse(seed) {
+  const ship = $('#fbShip').value;
+  if (!confirm(`Make seed ${seed} your ${ship === 'capital_freighter' ? 'capital freighter' : 'freighter'}?\n\n` +
+    'Its shape, parts and colours all change. Its home system stays as it is, so the same aliens stay aboard, ' +
+    'and your freighter base, cargo and everything installed are untouched. A backup is made first.')) return;
+  await post('/api/freighter', {path: S.path, seed, ship});
+  toast('Freighter rebuilt. Backup made.');
+  await loadFreighter();
+}
+
+$('#fbShip').onchange = () => guard(fbTree);
+$('#fbReset').onclick = () => guard(fbTree);
+$('#fbRoll').onclick = () => { $('#fbSeed').value = randomSeed(); guard(async () => fbShowSeed($('#fbSeed').value)); };
+$('#fbSee').onclick = () => guard(async () => fbShowSeed($('#fbSeed').value.trim()));
+$('#fbSeed').onkeydown = e => { if (e.key === 'Enter') guard(async () => fbShowSeed($('#fbSeed').value.trim())); };
+$('#fbUse').onclick = () => guard(() => fbUse(FB.seed));
+$('#fbFind').onclick = () => guard(fbFind);
+$('#fbStop').onclick = () => FB.job && post(`/api/jobs/${FB.job.id}/cancel`, {});
+
+/* The finder: one system's freighter fleet, the same ships the Design & Find system view
+   lists, put where the freighter itself is edited. */
+async function showFreighters() {
+  const box = $('#frFound');
+  box.innerHTML = '<p class="muted">Generating the system...</p>';
+  const s = await api(`/api/system?addr=${encodeURIComponent($('#frAddr').value.trim())}&galaxy=${+$('#frGal').value || 0}`);
+  if (!s.region_valid) { box.innerHTML = '<p class="muted">This region is empty: it has no star systems.</p>'; return; }
+  const fleet = s.ships.filter(x => x.kind === 'freighter fleet' && (x.alias === 'freighter' || x.alias === 'capital_freighter'));
+  $('#frWhere').innerHTML = `<span class="muted">${esc(s.galaxy_name)} &middot; system ${s.system} &middot;
+    ${s.inhabited ? 'held by the <b>' + esc(s.race) + '</b>' : 'uninhabited'}</span>`;
+  box.innerHTML = fleet.length ? fleet.map(x => freighterCard(x, s.ua)).join('')
+    : '<p class="muted">No freighter fleet warps into this system.</p>';
+  $$('#frFound button[data-seed]').forEach(b => b.onclick = () => applyFreighter(b.dataset.seed, b.dataset.ship, b.dataset.home));
+  paintThumbs(box);
+}
+$('#frShow').onclick = () => guard(showFreighters);
+$('#frAddr').onkeydown = e => { if (e.key === 'Enter') guard(showFreighters); };
+$('#frHere').onclick = () => guard(async () => {
+  const loc = S.loc || (S.loc = await api('/api/location?path=' + encodeURIComponent(S.path)));
+  $('#frAddr').value = loc.current.glyphs; $('#frGal').value = loc.current.galaxy;
+  await showFreighters();
+});
+
 async function showSystem() {
   const box = $('#fSystem'); box.innerHTML = '<p class="muted">Generating the system...</p>';
   const s = await api(`/api/system?addr=${encodeURIComponent($('#fAddr').value.trim())}&galaxy=${+$('#fGal').value || 0}`);
@@ -50,7 +237,8 @@ async function showSystem() {
   const others = s.ships.filter(x => !x.station && !fleet.includes(x));
   const bodies = s.planet_list.map(p => `<span class="badge ${p.levels[2] === 3 ? 'hot' : ''}" title="sentinels: ${esc(p.sentinels)}">${p.index}: ${esc(p.biome_name)}${p.levels[2] === 3 ? ' - corrupted sentinels' : ''}</span>`).join(' ');
   box.innerHTML = `<div class="card" style="padding:12px">${placeHtml(s)}
-      <p style="margin:8px 0 0">${s.planets} planets, ${s.moons} moons &middot; ${s.dissonant ? '<span class="badge hot">DISSONANT</span>' : 'not dissonant'}</p>
+      <p style="margin:8px 0 0">${s.planets} planets, ${s.moons} moons &middot; ${s.dissonant ? '<span class="badge hot">DISSONANT</span>' : 'not dissonant'}
+        &middot; ${s.inhabited ? 'held by the <b>' + esc(s.race) + '</b>' : 'uninhabited'}</p>
       <div style="margin-top:6px">${bodies}</div></div>
     <h3>Sentinel interceptor at crash sites</h3>
     <p class="muted" style="margin-top:0">${s.dissonant ? 'This system is dissonant, so its crash sites have this interceptor (every crash site in the system has this design; the class can differ).'

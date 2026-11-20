@@ -366,6 +366,19 @@ def set_freighter(readable_json: dict, kind: str, seed: str, home_ua: int | None
         ps["CurrentFreighterHomeSystemSeed"] = [True, f"0x{home_ua:X}"]
 
 
+def set_freighter_home(readable_json: dict, home_ua: int) -> None:
+    """Move the freighter's home system without touching how it looks.
+
+    The home system is the one piece of the freighter the game keeps apart from its seed, and it
+    is what the aliens aboard are drawn from -- nothing about the crew is written into the save,
+    so the game has to work them out at load, and this is the only thing it has to go on.
+    """
+    ps = readable_json["BaseContext"]["PlayerStateData"]
+    if not (ps.get("CurrentFreighter") or {}).get("Filename"):
+        raise ValueError("this save has no freighter")
+    ps["CurrentFreighterHomeSystemSeed"] = [True, f"0x{home_ua:X}"]
+
+
 def set_ship_name(readable_json: dict, slot: int, name: str) -> None:
     _populated_entry(readable_json, slot)["Name"] = name
 

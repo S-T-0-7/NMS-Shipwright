@@ -350,7 +350,10 @@ function lookBadge(look) {
   return `<div class="row" style="gap:4px;margin-top:4px">${sw('paint', look.primary)}${sw('paint', look.secondary)}${sw('undercoat', look.undercoat)}
     <span class="muted" style="font-size:12px">${cap(look.mode)}</span></div>`;
 }
-function renderGroups(groups, box) {
+/* `changed` is what to do when a choice is made -- the Designer redraws its preview and odds,
+   the Fleet page's freighter builder has its own. */
+function renderGroups(groups, box, changed) {
+  changed = changed || (() => { preview(); updateOdds(); });
   for (const g of groups) {
     const row = document.createElement('div'); row.className = 'grp';
     const label = document.createElement('label'); label.textContent = g.type.replace(/^_+|_+$/g, '').replace(/_/g, ' '); label.title = g.type;
@@ -360,11 +363,12 @@ function renderGroups(groups, box) {
     sel.dataset.weights = JSON.stringify(g.options.map(o => o.weight == null ? 20 : o.weight));
     for (const o of g.options) S.optLabel[o.id] = o.name || o.id;
     const kids = document.createElement('div'); kids.className = 'kids';
-    sel.onchange = () => { kids.innerHTML = ''; const o = g.options[sel.value]; if (o && o.children.length) renderGroups(o.children, kids); preview(); updateOdds(); };
+    sel.onchange = () => { kids.innerHTML = ''; const o = g.options[sel.value]; if (o && o.children.length) renderGroups(o.children, kids, changed); changed(); };
     row.append(label, sel); box.append(row, kids);
   }
 }
-const wanted = () => $$('#dTree select').filter(s => s.value !== '').map(s => JSON.parse(s.dataset.ids)[+s.value]);
+const wantedIn = root => $$(root + ' select').filter(s => s.value !== '').map(s => JSON.parse(s.dataset.ids)[+s.value]);
+const wanted = () => wantedIn('#dTree');
 let previewTimer;
 function preview() {
   clearTimeout(previewTimer);

@@ -114,7 +114,7 @@ function thumbInto(img, ship, seed) {
   });
 }
 
-function show3d(id, url, fallback) {
+function show3d(id, url, fallback, onload) {
   const el = $('#' + id); if (!el) return;
   VIEWERS[id]?.destroy(); el.classList.add('v3d', 'drawing');
   const v = VIEWERS[id] = window.ShipViewer && ShipViewer.mount(el);
@@ -125,7 +125,8 @@ function show3d(id, url, fallback) {
   hud(el, id);
   // A ship is a few megabytes and its textures a few more, so this is the wait people feel.
   busy(true);
-  v.load(url).then(done, e => fail(e.message)).finally(() => busy(false));
+  // onload gets the model's header, so a caller can tell an empty model from a drawn one.
+  v.load(url).then(head => { done(); onload?.(head); }, e => fail(e.message)).finally(() => busy(false));
 }
 
 /* The viewer's controls, laid over the canvas in its corners rather than stacked underneath:
@@ -263,7 +264,8 @@ $$('nav button').forEach(b => b.onclick = () => {
   $$('nav button').forEach(x => x.classList.toggle('active', x === b));
   $$('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + b.dataset.page));
   const load = {player: async () => { setupExport(); await Promise.all([loadPlayer(), loadBackups(), loadHealth(false)]); }, quests: loadQuests,
-                inventory: loadInventories, unlocks: loadUnlocks, corvette: loadCorvette,
+                inventory: loadInventories, unlocks: loadUnlocks, fleet: loadFleet, corvette: loadCorvette,
+                multitools: loadMultitools, companions: loadCompanions,
                 designer: () => post('/api/find/warm', {}).catch(() => {})}[b.dataset.page];
   if (load) guard(load);
 });
@@ -290,6 +292,8 @@ async function loadSaves() {
 }
 $('#saveSel').onchange = e => { S.path = e.target.value; guard(loadShips);
   const act = $$('.page').find(p => p.classList.contains('active'))?.id;
-  const reload = {'page-quests': loadQuests, 'page-inventory': loadInventories, 'page-unlocks': loadUnlocks}[act];
+  const reload = {'page-quests': loadQuests, 'page-inventory': loadInventories, 'page-unlocks': loadUnlocks,
+                  'page-fleet': loadFleet, 'page-multitools': loadMultitools,
+                  'page-companions': loadCompanions}[act];
   if (reload) guard(reload); };
 $('#refresh').onclick = () => guard(async () => { await Promise.all([loadStatus(), loadSaves()]); await loadShips(); });

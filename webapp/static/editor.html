@@ -16,10 +16,13 @@
 </header>
 <nav>
   <button data-page="ships" data-icon="ship" class="active">My Ships</button>
-  <button data-page="corvette" data-icon="layers">Corvette</button>
   <button data-page="designer" data-icon="sliders">Design &amp; Find</button>
+  <button data-page="corvette" data-icon="layers">Corvette</button>
+  <button data-page="fleet" data-icon="box">Fleet</button>
+  <button data-page="multitools" data-icon="wrench" class="wip" title="Under construction: the multi-tool tools are still being built">Multi-tools</button>
+  <button data-page="companions" data-icon="globe" class="wip" title="Under construction: the companion tools are still being built">Companions</button>
   <button data-page="inventory" data-icon="grid">Inventory</button>
-  <button data-page="unlocks" data-icon="key">Unlocks &amp; Fleet</button>
+  <button data-page="unlocks" data-icon="key">Unlocks</button>
   <button data-page="quests" data-icon="list">Quests</button>
   <button data-page="player" data-icon="disk">Save</button>
   <span class="navver" id="navVer" title="Installed version"></span>
@@ -192,7 +195,7 @@
   </section>
 
   <section class="page" id="page-unlocks">
-    <h2>Unlocks &amp; Fleet</h2>
+    <h2>Unlocks</h2>
     <h3>Knowledge</h3>
     <div class="card" style="padding:14px" id="uKnow"><span class="muted">Loading...</span></div>
     <h3>Expedition &amp; season rewards</h3>
@@ -205,9 +208,59 @@
         <span class="muted" id="wCount"></span></div>
       <div class="rewlist" id="wList"></div>
     </div>
-    <h3>Multi-tools</h3><div class="ulist" id="uTools"></div>
-    <h3>Frigates</h3><div class="ulist" id="uFrig"></div>
-    <h3>Companions</h3><div class="ulist" id="uPets"></div>
+  </section>
+
+  <section class="page" id="page-fleet">
+    <h2>Fleet</h2>
+    <h3>Your freighter</h3>
+    <div class="card" style="padding:12px" id="frCard"><span class="muted">Reading the save...</span></div>
+    <p class="muted" style="max-width:900px">Nothing about the aliens aboard is written into your save -- there is no race on the freighter
+      and no model saved for anyone standing on it -- so the game works them out when it loads, and the home system is the only thing it has
+      to go on. Changing the home system leaves the ship itself exactly as it is.</p>
+    <h3>Find a freighter</h3>
+    <p class="muted" style="max-width:900px;margin-top:0">Every system has a freighter fleet that warps in, and any of them can be yours to
+      look at. Taking one changes your freighter's shape, parts and colours; your base, cargo and everything installed stay where they are.</p>
+    <div class="card" style="padding:12px">
+      <div class="row"><label class="muted">System</label>
+        <input id="frAddr" class="mono" placeholder="Portal glyphs (10BE08220992) or coordinates (0191:0087:0A1F:00BE)" style="width:360px">
+        <label class="muted">Galaxy</label><input id="frGal" type="number" min="0" max="255" value="0" style="width:64px">
+        <button class="btn primary" id="frShow">Show its freighters</button><button class="btn" id="frHere">My current system</button></div>
+      <div class="row" id="frWhere" style="margin-top:8px"></div>
+    </div>
+    <div class="results" id="frFound" style="margin-top:12px"></div>
+    <h3>Build a freighter</h3>
+    <p class="muted" style="max-width:900px;margin-top:0">Pick the parts you want and the tool hunts through seeds until it finds one that
+      grows them. A freighter is not built part by part in the save -- the seed decides the whole hull -- so what you choose here is what to
+      go looking for. Leave a row on "Any" and you will take whatever comes with the rest.</p>
+    <div class="card" style="padding:12px">
+      <div class="row"><label class="muted">Type</label><select id="fbShip"></select>
+        <button class="btn ghost" id="fbReset" data-icon="spin">Reset</button>
+        <span style="flex:1"></span>
+        <label class="muted">Any seed</label><input id="fbSeed" class="mono" placeholder="0x1234ABCD..." style="width:220px">
+        <button class="btn" id="fbRoll" data-icon="dice">Random</button><button class="btn" id="fbSee">Preview</button></div>
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="card" style="padding:12px"><div class="tree" id="fbTree"><span class="muted">Loading...</span></div></div>
+      <div>
+        <div class="card hero" id="fbPreview"><span class="muted">Pick parts to preview</span></div>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="fbFind" data-icon="search">Find a seed with these parts</button>
+          <button class="btn" id="fbStop" disabled data-icon="stop">Stop</button>
+          <button class="btn primary" id="fbUse" hidden data-icon="check">Make this my freighter</button></div>
+        <p class="muted" id="fbStatus" style="margin:8px 0 0"></p>
+      </div>
+    </div>
+    <div class="results" id="fbResults" style="margin-top:12px"></div>
+    <h3>Frigates</h3><div class="ulist" id="uFrig"><span class="muted">Loading...</span></div>
+  </section>
+
+  <section class="page" id="page-multitools">
+    <h2>Multi-tools</h2>
+    <div class="ulist" id="uTools"><span class="muted">Loading...</span></div>
+  </section>
+
+  <section class="page" id="page-companions">
+    <h2>Companions</h2>
+    <div class="ulist" id="uPets"><span class="muted">Loading...</span></div>
   </section>
 
   <section class="page" id="page-quests">
